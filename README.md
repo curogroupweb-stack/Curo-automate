@@ -1,4 +1,4 @@
-# CURO Automate V0.2 Funcional
+# CURO Automate V0.3 Funcional
 
 Copia física independiente de AppDeploy y CURO Platform.
 
@@ -22,3 +22,7 @@ Abra `index.html` en Safari/Chrome/Edge. No requiere instalación ni servidor.
 Esta versión demuestra el producto y su flujo sin depender de servicios externos. El envío de correo es simulado. Gmail/Outlook, Supabase, IA real, documentos y ejecución programada se conectarán en fases posteriores.
 
 No modifica CURO Platform.
+
+
+## V0.3
+Página pública reorganizada con identidad CURO Group, Contacto, Newsletter, redes sociales, bloque legal y footer corporativo. El panel privado y sus funciones de V0.2 se conservan.
