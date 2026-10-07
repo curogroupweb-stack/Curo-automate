@@ -1,28 +1,44 @@
-# CURO Automate V0.3 Funcional
+# CURO Automate · MASTER V2 · Navegación y persistencia RC
 
-Copia física independiente de AppDeploy y CURO Platform.
+Base: MASTER V2 Resultado Completo.
 
-## Abrir
-Abra `index.html` en Safari/Chrome/Edge. No requiere instalación ni servidor.
-
-## Qué funciona en esta versión
-- Home pública antes del login.
-- Login local de demostración.
-- Panel privado CURO Automate.
-- Inicio con prompt natural.
-- Máximo 2 automatizaciones activas (Plan Gratis).
-- Ideas por profesión.
-- Simulación del flujo: correo → clasificación → contacto → borrador → aprobación/rechazo → historial.
-- Correo, Automatizaciones, Aprobaciones, Contactos, Conocimiento e Historial.
-- CURO Agent en modo supervisado.
-- Persistencia local mediante localStorage.
-- Diseño responsive.
-
-## Importante
-Esta versión demuestra el producto y su flujo sin depender de servicios externos. El envío de correo es simulado. Gmail/Outlook, Supabase, IA real, documentos y ejecución programada se conectarán en fases posteriores.
-
-No modifica CURO Platform.
+Correcciones aisladas:
+- Backup físico completo antes de editar.
+- Ver ideas funciona independientemente del límite del plan.
+- El usuario puede describir, preparar y probar una automatización aunque esté en 2/2.
+- El límite se aplica únicamente al intentar guardar/activar una nueva automatización.
+- Automatizaciones permanece accesible en 2/2 y muestra las automatizaciones existentes.
+- La comprobación de draft_id ocurre antes del límite para no duplicar un borrador recuperado.
+- Se conserva la misma clave localStorage (curoAutomateV02), por lo que no se resetean los datos existentes del navegador.
+- Gmail/API y motor de Execution/Resultado/Historial se conservan sin cambios.
 
 
-## V0.3
-Página pública reorganizada con identidad CURO Group, Contacto, Newsletter, redes sociales, bloque legal y footer corporativo. El panel privado y sus funciones de V0.2 se conservan.
+## FIX 05 — Historial y ejecuciones
+- Historial general robustecido para datos guardados de versiones anteriores.
+- Botón Ver resultado por ejecución.
+- Botón Volver a ejecutar sin duplicar la automatización.
+- Acceso al historial específico de cada automatización.
+- Cache bust actualizado a history05.
+
+## V12 · Resolver + Conexiones
+- Añade catálogo de capacidades/conectores y pantalla Conexiones.
+- El Resolver infiere Drive/Contactos/Gmail para una petición sencilla de bienvenida a familias, aunque el usuario no mencione tecnología.
+- OAuth Google solicita Gmail + Drive readonly; Drive expone estado y exploración de carpetas mediante API.
+- Calendar, Sheets, WhatsApp Business y Mailchimp aparecen como hoja de ruta, no se simulan como conectados.
+- Para Drive real, Google Drive API debe estar habilitada en el proyecto Google Cloud y el usuario debe volver a autorizar Google.
+
+
+## V14 UX
+- Se elimina “Probar gratis” del encabezado público.
+- Dictado por voz en los campos principales de automatización (SpeechRecognition del navegador).
+- Planner/modal adaptable con scroll interno y acciones siempre visibles.
+- Aviso local de conexión integrado en el Planner para evitar doble modal.
+
+
+## V15 · Semantic Welcome + Web Ready
+- El Planner reconoce altas/registros de nuevos usuarios como trigger específico.
+- Construye el flujo: alta → datos del usuario → anti-duplicado → plantilla → Gmail → registro.
+- La fuente de usuarios CURO se muestra como fuente interna, no como aplicación externa a configurar.
+- Gmail sigue requiriendo ejecución web real para OAuth; no se simula conexión desde file://.
+
+- V16: OAuth web conserva y recupera el borrador del Planner al volver de Google; valida configuración OAuth del servidor antes de redirigir.
