@@ -42,3 +42,8 @@ Correcciones aisladas:
 - Gmail sigue requiriendo ejecución web real para OAuth; no se simula conexión desde file://.
 
 - V16: OAuth web conserva y recupera el borrador del Planner al volver de Google; valida configuración OAuth del servidor antes de redirigir.
+
+- V17: corrige OAuth state entre dominios de deployment y dominio de producción usando state firmado HMAC con caducidad de 10 minutos; elimina dependencia de cookie de state.
+- Bloque Gmail consolidado: no permite preparar/guardar un plan con fuentes obligatorias desconectadas; refresca el estado real de Google al volver de OAuth; distingue cancelación/código ausente/state inválido; valida destinatario; y no fuerza `Re:` en correos nuevos.
+- Bloque ejecución/aprobación: Historial global reparado; ejecuciones que requieren aprobación quedan `awaiting_approval`; aprobación de automatizaciones Gmail valida conexión y destinatario, envía por API y registra entrega; errores quedan trazados; fuentes internas CURO aún no conectadas quedan `Preparada` y no se presentan falsamente como activas.
+- Bloque persistencia/reutilización: estado operativo calculado antes de ejecutar; automatizaciones con fuente interna CURO quedan guardadas como Preparadas y no pueden activarse/ejecutarse hasta conectar el registro real; historial tolera ejecuciones pendientes; resultado distingue Pendiente/Completada/Fallida; edición y pausa actualizan estado sin duplicar automatizaciones.

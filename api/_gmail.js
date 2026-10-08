@@ -3,6 +3,9 @@ const CLIENT_ID=()=>process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET=()=>process.env.GOOGLE_CLIENT_SECRET;
 const REDIRECT=()=>process.env.GOOGLE_REDIRECT_URI;
 const key=()=>crypto.createHash('sha256').update(CLIENT_SECRET()||'').digest();
+
+function oauthState(){const ts=Date.now().toString();const nonce=crypto.randomBytes(18).toString('base64url');const payload=`${ts}.${nonce}`;const sig=crypto.createHmac('sha256',key()).update(payload).digest('base64url');return `${payload}.${sig}`}
+function verifyOauthState(v){try{const [ts,nonce,sig,...rest]=String(v||'').split('.');if(rest.length||!ts||!nonce||!sig)return false;const payload=`${ts}.${nonce}`;const expected=crypto.createHmac('sha256',key()).update(payload).digest();const got=Buffer.from(sig,'base64url');if(got.length!==expected.length||!crypto.timingSafeEqual(got,expected))return false;const age=Date.now()-Number(ts);return Number.isFinite(age)&&age>=0&&age<=10*60*1000}catch{return false}}
 function seal(obj){const iv=crypto.randomBytes(12);const c=crypto.createCipheriv('aes-256-gcm',key(),iv);const raw=Buffer.from(JSON.stringify(obj));const enc=Buffer.concat([c.update(raw),c.final()]);return Buffer.concat([iv,c.getAuthTag(),enc]).toString('base64url')}
 function open(v){try{const b=Buffer.from(v,'base64url'),iv=b.subarray(0,12),tag=b.subarray(12,28),enc=b.subarray(28);const d=crypto.createDecipheriv('aes-256-gcm',key(),iv);d.setAuthTag(tag);return JSON.parse(Buffer.concat([d.update(enc),d.final()]).toString())}catch{return null}}
 function cookies(req){return Object.fromEntries((req.headers.cookie||'').split(';').map(x=>x.trim().split('=').map(decodeURIComponent)).filter(x=>x.length===2))}
@@ -13,4 +16,4 @@ async function gmail(req,res,path,opts={}){const t=await token(req,res);return f
 function json(res,status,data){res.statusCode=status;res.setHeader('content-type','application/json; charset=utf-8');res.end(JSON.stringify(data))}
 function hdr(msg,name){return (msg.payload?.headers||[]).find(h=>h.name.toLowerCase()===name.toLowerCase())?.value||''}
 function decodeBody(p){if(p?.body?.data)return Buffer.from(p.body.data,'base64url').toString('utf8');for(const part of p?.parts||[]){if(part.mimeType==='text/plain'&&part.body?.data)return Buffer.from(part.body.data,'base64url').toString('utf8')}return ''}
-module.exports={CLIENT_ID,CLIENT_SECRET,REDIRECT,seal,open,cookies,setCookie,token,gmail,json,hdr,decodeBody};
+module.exports={CLIENT_ID,CLIENT_SECRET,REDIRECT,oauthState,verifyOauthState,seal,open,cookies,setCookie,token,gmail,json,hdr,decodeBody};
