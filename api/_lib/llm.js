@@ -60,6 +60,13 @@ async function openaiCompatChat({ system, messages, tools, maxTokens, temperatur
     const recovered = recoverFailedGeneration(j.error?.failed_generation, tools);
     if (recovered) return { text: '', tool_calls: [recovered], usage: { input: 0, output: 0 } };
   }
+  // Límite por minuto del modelo principal: el modelo alternativo tiene su propio cupo en Groq.
+  if (r.status === 429 && body.model !== fallback) {
+    r = await fetchRetry('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' }, body: JSON.stringify({ ...body, model: fallback })
+    }, deadline);
+    j = await r.json();
+  }
   if (!r.ok) throw new HttpError(502, r.status === 429
     ? 'La IA gratuita (Groq) ha alcanzado su límite por minuto. Espera un minuto y vuelve a intentarlo.'
     : 'IA (Groq): ' + (j.error?.message || r.status));

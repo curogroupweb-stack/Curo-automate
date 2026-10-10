@@ -93,7 +93,8 @@ async function getText(url, ms = 9000) {
 }
 async function googleNews(query) {
   const xml = await getText(`https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=es&gl=ES&ceid=ES:es`);
-  return rssItems(xml, 8).map(x => ({ ...x, snippet: undefined }));
+  // 6 resultados con fecha corta: suficiente para resumir y gasta menos del cupo por minuto de la IA gratuita.
+  return rssItems(xml, 6).map(x => { const d = new Date(x.date); return { ...x, snippet: undefined, date: isNaN(d) ? x.date : d.toISOString().slice(0, 10) }; });
 }
 async function bingWeb(query) {
   const xml = await getText(`https://www.bing.com/search?format=rss&setlang=es&cc=ES&q=${encodeURIComponent(query)}`);
