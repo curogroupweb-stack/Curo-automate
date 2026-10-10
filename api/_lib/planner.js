@@ -27,7 +27,7 @@ REGLAS
 - questions: máximo 2 preguntas imprescindibles; si se puede suponer algo razonable, supónlo y no preguntes.
 - Escribe todo en español claro, sin jerga técnica. steps: 3 a 7 pasos cortos que entienda cualquiera. Nunca menciones nombres internos (curo_new_user, gmail_send, web_search, etc.).
 - name: 2 a 5 palabras en español normal, con mayúscula inicial y espacios (por ejemplo "Bienvenida a nuevos usuarios"), nunca con guiones bajos.
-- gmail_query usa la sintaxis de Gmail. Por defecto: "in:inbox -category:promotions -category:social -from:me".
+- gmail_query usa la sintaxis de Gmail. Por defecto: "in:inbox -category:promotions -category:social -category:updates -from:me -from:noreply -from:no-reply".
 
 Responde SOLO con este JSON:
 {"name":"nombre corto","summary":"una frase de lo que hará","trigger":{"type":"manual|schedule|gmail_new_message|curo_new_user","frequency":"hourly|daily|weekly|monthly","time":"HH:MM","weekday":1,"monthday":1,"gmail_query":"..."},"steps":["..."],"tools":["..."],"inputs":[{"key":"tema","label":"Tema","type":"text"}],"approval":"always|never","output":"qué recibirá el usuario","feasible":true,"limitations":["..."],"questions":["..."]}`;
@@ -55,7 +55,8 @@ function normalize(raw, { connections, isAdmin, instruction }) {
     if (trigger.frequency === 'monthly') trigger.monthday = Math.min(Math.max(parseInt(t.monthday, 10) || 1, 1), 28);
     trigger.label = describe(trigger);
   } else if (type === 'gmail_new_message') {
-    trigger.gmail_query = String(t.gmail_query || 'in:inbox -category:promotions -category:social -from:me').slice(0, 300);
+    trigger.gmail_query = String(t.gmail_query || 'in:inbox -category:promotions -category:social -category:updates -from:me').slice(0, 300);
+    for (const extra of ['-from:noreply', '-from:no-reply']) if (!trigger.gmail_query.includes(extra)) trigger.gmail_query += ' ' + extra;
     if (!/-from:me/.test(trigger.gmail_query)) trigger.gmail_query += ' -from:me';
     trigger.label = 'Cuando llegue un correo nuevo';
   } else if (type === 'curo_new_user') {
