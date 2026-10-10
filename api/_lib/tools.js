@@ -25,13 +25,13 @@ const CATALOG = {
   web_search: {
     needs: null,
     label: 'Buscar en internet',
-    description: 'Busca información actual en internet. Devuelve títulos, enlaces y extractos. Usa fetch_url para leer una página concreta.',
-    parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] }
+    description: 'Busca en internet. Con news=true busca NOTICIAS recientes (Google Noticias: título, medio, fecha y enlace; normalmente basta con eso para resumir). Con news=false busca páginas web en general. Usa consultas cortas (3-6 palabras), en el idioma del tema.',
+    parameters: { type: 'object', properties: { query: { type: 'string' }, news: { type: 'boolean' } }, required: ['query'] }
   },
   fetch_url: {
     needs: null,
     label: 'Leer una página web',
-    description: 'Descarga una página web pública y devuelve su texto (máximo unos 8.000 caracteres).',
+    description: 'Lee el texto de una página web pública (máximo unos 4.000 caracteres). Usa SOLO enlaces que hayan aparecido en resultados de búsqueda o que haya dado el usuario; nunca inventes direcciones.',
     parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] }
   }
 };
@@ -71,30 +71,61 @@ function htmlToText(html) {
     .replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
 }
 
-async function webSearch(query) {
-  if (process.env.TAVILY_API_KEY) {
-    const r = await fetch('https://api.tavily.com/search', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ api_key: process.env.TAVILY_API_KEY, query, max_results: 6 })
-    });
-    const j = await r.json();
-    return (j.results || []).map(x => ({ title: x.title, url: x.url, snippet: (x.content || '').slice(0, 300) }));
-  }
-  const r = await fetch('https://html.duckduckgo.com/html/?q=' + encodeURIComponent(query), {
-    headers: { 'user-agent': 'Mozilla/5.0 (compatible; CuroAutomate/1.0)', 'accept-language': 'es-ES,es;q=0.9' }
-  });
-  const html = await r.text();
+function decodeEntities(t) {
+  return String(t || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&');
+}
+function rssItems(xml, max = 6) {
   const out = [];
-  const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
-  let m;
-  while ((m = re.exec(html)) && out.length < 6) {
-    let url = m[1];
-    const uddg = url.match(/uddg=([^&]+)/);
-    if (uddg) url = decodeURIComponent(uddg[1]);
-    out.push({ title: htmlToText(m[2]), url, snippet: htmlToText(m[3]).slice(0, 300) });
+  const items = String(xml).match(/<item[\s\S]*?<\/item>/g) || [];
+  for (const it of items.slice(0, max)) {
+    const tag = n => decodeEntities((it.match(new RegExp(`<${n}[^>]*>([\\s\\S]*?)<\\/${n}>`)) || [])[1] || '').trim();
+    out.push({ title: htmlToText(tag('title')), url: tag('link'), source: htmlToText(tag('source')) || undefined, date: tag('pubDate') || undefined, snippet: htmlToText(tag('description')).slice(0, 220) || undefined });
   }
-  if (!out.length) return { error: 'La búsqueda no devolvió resultados ahora mismo. Prueba con otra consulta o lee una web concreta con fetch_url.' };
+  return out.filter(x => x.title && x.url);
+}
+async function getText(url, ms = 9000) {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
+  try {
+    const r = await fetch(url, { signal: ctl.signal, headers: { 'user-agent': 'Mozilla/5.0 (compatible; CuroAutomate/1.0)', 'accept-language': 'es-ES,es;q=0.9,en;q=0.6' } });
+    return r.ok ? await r.text() : '';
+  } catch { return ''; } finally { clearTimeout(t); }
+}
+async function googleNews(query) {
+  const xml = await getText(`https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=es&gl=ES&ceid=ES:es`);
+  return rssItems(xml, 8).map(x => ({ ...x, snippet: undefined }));
+}
+async function bingWeb(query) {
+  const xml = await getText(`https://www.bing.com/search?format=rss&setlang=es&cc=ES&q=${encodeURIComponent(query)}`);
+  return rssItems(xml, 6);
+}
+async function ddgLite(query) {
+  const html = await getText('https://lite.duckduckgo.com/lite/?q=' + encodeURIComponent(query));
+  const out = []; const re = /<a[^>]+href="([^"]+)"[^>]*class=['"]result-link['"][^>]*>([\s\S]*?)<\/a>/g; let m;
+  while ((m = re.exec(html)) && out.length < 6) {
+    let url = m[1]; const u = url.match(/uddg=([^&]+)/); if (u) url = decodeURIComponent(u[1]);
+    out.push({ title: htmlToText(m[2]), url });
+  }
   return out;
+}
+
+async function webSearch(query, news) {
+  query = String(query || '').slice(0, 200);
+  if (process.env.TAVILY_API_KEY) {
+    try {
+      const r = await fetch('https://api.tavily.com/search', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ api_key: process.env.TAVILY_API_KEY, query, max_results: 6, topic: news ? 'news' : 'general' })
+      });
+      const j = await r.json();
+      if (j.results?.length) return j.results.map(x => ({ title: x.title, url: x.url, snippet: (x.content || '').slice(0, 220) }));
+    } catch {}
+  }
+  const order = news ? [googleNews, bingWeb] : [bingWeb, ddgLite, googleNews];
+  for (const fn of order) {
+    const res = await fn(query);
+    if (res.length) return res;
+  }
+  return { error: 'La búsqueda no devolvió resultados. Prueba con una consulta más corta o más general. No inventes enlaces.' };
 }
 
 async function fetchUrl(url) {
@@ -106,7 +137,8 @@ async function fetchUrl(url) {
     const type = r.headers.get('content-type') || '';
     if (!/text|html|json|xml/.test(type)) return { error: `La página no es texto (${type || 'tipo desconocido'}).` };
     const text = await r.text();
-    return { url: r.url, status: r.status, text: (/html/.test(type) ? htmlToText(text) : text).slice(0, 8000) };
+    if (r.status >= 400) return { error: `La página respondió con error ${r.status}. Prueba con otro enlace de los resultados.` };
+    return { url: r.url, text: (/html/.test(type) ? htmlToText(text) : text).slice(0, 4000) };
   } catch (e) {
     return { error: 'No se pudo leer la página: ' + (e.name === 'AbortError' ? 'tardó demasiado' : e.message) };
   } finally { clearTimeout(timer); }
@@ -131,7 +163,7 @@ async function execute(name, args, ctx) {
       const sent = await google.sendMessage(ctx.userId, args);
       return { status: 'enviado', ...sent };
     }
-    case 'web_search': return webSearch(args.query);
+    case 'web_search': return webSearch(args.query, !!args.news);
     case 'fetch_url': return fetchUrl(args.url);
     default: return { error: `Herramienta desconocida: ${name}` };
   }

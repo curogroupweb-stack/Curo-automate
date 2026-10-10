@@ -21,13 +21,13 @@ function info() {
 // messages: [{role:'user'|'assistant'|'tool', content, tool_calls?, tool_call_id?}]
 // tools: [{name, description, parameters(JSON Schema)}]
 // Devuelve { text, tool_calls:[{id,name,args}], usage:{input,output} }
-async function chat({ system, messages, tools = [], maxTokens = 1800, temperature = 0.2 }) {
+async function chat({ system, messages, tools = [], maxTokens = 1800, temperature = 0.2, deadline }) {
   const p = provider();
-  if (p === 'anthropic') return anthropicChat({ system, messages, tools, maxTokens, temperature });
-  return openaiCompatChat({ system, messages, tools, maxTokens, temperature });
+  if (p === 'anthropic') return anthropicChat({ system, messages, tools, maxTokens, temperature, deadline });
+  return openaiCompatChat({ system, messages, tools, maxTokens, temperature, deadline });
 }
 
-async function openaiCompatChat({ system, messages, tools, maxTokens, temperature }) {
+async function openaiCompatChat({ system, messages, tools, maxTokens, temperature, deadline }) {
   const key = process.env.GROQ_API_KEY;
   if (!key) throw new HttpError(500, 'Falta configurar GROQ_API_KEY en Vercel.');
   const body = {
@@ -47,9 +47,11 @@ async function openaiCompatChat({ system, messages, tools, maxTokens, temperatur
   }
   const r = await fetchRetry('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' }, body: JSON.stringify(body)
-  });
+  }, deadline);
   const j = await r.json();
-  if (!r.ok) throw new HttpError(502, 'IA (Groq): ' + (j.error?.message || r.status));
+  if (!r.ok) throw new HttpError(502, r.status === 429
+    ? 'La IA gratuita (Groq) ha alcanzado su límite por minuto. Espera un minuto y vuelve a intentarlo.'
+    : 'IA (Groq): ' + (j.error?.message || r.status));
   const msg = j.choices?.[0]?.message || {};
   return {
     text: msg.content || '',
@@ -58,7 +60,7 @@ async function openaiCompatChat({ system, messages, tools, maxTokens, temperatur
   };
 }
 
-async function anthropicChat({ system, messages, tools, maxTokens, temperature }) {
+async function anthropicChat({ system, messages, tools, maxTokens, temperature, deadline }) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new HttpError(500, 'Falta configurar ANTHROPIC_API_KEY en Vercel.');
   const out = [];
@@ -76,7 +78,7 @@ async function anthropicChat({ system, messages, tools, maxTokens, temperature }
   if (tools.length) body.tools = tools.map(t => ({ name: t.name, description: t.description, input_schema: t.parameters }));
   const r = await fetchRetry('https://api.anthropic.com/v1/messages', {
     method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, body: JSON.stringify(body)
-  });
+  }, deadline);
   const j = await r.json();
   if (!r.ok) throw new HttpError(502, 'IA (Claude): ' + (j.error?.message || r.status));
   return {
@@ -86,11 +88,19 @@ async function anthropicChat({ system, messages, tools, maxTokens, temperature }
   };
 }
 
-async function fetchRetry(url, opts, tries = 3) {
+// Reintenta si el proveedor pide esperar (límite por minuto del plan gratuito) o falla temporalmente.
+async function fetchRetry(url, opts, deadline = Date.now() + 45000, tries = 5) {
   for (let i = 0; ; i++) {
     const r = await fetch(url, opts);
     if ((r.status === 429 || r.status >= 500) && i < tries - 1) {
-      const wait = Math.min(Number(r.headers.get('retry-after')) * 1000 || 1500 * (i + 1), 8000);
+      let wait = Number(r.headers.get('retry-after')) * 1000;
+      if (!wait) {
+        const txt = await r.clone().text().catch(() => '');
+        const m = txt.match(/try again in ([\d.]+)\s*(ms|s)/i);
+        wait = m ? Math.ceil(parseFloat(m[1]) * (m[2].toLowerCase() === 'ms' ? 1 : 1000)) + 500 : 2000 * (i + 1);
+      }
+      wait = Math.min(wait, 20000);
+      if (Date.now() + wait > deadline - 5000) return r; // no hay tiempo: devolvemos el error
       await new Promise(s => setTimeout(s, wait));
       continue;
     }

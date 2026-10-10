@@ -4,7 +4,8 @@ const tools = require('./tools');
 const google = require('./google');
 const { db, enc } = require('./db');
 
-const MAX_TURNS = 10;
+const MAX_TURNS = 8;
+const KEEP_FULL_TOOL_RESULTS = 2; // los resultados antiguos se resumen para ahorrar tokens
 
 async function connectionsFor(userId) {
   const g = await google.status(userId).catch(() => ({ connected: false }));
@@ -37,13 +38,22 @@ REGLAS
 - Si falta información imprescindible, no la inventes: explícalo en el resultado final.
 - Para enviar correos usa gmail_send con un texto completo, cordial y listo para enviar, en el idioma del destinatario.
 - No envíes correos a direcciones que no aparezcan en el evento, en los correos leídos o en la petición del usuario.
-- Sé eficiente: no repitas llamadas iguales.
+- Sé eficiente: como máximo 3 búsquedas y 2 lecturas de páginas. No repitas llamadas iguales.
+- Para noticias usa web_search con news=true: el título, el medio, la fecha y el enlace suelen bastar para resumir sin abrir las páginas.
+- Nunca inventes enlaces: usa solo los que aparezcan en los resultados.
 - Termina SIEMPRE llamando a "finish" con un título corto y el resultado completo para el usuario, en español.`;
 }
 
 function trimResult(value) {
   const s = JSON.stringify(value ?? null);
-  return s.length > 9000 ? s.slice(0, 9000) + '…(recortado)' : s;
+  return s.length > 3500 ? s.slice(0, 3500) + '…(recortado)' : s;
+}
+
+// Mantiene completos solo los últimos resultados de herramientas; los anteriores se acortan.
+function compact(messages) {
+  const toolIdx = messages.map((m, i) => (m.role === 'tool' ? i : -1)).filter(i => i >= 0);
+  const old = new Set(toolIdx.slice(0, Math.max(0, toolIdx.length - KEEP_FULL_TOOL_RESULTS)));
+  return messages.map((m, i) => (old.has(i) && m.content.length > 500 ? { ...m, content: m.content.slice(0, 500) + '…(resumido)' } : m));
 }
 
 // opts: { automation, userId, source, event, inputs, deadline }
@@ -82,7 +92,7 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       if (Date.now() > deadline) throw new Error('La ejecución tardó demasiado y se detuvo por seguridad.');
-      const res = await chat({ system, messages, tools: defs, maxTokens: 2000 });
+      const res = await chat({ system, messages: compact(messages), tools: defs, maxTokens: 1200, deadline });
       usage.input += res.usage.input; usage.output += res.usage.output; usage.turns++;
 
       if (!res.tool_calls.length) {
