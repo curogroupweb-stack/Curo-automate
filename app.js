@@ -499,6 +499,12 @@ function accountPage() {
 }
 
 // ---------- Arranque ----------
+// ?ir=aprobaciones (enlace de los avisos por correo) abre directamente Aprobaciones.
+function startPage() {
+  const ir = new URLSearchParams(location.search).get('ir');
+  if (ir) history.replaceState({}, '', location.pathname);
+  return ir === 'aprobaciones' ? 'Aprobaciones' : 'Inicio';
+}
 async function boot() {
   const q = new URLSearchParams(location.search);
   const googleResult = q.get('google'), reason = q.get('reason');
@@ -509,7 +515,7 @@ async function boot() {
     if (recall('curo_pending_instruction')) return login('login', 'Inicia sesión y CURO preparará el plan de tu automatización.');
     return home();
   }
-  await go('Inicio');
+  await go(startPage());
   if (googleResult === 'connected') {
     toast('Gmail conectado correctamente.');
     const pend = recall('curo_pending_plan');
@@ -518,7 +524,7 @@ async function boot() {
 }
 sb.auth.onAuthStateChange((event, s) => {
   const had = !!session; session = s;
-  if (event === 'SIGNED_IN' && !had) go('Inicio');
+  if (event === 'SIGNED_IN' && !had) go(startPage());
   if (event === 'SIGNED_OUT') { me = null; home(); }
   if (event === 'PASSWORD_RECOVERY') newPassword();
 });

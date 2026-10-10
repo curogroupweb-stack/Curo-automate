@@ -161,6 +161,7 @@ async function execute(name, args, ctx) {
           summary: `Correo para ${args.to}: ${args.subject}`
         });
         ctx.approvals.push(ap.id);
+        await require('./notify').approvalPending(ctx, args);
         return { status: 'pendiente_de_aprobacion', note: 'El correo se ha guardado como borrador. El usuario lo revisará y lo enviará desde Aprobaciones. No lo vuelvas a crear.' };
       }
       const sent = await sendEmail(ctx.userId, args, { brand: ctx.brand });
