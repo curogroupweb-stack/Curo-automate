@@ -1,1 +1,0 @@
-const {gmail,json}=require('../_gmail');module.exports=async(req,res)=>{try{const r=await gmail(req,res,'/profile');if(!r.ok)throw new Error('No conectado');const p=await r.json();json(res,200,{connected:true,email:p.emailAddress,messagesTotal:p.messagesTotal})}catch(e){json(res,200,{connected:false})}}

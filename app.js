@@ -1,25 +1,168 @@
-const A=document.getElementById('app');
-const K='curoAutomateV02';
-let pendingInstruction='';
-let guestMode=false;
-let pendingDraft=null;
-let state=JSON.parse(localStorage.getItem(K)||'null')||{user:null,plan:'Gratis',automations:[],templates:[],documents:[],newsletter:[],contacts:[],knowledge:[{title:'Consultoría IA para centros educativos',text:'Requiere diagnóstico previo. CURO nunca inventa precios.'},{title:'Regla comercial',text:'Si falta un precio, condición o política, solicitar revisión humana.'}],mails:[],approvals:[],audit:[]};
-state.plan=state.plan||'Gratis';state.connections=state.connections||{gmail:{},drive:{},calendar:{},contacts:{},sheets:{},whatsapp:{},mailchimp:{}};state.runtime=state.runtime||{processed_events:{},last_tick:null};state.runtime.processed_events=state.runtime.processed_events||{};state.free_automations_created_total=Number.isFinite(Number(state.free_automations_created_total))?Number(state.free_automations_created_total):state.automations.length;
-// Reconciliación segura: si no existe ninguna automatización guardada, no bloquear con un contador huérfano.
-if(Array.isArray(state.automations)&&state.automations.length===0&&state.free_automations_created_total>0){
-  try{localStorage.setItem('curoAutomateQuotaRecovery_'+Date.now(),JSON.stringify({created_at:new Date().toISOString(),previous_total:state.free_automations_created_total,automations:state.automations,executions:state.executions||[],approvals:state.approvals||[]}))}catch(e){}
-  state.free_automations_created_total=0;
-  localStorage.setItem(K,JSON.stringify(state));
-}
-state.templates=Array.isArray(state.templates)?state.templates:[];state.documents=Array.isArray(state.documents)?state.documents:[];state.newsletter=Array.isArray(state.newsletter)?state.newsletter:[];state.executions=Array.isArray(state.executions)?state.executions:[];state.approvals=Array.isArray(state.approvals)?state.approvals:[];state.contacts=Array.isArray(state.contacts)?state.contacts:[];state.audit=Array.isArray(state.audit)?state.audit:[];state.mails=Array.isArray(state.mails)?state.mails:[];state.knowledge=Array.isArray(state.knowledge)?state.knowledge:[];state.collections=state.collections||[{id:'col-ecosistemas',name:'Ciencias · Ecosistemas',items:['Vídeos sobre ecosistemas','Webs y documentos de referencia','Actividades guardadas','Bibliografía seleccionada'],snapshot:'MVP V2 demo'}];state.automations=(state.automations||[]).map(a=>({...a,name:a.name||'Automatización',description:a.description||a.text||'',text:a.text||a.description||'',automation_type:a.automation_type||'direct',trigger:a.trigger||'manual',inputs:a.inputs||[],context_sources:Array.isArray(a.context_sources)?a.context_sources:[],variables:Array.isArray(a.variables)?a.variables:[],rules:Array.isArray(a.rules)?a.rules:[],actions:Array.isArray(a.actions)?a.actions:['Analizar','Preparar acción','Solicitar aprobación','Ejecutar','Registrar'],output:a.output||'Acción supervisada',created_at:a.created_at||new Date().toISOString(),updated_at:a.updated_at||new Date().toISOString()}));
-// MVP V2 migration: collapse exact test duplicates and never allow more active automations than the plan.
-(function migrateV2(){const ranked=[...state.automations].sort((a,b)=>{const ae=state.executions.filter(e=>String(e.automation_id)===String(a.id)).length,be=state.executions.filter(e=>String(e.automation_id)===String(b.id)).length;return be-ae});const seen=new Set(),keep=[];for(const a of ranked){const key=((a.description||a.text||'').trim().toLowerCase()+'|'+a.automation_type);if(key&&seen.has(key)){state.executions=state.executions.map(e=>String(e.automation_id)===String(a.id)?{...e,automation_id:(keep.find(k=>((k.description||k.text||'').trim().toLowerCase()+'|'+k.automation_type)===key)||{}).id}:e);continue}seen.add(key);keep.push(a)}state.automations=keep.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));const limits={Gratis:2,Creator:10,Pro:30,Business:100},limit=limits[state.plan]||2;let n=0;for(const a of state.automations){if(a.status==='Activa'){n++;if(n>limit)a.status='Pausada'}}})();
-const save=()=>localStorage.setItem(K,JSON.stringify(state));
-// Utilidades de renderizado: necesarias en todas las vistas privadas con datos guardados.
-function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]))}
-// Compatibilidad con llamadas históricas del MVP.
-function autos(){return automationsPage()}
+/* CURO Automate · app web (V2 conectada).
+   Portada pública + espacio privado conectado a Supabase (login, datos) y a la API (IA, motor, Gmail). */
+const SB_URL = 'https://llugctysxrkqpydyhnvw.supabase.co';
+const SB_KEY = 'sb_publishable_RPo3-Vb7rZ9A7R1dXsH11Q_h5iKXT64';
+const A = document.getElementById('app');
+const sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+let session = null, me = null, currentPage = 'Inicio';
 
+const TOOL_LABELS = {
+  gmail_search: 'Buscar en tu Gmail', gmail_read: 'Leer correos', gmail_send: 'Enviar correos desde tu Gmail',
+  web_search: 'Buscar en internet', fetch_url: 'Leer páginas web'
+};
+const RUN_STATUS = {
+  running: ['En curso', 'warn'], awaiting_approval: ['Esperando tu aprobación', 'warn'], completed: ['Completada', 'ok'], failed: ['Con error', 'danger']
+};
+const SOURCE_LABEL = { manual: 'Manual', schedule: 'Programada', gmail: 'Correo nuevo', curo_new_user: 'Alta en CURO' };
+
+function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c])); }
+function fmtDate(v) { return v ? new Date(v).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' }) : '—'; }
+function store(k, v) { try { v === null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, JSON.stringify(v)); } catch {} }
+function recall(k) { try { return JSON.parse(sessionStorage.getItem(k) || 'null'); } catch { return null; } }
+
+async function api(path, { method = 'GET', body } = {}) {
+  const { data } = await sb.auth.getSession();
+  const token = data.session?.access_token;
+  const r = await fetch('/api/' + path, {
+    method, headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) },
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+  let j = {};
+  try { j = await r.json(); } catch {}
+  if (r.status === 401 && session) { await sb.auth.signOut(); }
+  if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
+  return j;
+}
+
+// ---------- Ventanas y avisos ----------
+function closeModals() { document.querySelectorAll('.modal').forEach(m => m.remove()); }
+function modal(title, html, { wide = false, actions = '' } = {}) {
+  const d = document.createElement('div');
+  d.className = 'modal';
+  d.innerHTML = `<div class="modalbox ${wide ? 'wide' : ''}" role="dialog" aria-modal="true"><div class="row"><h2 style="margin:0">${title}</h2><button class="iconBtn" aria-label="Cerrar" onclick="this.closest('.modal').remove()">×</button></div><div class="modalText">${html}</div>${actions ? `<div class="actions">${actions}</div>` : ''}</div>`;
+  d.addEventListener('click', e => { if (e.target === d) d.remove(); });
+  document.body.appendChild(d);
+  return d;
+}
+function info(title, text) { return modal(esc(title), `<p>${esc(text)}</p>`, { actions: `<button class="btn primary" onclick="this.closest('.modal').remove()">Entendido</button>` }); }
+function toast(text, kind = 'ok') {
+  const t = document.createElement('div');
+  t.className = 'toast ' + kind; t.textContent = text; t.setAttribute('role', 'status');
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4200);
+}
+function busy(btn, text) { if (!btn) return () => {}; const old = btn.innerHTML; btn.disabled = true; btn.innerHTML = `<span class="spin"></span> ${esc(text)}`; return () => { btn.disabled = false; btn.innerHTML = old; }; }
+
+// ---------- Portada pública: acciones ----------
+function pickPublicIdea(i) { const e = document.getElementById('publicInstruction'); if (e) { e.value = ideas[i][1]; e.focus(); e.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }
+function showIdeas() { document.getElementById('ideas-inicio')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+function startFromPublic() {
+  const t = document.getElementById('publicInstruction')?.value.trim();
+  if (!t) return;
+  store('curo_pending_instruction', t);
+  if (session) { go('Inicio'); } else login('signup', 'Crea tu cuenta gratis y CURO preparará el plan de tu automatización.');
+}
+function newsletterDemo() {
+  const e = document.getElementById('newsletterEmail'), m = document.getElementById('newsletterMsg');
+  const email = e?.value.trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { if (m) m.textContent = 'Escribe un correo electrónico válido.'; return; }
+  sb.from('newsletter_subscribers').insert({ email }).then(({ error }) => {
+    if (m) m.textContent = error ? 'No se pudo registrar ahora. Escríbenos a curogroup.web@gmail.com.' : '¡Gracias! Te escribiremos con las novedades de CURO.';
+  });
+}
+function legalDemo(name) { info(name, 'Los textos legales oficiales de CURO Group se publicarán antes del lanzamiento comercial. Para cualquier consulta: curogroup.web@gmail.com.'); }
+function showPublicPlans() { login('signup'); }
+
+let activeRecognition = null;
+function toggleDictation(targetId, btn) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return info('Dictado por voz', 'Tu navegador no permite dictar en esta página. Puedes escribir la tarea normalmente.');
+  if (activeRecognition) { try { activeRecognition.stop(); } catch {} activeRecognition = null; return; }
+  const target = document.getElementById(targetId); if (!target) return;
+  const rec = new SR(); activeRecognition = rec; rec.lang = 'es-ES'; rec.continuous = true; rec.interimResults = true;
+  let base = target.value.trim();
+  const label = btn.querySelector('span');
+  rec.onstart = () => { btn.classList.add('listening'); if (label) label.textContent = 'Escuchando…'; };
+  rec.onresult = ev => { let fin = '', tmp = ''; for (let i = ev.resultIndex; i < ev.results.length; i++) { const t = ev.results[i][0].transcript; ev.results[i].isFinal ? fin += t : tmp += t; } if (fin) base = (base ? base + ' ' : '') + fin.trim(); target.value = (base + (tmp ? ' ' + tmp : '')).trim(); };
+  rec.onend = () => { activeRecognition = null; btn.classList.remove('listening'); if (label) label.textContent = 'Dictar'; };
+  try { rec.start(); } catch { activeRecognition = null; }
+}
+
+// ---------- Acceso ----------
+function login(mode = 'login', note = '') {
+  const signup = mode === 'signup';
+  A.innerHTML = `<div class="login"><form class="loginbox" onsubmit="event.preventDefault();${signup ? 'doSignup' : 'doLogin'}(this)">
+    <div class="brand"><span class="grad">CURO</span> Automate</div>
+    <h2>${signup ? 'Crea tu cuenta' : 'Entra a tu espacio'}</h2>
+    <p class="muted">${esc(note || (signup ? 'Tu cuenta sirve para toda la plataforma CURO Group.' : 'Usa la misma cuenta que en CURO Group.'))}</p>
+    ${signup ? '<label class="field">Nombre<input id="authName" autocomplete="name" required></label>' : ''}
+    <label class="field">Email<input id="authEmail" type="email" autocomplete="email" required></label>
+    <label class="field">Contraseña<input id="authPass" type="password" minlength="8" autocomplete="${signup ? 'new-password' : 'current-password'}" required></label>
+    <p class="formError" id="authError" role="alert"></p>
+    <button class="btn primary wideBtn" type="submit">${signup ? 'Crear cuenta' : 'Entrar'}</button>
+    ${signup ? '' : '<button class="btn linkbtn" type="button" onclick="resetPassword()">He olvidado mi contraseña</button>'}
+    <p class="muted switchAuth">${signup ? '¿Ya tienes cuenta? <a href="#" onclick="login(\'login\');return false">Inicia sesión</a>' : '¿Aún no tienes cuenta? <a href="#" onclick="login(\'signup\');return false">Créala gratis</a>'}</p>
+    <button class="btn ghost wideBtn" type="button" onclick="home()">Volver</button>
+  </form></div>`;
+  document.getElementById(signup ? 'authName' : 'authEmail')?.focus();
+}
+function authError(msg) { const e = document.getElementById('authError'); if (e) e.textContent = msg; }
+function translateAuth(m = '') {
+  if (/Invalid login/i.test(m)) return 'Email o contraseña incorrectos.';
+  if (/Email not confirmed/i.test(m)) return 'Aún no has confirmado tu email. Revisa tu bandeja de entrada.';
+  if (/already registered/i.test(m)) return 'Ya existe una cuenta con ese email. Inicia sesión.';
+  if (/Password should be/i.test(m)) return 'La contraseña debe tener al menos 8 caracteres.';
+  return m || 'No se pudo completar. Inténtalo de nuevo.';
+}
+async function doLogin(form) {
+  const done = busy(form.querySelector('[type=submit]'), 'Entrando…');
+  const { error } = await sb.auth.signInWithPassword({ email: authEmail.value.trim(), password: authPass.value });
+  done();
+  if (error) authError(translateAuth(error.message));
+}
+async function doSignup(form) {
+  const done = busy(form.querySelector('[type=submit]'), 'Creando cuenta…');
+  const name = authName.value.trim();
+  const { data, error } = await sb.auth.signUp({ email: authEmail.value.trim(), password: authPass.value, options: { data: { name, display_name: name }, emailRedirectTo: location.origin } });
+  done();
+  if (error) return authError(translateAuth(error.message));
+  if (!data.session) {
+    A.innerHTML = `<div class="login"><div class="loginbox"><div class="brand"><span class="grad">CURO</span> Automate</div><h2>Revisa tu correo</h2><p>Te hemos enviado un enlace a <b>${esc(authEmail.value)}</b> para confirmar tu cuenta. Después vuelve aquí e inicia sesión.</p><p class="muted">Lo que estabas preparando se recuperará al entrar.</p><button class="btn primary wideBtn" onclick="login('login')">Ir a iniciar sesión</button></div></div>`;
+  }
+}
+async function resetPassword() {
+  const email = document.getElementById('authEmail')?.value.trim();
+  if (!email) return authError('Escribe tu email y vuelve a pulsar.');
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin });
+  authError(error ? translateAuth(error.message) : 'Te hemos enviado un enlace para cambiar la contraseña.');
+}
+async function logout() { await sb.auth.signOut(); me = null; home(); }
+
+// ---------- Estructura del espacio privado ----------
+const NAV = ['Inicio', 'Automatizaciones', 'Aprobaciones', 'Historial', 'Conexiones', 'Conocimiento', 'Cuenta'];
+function shell(page, body) {
+  currentPage = page;
+  const pending = me?.counts?.pending_approvals || 0;
+  A.innerHTML = `<div class="shell"><aside class="side"><div class="brand"><span class="grad">CURO</span> Automate</div><nav>${NAV.map(n =>
+    `<button class="navbtn ${n === page ? 'active' : ''}" onclick="go('${n}')">${n}${n === 'Aprobaciones' && pending ? ` <span class="navCount">${pending}</span>` : ''}</button>`).join('')}</nav>
+    <div class="sideFoot"><small>${esc(me?.user?.email || '')}</small><button class="navbtn" onclick="logout()">Salir</button></div></aside>
+    <main class="main"><div class="dashhead"><div><small class="muted">CURO AUTOMATE</small><h1>${esc(page)}</h1></div>${aiBadge()}</div><div id="page">${body}</div></main></div>`;
+}
+function aiBadge() {
+  if (!me) return '';
+  if (!me.ai?.configured) return `<span class="badge danger" title="Falta configurar la clave de IA en el servidor">IA sin configurar</span>`;
+  return `<span class="badge ok" title="Proveedor de IA activo">IA activa · ${esc(me.ai.provider === 'anthropic' ? 'Claude' : 'Groq')}</span>`;
+}
+async function refreshMe() { me = await api('me'); return me; }
+async function go(page) {
+  if (!session) return login('login');
+  try { await refreshMe(); } catch (e) { return shell(page, `<div class="card"><p>${esc(e.message)}</p><button class="btn primary" onclick="go('${page}')">Reintentar</button></div>`); }
+  const pages = { Inicio: inicio, Automatizaciones: automationsPage, Aprobaciones: approvalsPage, Historial: historyPage, Conexiones: connectionsPage, Conocimiento: knowledgePage, Cuenta: accountPage };
+  (pages[page] || inicio)();
+}
+function loading(page, text = 'Cargando…') { shell(page, `<div class="card"><p class="muted"><span class="spin"></span> ${esc(text)}</p></div>`); }
+
+// ---------- Portada pública (diseño original) ----------
 const featureIcons=[
 `<svg viewBox="0 0 72 72" aria-hidden="true"><rect x="10" y="19" width="52" height="38" rx="9" fill="#dbeafe"/><path d="M13 24l23 18 23-18" fill="none" stroke="#2563eb" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="55" cy="51" r="12" fill="#2563eb"/><path d="M55 45v12M49 51h12" stroke="white" stroke-width="3.5" stroke-linecap="round"/></svg>`,
 `<svg viewBox="0 0 72 72" aria-hidden="true"><rect x="15" y="10" width="42" height="52" rx="9" fill="#ede9fe"/><path d="M24 25h24M24 35h17M24 45h13" stroke="#7c3aed" stroke-width="4" stroke-linecap="round"/><circle cx="52" cy="50" r="12" fill="#7c3aed"/><path d="M46 50l4 4 8-9" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
@@ -29,325 +172,338 @@ const featureIcons=[
 `<svg viewBox="0 0 72 72" aria-hidden="true"><path d="M36 10l7 7 10-1 3 10 8 6-5 9 2 10-10 3-6 8-9-5-9 5-6-8-10-3 2-10-5-9 8-6 3-10 10 1z" fill="#dbeafe" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/><circle cx="36" cy="36" r="11" fill="white"/><path d="M31 36l4 4 7-9" fill="none" stroke="#00a98f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 ];
 const ideas=[['Docentes','Cuando reciba consultas de familias, clasifícalas, prepara una respuesta clara y déjamela lista para aprobar.'],['Emprendedores','Cuando llegue un nuevo cliente potencial, guarda sus datos, identifica qué necesita, prepara una respuesta y programa seguimiento.'],['Community managers','Organiza las solicitudes de contenido, prepara borradores por red social y envíamelos a aprobación antes de publicar.'],['Creadores de contenido','Cuando reciba una propuesta de colaboración, registra la marca, resume la propuesta y prepara una respuesta.'],['Freelance y consultores','Cuando llegue una consulta profesional, crea el contacto, resume la necesidad, prepara respuesta y seguimiento.'],['Pequeños equipos','Recoge solicitudes entrantes, asígnales prioridad, prepara las acciones siguientes y avisa de las que necesiten aprobación.']];
-function home(){A.innerHTML=`<header class="top"><div class="brand"><span class="grad">CURO</span> Automate</div><div class="topnav"><a href="#que-hace">Qué hace</a><a href="#como-funciona">Cómo funciona</a><a href="#contacto">Contacto</a><button class="btn ghost" onclick="login()">Iniciar sesión</button></div></header><main><section class="hero"><span class="pill">AUTOMATIZACIÓN CON IA · MODO SUPERVISADO</span><h1>Dile qué trabajo quieres delegar. <span class="grad">CURO se ocupa del resto.</span></h1><p>Describe una tarea con tus palabras. CURO organiza el proceso, prepara el trabajo y te pide aprobación cuando hace falta.</p><div class="publicPrompt"><label for="publicInstruction">¿Qué quieres que CURO haga por ti?</label><div class="dictationWrap"><textarea id="publicInstruction" placeholder="Describe una tarea que haces repetidamente…">Cuando llegue una consulta sobre mis servicios, identifica al cliente, guarda sus datos, prepara una respuesta y avísame antes de enviarla.</textarea><button class="dictateBtn" type="button" onclick="toggleDictation('publicInstruction',this)" title="Dictar automatización" aria-label="Dictar automatización">🎙 <span>Dictar</span></button></div><div class="heroActions"><button class="btn primary" onclick="startFromPublic()">Crear mi automatización</button><button class="btn ghost linkbtn" onclick="showIdeas()">Ver ideas</button></div></div><div class="starterWrap" id="ideas-inicio"><small>O EMPIEZA CON UNA IDEA</small><div class="starterGrid">${ideas.slice(0,4).map((x,i)=>`<div class="starterCard starterExample"><span>${x[0]}</span><b>${['Responder consultas','Captar y seguir clientes','Organizar solicitudes','Gestionar colaboraciones'][i]}</b><small>Ejemplo de lo que puedes pedirle a CURO</small></div>`).join('')}</div></div></section><section class="section" id="que-hace"><div class="sectionIntro"><span class="eyebrow">CURO AUTOMATE</span><h2>¿Qué puede hacer CURO por ti?</h2><p class="muted">Un espacio para delegar trabajo repetitivo sin construir flujos técnicos.</p></div><div class="grid">${['Correo inteligente','Respuestas y aprobaciones','Contactos y seguimiento','Documentos','Conocimiento de tu negocio','Organización de tareas'].map((x,i)=>`<div class="card feature"><b class="featureIcon">${featureIcons[i]}</b><h3>${x}</h3><p class="muted">${['Clasifica consultas y detecta qué necesita cada mensaje.','Prepara borradores y deja las acciones sensibles bajo tu control.','Registra personas, organizaciones, intereses y próximos pasos.','Prepara propuestas, informes, presupuestos y otros documentos.','Utiliza tus servicios, reglas y datos sin inventar información.','Convierte instrucciones en procesos repetibles y trazables.'][i]}</p></div>`).join('')}</div></section><section class="section softSection"><div class="sectionIntro"><span class="eyebrow">PARA TU PROFESIÓN</span><h2>Automatizaciones pensadas para tu trabajo</h2><p class="muted">Empieza con una necesidad concreta y adapta cada automatización a tu forma de trabajar.</p></div><div class="grid">${ideas.map(x=>`<div class="card"><span class="badge">${x[0]}</span><p>${x[1]}</p></div>`).join('')}</div></section><section class="section" id="como-funciona"><div class="sectionIntro"><span class="eyebrow">SIN FLUJOS TÉCNICOS</span><h2>Cómo funciona</h2></div><div class="steps">${[['1','Describe qué quieres delegar','Escríbelo con tus propias palabras.'],['2','CURO prepara el proceso','Organiza las acciones y utiliza tu conocimiento.'],['3','Revisas cuando sea necesario','Las acciones sensibles quedan bajo aprobación.'],['4','CURO ejecuta y registra','Mantiene trazabilidad de lo realizado.']].map(x=>`<div class="card step"><span class="stepNum">${x[0]}</span><h3>${x[1]}</h3><p class="muted">${x[2]}</p></div>`).join('')}</div></section><section class="section agentPublic"><div><span class="pill">CURO AGENT</span><h2>Automatización con control humano</h2><p class="muted">CURO puede preparar, organizar y ejecutar tareas. En modo supervisado, las decisiones importantes esperan tu aprobación.</p></div><div class="agentVisual"><div class="agentIcon big">✦</div><div><b>CURO Agent</b><small>Modo supervisado</small></div></div></section><section class="section"><div class="planCard"><div><span class="pill">PLAN GRATIS</span><h2>Prueba hasta 2 automatizaciones gratis</h2><p>Puedes crear 2 automatizaciones gratuitas en total. Eliminarlas no recupera el cupo gratuito.</p></div><button class="btn primary" onclick="showPublicPlans()">Ver planes</button></div></section><section class="contactBand" id="contacto"><div class="contactInner"><div><span class="eyebrow light">CONTACTO</span><h2>¿Tienes una pregunta?</h2><p>Estamos construyendo una forma más sencilla de delegar trabajo con inteligencia artificial.</p><a class="contactLink" href="mailto:curogroup.web@gmail.com">curogroup.web@gmail.com</a></div><div class="newsletter"><span class="eyebrow light">NEWSLETTER</span><h3>Novedades de CURO Group</h3><p>Recibe recursos, ideas y novedades sobre IA, automatización y productos CURO.</p><div class="newsletterForm"><input id="newsletterEmail" type="email" placeholder="Tu correo electrónico"><button class="btn primary" onclick="newsletterDemo()">Suscribirme</button></div><small>En esta versión MVP la suscripción se mostrará como demostración.</small></div></div></section></main><footer class="footer"><div class="footerGrid"><div><div class="brand"><span class="grad">CURO</span> Group</div><p>Herramientas, recursos y soluciones para trabajar y aprender con inteligencia artificial.</p><p><b>Madrid, España</b></p></div><div><h4>Navegación</h4><a href="#que-hace">Qué hace</a><a href="#como-funciona">Cómo funciona</a><a href="#contacto">Contacto</a><a href="#" onclick="login();return false">CURO Automate</a></div><div><h4>Legal</h4><a href="#" onclick="legalDemo('Aviso legal');return false">Aviso legal</a><a href="#" onclick="legalDemo('Política de privacidad');return false">Política de privacidad</a><a href="#" onclick="legalDemo('Términos y condiciones');return false">Términos y condiciones</a><a href="#" onclick="legalDemo('Cookies');return false">Cookies</a></div><div><h4>Síguenos</h4><a target="_blank" rel="noopener" href="https://www.instagram.com/curo.group/">Instagram</a><a target="_blank" rel="noopener" href="https://www.tiktok.com/@curo.group">TikTok</a><a target="_blank" rel="noopener" href="https://www.youtube.com/@Curo.Group1">YouTube</a><a target="_blank" rel="noopener" href="https://www.linkedin.com/company/curo-group-94258942a/">LinkedIn</a></div></div><div class="footerBottom"><span>© 2026 CURO Group · Madrid, España</span><span>Privacidad · Cookies · Términos · Aviso legal</span></div></footer>`}
-function pickPublicIdea(i){let e=document.getElementById('publicInstruction');if(e){e.value=ideas[i][1];e.focus();e.scrollIntoView({behavior:'smooth',block:'center'})}}
-function showIdeas(){const el=document.getElementById('ideas-inicio');if(el)el.scrollIntoView({behavior:'smooth',block:'start'})}
-function startFromPublic(){let e=document.getElementById('publicInstruction');pendingInstruction=(e&&e.value.trim())||'';if(!pendingInstruction)return;guestMode=true;guestWorkspace(pendingInstruction);setTimeout(()=>prepareAuto(),0)}
-let activeRecognition=null;
-function toggleDictation(targetId,btn){
- const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
- if(!SR){return modal('Dictado por voz','Tu navegador no ofrece dictado web en esta versión. Puedes escribir la automatización normalmente.');}
- if(activeRecognition){try{activeRecognition.stop()}catch(e){} activeRecognition=null; if(btn){btn.classList.remove('listening');btn.querySelector('span').textContent='Dictar'} return;}
- const target=document.getElementById(targetId); if(!target)return;
- const rec=new SR(); activeRecognition=rec; rec.lang='es-ES'; rec.continuous=true; rec.interimResults=true;
- let base=target.value.trim();
- rec.onstart=()=>{btn.classList.add('listening');btn.querySelector('span').textContent='Escuchando…'};
- rec.onresult=(ev)=>{let finalText='', interim=''; for(let i=ev.resultIndex;i<ev.results.length;i++){let txt=ev.results[i][0].transcript;if(ev.results[i].isFinal)finalText+=txt;else interim+=txt} if(finalText){base=(base?base+' ':'')+finalText.trim()} target.value=(base+(interim?' '+interim:'' )).trim();};
- rec.onerror=()=>{};
- rec.onend=()=>{activeRecognition=null;btn.classList.remove('listening');btn.querySelector('span').textContent='Dictar'};
- try{rec.start()}catch(e){activeRecognition=null}
-}
-function guestWorkspace(t){A.innerHTML=`<div class="standalone"><div class="row"><div class="brand"><span class="grad">CURO</span> Automate</div><button class="btn ghost" onclick="guestMode=false;home()">← Volver</button></div><div class="prompt"><span class="pill">PRUEBA SIN REGISTRO</span><h2>Construye tu automatización antes de crear una cuenta</h2><p class="muted">Puedes describirla, revisar lo que CURO entiende y probar su estructura. Solo te pediremos iniciar sesión cuando quieras guardarla o activarla.</p><div class="dictationWrap"><textarea id="instruction">${escapeHtml(t)}</textarea><button class="dictateBtn" type="button" onclick="toggleDictation('instruction',this)" title="Dictar automatización" aria-label="Dictar automatización">🎙 <span>Dictar</span></button></div><button class="btn primary" onclick="prepareAuto()">Preparar automatización</button></div></div>`}
-function requireAccountForDraft(draft){pendingDraft=draft;pendingInstruction=draft.instruction||pendingInstruction;let d=document.createElement('div');d.className='modal';d.innerHTML=`<div class="modalbox flowConfirm"><span class="pill">TU AUTOMATIZACIÓN ESTÁ LISTA</span><h2>Guárdala para volver a utilizarla</h2><p>Ya puedes comprobar cómo funcionará CURO. Para <b>guardar, activar, ejecutar con tus datos e incorporar el resultado al historial</b>, crea una cuenta o inicia sesión.</p><div class="card"><b>No perderás lo que acabas de construir.</b><p class="muted">Después de entrar, CURO recuperará esta automatización y la guardará en Mis automatizaciones.</p></div><div class="actions"><button class="btn ghost" onclick="this.closest('.modal').remove()">Seguir revisando</button><button class="btn primary" onclick="this.closest('.modal').remove();login()">Crear cuenta / Iniciar sesión</button></div></div>`;document.body.appendChild(d)}
-function newsletterDemo(){let e=document.getElementById('newsletterEmail');let email=e&&e.value.trim();if(!email)return modal('Newsletter','Escribe tu correo electrónico para continuar.');if(!state.newsletter.includes(email))state.newsletter.push(email);save();modal('Newsletter CURO','Suscripción registrada en este MVP. Antes del lanzamiento comercial se conectará al proveedor definitivo de email.')}
-function legalDemo(name){modal(name,'Esta sección queda preparada para enlazar con los textos legales oficiales de CURO Group antes de la publicación comercial.')}
+function home(){A.innerHTML=`<header class="top"><div class="brand"><span class="grad">CURO</span> Automate</div><div class="topnav"><a href="#que-hace">Qué hace</a><a href="#como-funciona">Cómo funciona</a><a href="#contacto">Contacto</a><button class="btn ghost" onclick="login('login')">Iniciar sesión</button></div></header><main><section class="hero"><span class="pill">AUTOMATIZACIÓN CON IA · MODO SUPERVISADO</span><h1>Dile qué trabajo quieres delegar. <span class="grad">CURO se ocupa del resto.</span></h1><p>Describe una tarea con tus palabras. CURO organiza el proceso, prepara el trabajo y te pide aprobación cuando hace falta.</p><div class="publicPrompt"><label for="publicInstruction">¿Qué quieres que CURO haga por ti?</label><div class="dictationWrap"><textarea id="publicInstruction" placeholder="Describe una tarea que haces repetidamente…">Cuando llegue una consulta sobre mis servicios, identifica al cliente, guarda sus datos, prepara una respuesta y avísame antes de enviarla.</textarea><button class="dictateBtn" type="button" onclick="toggleDictation('publicInstruction',this)" title="Dictar automatización" aria-label="Dictar automatización">🎙 <span>Dictar</span></button></div><div class="heroActions"><button class="btn primary" onclick="startFromPublic()">Crear mi automatización</button><button class="btn ghost linkbtn" onclick="showIdeas()">Ver ideas</button></div></div><div class="starterWrap" id="ideas-inicio"><small>O EMPIEZA CON UNA IDEA</small><div class="starterGrid">${ideas.slice(0,4).map((x,i)=>`<button type="button" class="starterCard starterExample" onclick="pickPublicIdea(${i})"><span>${x[0]}</span><b>${['Responder consultas','Captar y seguir clientes','Organizar solicitudes','Gestionar colaboraciones'][i]}</b><small>Usar este ejemplo</small></button>`).join('')}</div></div></section><section class="section" id="que-hace"><div class="sectionIntro"><span class="eyebrow">CURO AUTOMATE</span><h2>¿Qué puede hacer CURO por ti?</h2><p class="muted">Un espacio para delegar trabajo repetitivo sin construir flujos técnicos.</p></div><div class="grid">${['Correo inteligente','Respuestas y aprobaciones','Contactos y seguimiento','Documentos','Conocimiento de tu negocio','Organización de tareas'].map((x,i)=>`<div class="card feature"><b class="featureIcon">${featureIcons[i]}</b><h3>${x}</h3><p class="muted">${['Clasifica consultas y detecta qué necesita cada mensaje.','Prepara borradores y deja las acciones sensibles bajo tu control.','Registra personas, organizaciones, intereses y próximos pasos.','Prepara propuestas, informes, presupuestos y otros documentos.','Utiliza tus servicios, reglas y datos sin inventar información.','Convierte instrucciones en procesos repetibles y trazables.'][i]}</p></div>`).join('')}</div></section><section class="section softSection"><div class="sectionIntro"><span class="eyebrow">PARA TU PROFESIÓN</span><h2>Automatizaciones pensadas para tu trabajo</h2><p class="muted">Empieza con una necesidad concreta y adapta cada automatización a tu forma de trabajar.</p></div><div class="grid">${ideas.map(x=>`<div class="card"><span class="badge">${x[0]}</span><p>${x[1]}</p></div>`).join('')}</div></section><section class="section" id="como-funciona"><div class="sectionIntro"><span class="eyebrow">SIN FLUJOS TÉCNICOS</span><h2>Cómo funciona</h2></div><div class="steps">${[['1','Describe qué quieres delegar','Escríbelo con tus propias palabras.'],['2','CURO prepara el proceso','Organiza las acciones y utiliza tu conocimiento.'],['3','Revisas cuando sea necesario','Las acciones sensibles quedan bajo aprobación.'],['4','CURO ejecuta y registra','Mantiene trazabilidad de lo realizado.']].map(x=>`<div class="card step"><span class="stepNum">${x[0]}</span><h3>${x[1]}</h3><p class="muted">${x[2]}</p></div>`).join('')}</div></section><section class="section agentPublic"><div><span class="pill">CURO AGENT</span><h2>Automatización con control humano</h2><p class="muted">CURO puede preparar, organizar y ejecutar tareas. En modo supervisado, las decisiones importantes esperan tu aprobación.</p></div><div class="agentVisual"><div class="agentIcon big">✦</div><div><b>CURO Agent</b><small>Modo supervisado</small></div></div></section><section class="section"><div class="planCard"><div><span class="pill">EMPIEZA GRATIS</span><h2>Crea tu primera automatización hoy</h2><p>Describe la tarea, revisa el plan que prepara CURO y actívala. Tú apruebas cada envío importante.</p></div><button class="btn primary" onclick="login('signup')">Crear cuenta gratis</button></div></section><section class="contactBand" id="contacto"><div class="contactInner"><div><span class="eyebrow light">CONTACTO</span><h2>¿Tienes una pregunta?</h2><p>Estamos construyendo una forma más sencilla de delegar trabajo con inteligencia artificial.</p><a class="contactLink" href="mailto:curogroup.web@gmail.com">curogroup.web@gmail.com</a></div><div class="newsletter"><span class="eyebrow light">NEWSLETTER</span><h3>Novedades de CURO Group</h3><p>Recibe recursos, ideas y novedades sobre IA, automatización y productos CURO.</p><div class="newsletterForm"><input id="newsletterEmail" type="email" placeholder="Tu correo electrónico"><button class="btn primary" onclick="newsletterDemo()">Suscribirme</button></div><small id="newsletterMsg"></small></div></div></section></main><footer class="footer"><div class="footerGrid"><div><div class="brand"><span class="grad">CURO</span> Group</div><p>Herramientas, recursos y soluciones para trabajar y aprender con inteligencia artificial.</p><p><b>Madrid, España</b></p></div><div><h4>Navegación</h4><a href="#que-hace">Qué hace</a><a href="#como-funciona">Cómo funciona</a><a href="#contacto">Contacto</a><a href="#" onclick="login('login');return false">CURO Automate</a></div><div><h4>Legal</h4><a href="#" onclick="legalDemo('Aviso legal');return false">Aviso legal</a><a href="#" onclick="legalDemo('Política de privacidad');return false">Política de privacidad</a><a href="#" onclick="legalDemo('Términos y condiciones');return false">Términos y condiciones</a><a href="#" onclick="legalDemo('Cookies');return false">Cookies</a></div><div><h4>Síguenos</h4><a target="_blank" rel="noopener" href="https://www.instagram.com/curo.group/">Instagram</a><a target="_blank" rel="noopener" href="https://www.tiktok.com/@curo.group">TikTok</a><a target="_blank" rel="noopener" href="https://www.youtube.com/@Curo.Group1">YouTube</a><a target="_blank" rel="noopener" href="https://www.linkedin.com/company/curo-group-94258942a/">LinkedIn</a></div></div><div class="footerBottom"><span>© 2026 CURO Group · Madrid, España</span><span>Privacidad · Cookies · Términos · Aviso legal</span></div></footer>`}
 
-function login(){A.innerHTML=`<div class="login"><div class="loginbox"><div class="brand"><span class="grad">CURO</span> AUTOMATE</div><h2>Entra a tu espacio</h2><p class="muted">CURO preparará tu automatización en modo supervisado antes de activarla.</p><input id="name" placeholder="Tu nombre" value="Alejandra"><input id="email" placeholder="Email" type="email"><button class="btn primary" style="width:100%;margin-top:8px" onclick="enter()">Entrar / Crear cuenta</button><button class="btn ghost" style="width:100%;margin-top:8px" onclick="home()">Volver</button></div></div>`}
-function enter(){let n=document.getElementById('name').value.trim()||'Usuario',e=document.getElementById('email').value.trim()||'demo@curo.local';state.user={name:n,email:e};save();if(pendingDraft){let d=pendingDraft;pendingDraft=null;guestMode=false;pendingInstruction='';saveAutomation(d);return}inicio(pendingInstruction);pendingInstruction='';guestMode=false}
-const nav=['Inicio','Correo','Automatizaciones','Aprobaciones','Plantillas','Contactos','Documentos','Conocimiento','Conexiones','Historial','Cuenta'];
-function shell(page,body){A.innerHTML=`<div class="shell"><aside class="side"><div class="brand"><span class="grad">CURO</span> Automate</div><nav>${nav.map(n=>`<button class="navbtn ${n==page?'active':''}" onclick="dash('${n}')">${n}</button>`).join('')}</nav></aside><main class="main"><div class="dashhead"><div><small class="muted">CURO AUTOMATE</small><h1 style="margin:3px 0">${page}</h1></div><div class="agent"><div class="agentIcon">✦</div><div><b>CURO Agent</b><br><small class="muted">Modo supervisado</small></div><button class="btn ghost" onclick="logout()">Salir</button></div></div>${body}</main></div>`}
-function dash(p){if(!state.user)return login(); if(p==='Inicio')return inicio(); if(p==='Correo')return correo(); if(p==='Automatizaciones')return automationsPage(); if(p==='Aprobaciones')return approvals(); if(p==='Contactos')return contacts(); if(p==='Conocimiento')return knowledge(); if(p==='Conexiones')return connectionsPage(); if(p==='Historial')return historyPage(); if(p==='Plantillas')return templates(); if(p==='Documentos')return documents(); if(p==='Cuenta')return account();}
-function inicio(prefill=''){let used=hasUnlimitedTestAccess()?state.automations.length:(state.plan==='Gratis'?Math.min(Number(state.free_automations_created_total)||0,2):state.automations.filter(a=>a.status==='Activa').length);let pending=state.approvals.filter(x=>x.status==='Pendiente').length;let initial=prefill||'Cuando llegue una consulta sobre mis servicios, identifica al cliente, guarda sus datos, prepara una respuesta y avísame antes de enviarla.';shell('Inicio',`<div class="homePlanRow"><span class="pill">PLAN ${escapeHtml((state.plan||'Gratis').toUpperCase())}</span>${state.plan==='Gratis'?`<small class="muted">Tienes 2 automatizaciones gratuitas en total. Eliminarlas no recupera el cupo.</small>`:''}</div><div class="stats"><button class="card stat statLink" onclick="automationsPage()"><small>AUTOMATIZACIONES</small><b>${hasUnlimitedTestAccess()?used:(state.plan==='Gratis'?`${used}/2`:used)}</b><span class="muted">${hasUnlimitedTestAccess()?'modo pruebas · sin límite':(state.plan==='Gratis'?'gratuitas utilizadas':'activas')}</span><span class="statAction">Ver automatizaciones →</span></button><button class="card stat statLink ${pending?'statAttention':''}" onclick="approvals()"><small>APROBACIONES</small><b>${pending}</b><span class="muted">${pending===1?'pendiente':'pendientes'}</span><span class="statAction">Revisar aprobaciones →</span></button><button class="card stat statLink" onclick="contacts()"><small>CONTACTOS</small><b>${state.contacts.length}</b><span class="muted">registrados</span><span class="statAction">Ver contactos →</span></button><button class="card stat statLink" onclick="historyPage()"><small>ACTIVIDAD</small><b>${state.audit.length}</b><span class="muted">acciones registradas</span><span class="statAction">Ver historial →</span></button></div><div class="prompt"><span class="pill">DELEGA UNA TAREA</span><h2>¿Qué quieres que CURO haga por ti?</h2><textarea id="instruction">${initial}</textarea><button class="btn primary" onclick="prepareAuto()">Preparar automatización</button> <button class="btn ghost" onclick="correo()">Conectar / revisar Gmail</button></div><section style="margin-top:30px"><h2>Ideas para empezar</h2><p class="muted">Ejemplos para inspirarte. Escribe arriba, con tus propias palabras, la automatización que realmente necesitas.</p><div class="ideas">${ideas.map(x=>`<div class="card idea ideaExample"><span class="badge">${x[0]}</span><p>${x[1]}</p><small class="muted">Ejemplo de automatización</small></div>`).join('')}</div></section>`) }
-function useIdea(t){document.getElementById('instruction').value=t;scrollTo(0,0)}
-function normalizeIntentText(t){return (t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}
-function isLocalTestMode(){return location.protocol==='file:'||location.hostname==='localhost'||location.hostname==='127.0.0.1'}
-function hasUnlimitedTestAccess(){return isLocalTestMode()}
-function quotaLabel(){return hasUnlimitedTestAccess()?'Modo pruebas · sin límite':(state.plan==='Gratis'?`${Math.min(Number(state.free_automations_created_total)||0,2)}/2 gratuitas utilizadas`:`${state.automations.filter(a=>a.status==='Activa').length}/${planLimit()} activas`)}
-function detectReusable(t){let n=normalizeIntentText(t);return /(cada semana|semanal|cada mes|mensual|cada dia|diario|reutil|planific|actividad|informe|calendario|contenido|curso|tema diferente|cada vez|generar.*cada|crear.*cada|publicaciones|posts|guiones|rubricas)/i.test(n)}
-function scoreIntent(t){let n=normalizeIntentText(t);let groups={
-  community:['community','instagram','tiktok','linkedin','facebook','red social','redes sociales','publicacion','publicaciones','post','posts','reel','reels','carrusel','carruseles','calendario editorial','campana','contenido social','marca'],
-  docente:['docente','alumno','alumnos','clase','clases','curso','planificacion','rubrica','evaluacion','familias','colegio','escuela','primaria','secundaria','actividad didactica','materia','asignatura'],
-  creador:['creador','youtube','guion','guiones','video','videos','newsletter','podcast','episodio','miniatura','titulo de video','descripcion de video'],
-  negocio:['consultoria','consultor','cliente','clientes','presupuesto','servicio','servicios','propuesta comercial','negocio','emprendedor','autonomo','freelance','factura','proveedor','lead']
-};let scores={community:0,docente:0,creador:0,negocio:0};for(let [k,words] of Object.entries(groups))for(let w of words)if(n.includes(w))scores[k]+=w.includes(' ')?3:2;
-// Señales de alta precisión prevalecen sobre términos genéricos como "marca" o "contenido".
-if(/instagram|tiktok|linkedin|facebook|red social|publicaciones|reels|carruseles/.test(n))scores.community+=8;
-if(/planificacion|rubrica|alumnos|clases|colegio|escuela/.test(n))scores.docente+=8;
-if(/youtube|guion|podcast|episodio/.test(n))scores.creador+=8;
-if(/presupuesto|consultoria|propuesta comercial|factura/.test(n))scores.negocio+=8;
-let ranked=Object.entries(scores).sort((a,b)=>b[1]-a[1]);return{profile:ranked[0][1]>0?ranked[0][0]:'general',scores,confidence:ranked[0][1]-(ranked[1]?.[1]||0)}}
-function inferProfile(t){return scoreIntent(t).profile}
-function extractIntentHints(t){let n=normalizeIntentText(t),h={};let count=n.match(/(?:crea|crear|genera|generar|prepara|preparar)?\s*(\d+)\s+(?:publicaciones|posts|reels|videos|guiones|actividades)/);if(count)h.count=Number(count[1]);if(n.includes('instagram'))h.channel='Instagram';else if(n.includes('tiktok'))h.channel='TikTok';else if(n.includes('linkedin'))h.channel='LinkedIn';else if(n.includes('youtube'))h.channel='YouTube';if(/tono profesional/.test(n))h.tone='profesional';else if(/tono cercano/.test(n))h.tone='cercano';return h}
-function suggestReusable(t){let analysis=scoreIntent(t),p=analysis.profile,h=extractIntentHints(t),cfg={profile:p,variables:[],rules:['No inventar datos ni referencias'],output:'Resultado',analysis};
-if(p==='docente'){cfg.variables=[['course','Curso / nivel','text'],['topic','Tema o contenido','text'],['classes','Número de clases','number'],['period','Semana / fecha','text']];cfg.rules=['Adaptar al nivel','Priorizar las fuentes seleccionadas','No inventar referencias','Incluir evaluación cuando corresponda'];cfg.output='Planificación / actividad'}
-else if(p==='community'){cfg.variables=[['brand','Marca / proyecto','text'],['topic','Tema','text'],['period','Semana / período','text']];if(!h.channel)cfg.variables.push(['channel','Red social','text']);cfg.rules=[h.count?`Crear ${h.count} publicaciones`:'Respetar la cantidad de piezas solicitada',h.tone?`Mantener tono ${h.tone}`:'Mantener el tono de marca',h.channel?`Adaptar el contenido a ${h.channel}`:'Adaptar el formato a la red social','Mantener coherencia de marca','No inventar datos ni referencias'];cfg.output=h.channel?`Contenido semanal para ${h.channel}`:'Calendario / contenido para redes sociales'}
-else if(p==='creador'){cfg.variables=[['topic','Tema','text'],['format','Formato','text'],['duration','Duración / extensión','text'],['period','Fecha / período','text']];cfg.rules=['Mantener el estilo del creador','Incluir un gancho claro cuando corresponda','Priorizar las fuentes seleccionadas','No inventar referencias'];cfg.output='Contenido / guion'}
-else if(p==='negocio'){cfg.variables=[['client','Cliente / empresa','text'],['service','Servicio / necesidad','text'],['objective','Objetivo','text'],['date','Fecha','date']];cfg.rules=['Mantener tono profesional','Priorizar el conocimiento y fuentes seleccionadas','No inventar precios ni condiciones','Solicitar revisión si falta información crítica'];cfg.output='Propuesta / documento'}
-else{cfg.variables=[['topic','Tema / asunto','text'],['objective','Objetivo','text'],['format','Formato deseado','text'],['period','Fecha / período','text']];cfg.rules=['Mantener la estructura solicitada','Priorizar las fuentes seleccionadas','No inventar datos ni referencias'];cfg.output='Resultado reutilizable'}
-return cfg}
-function inferDynamicSchema(t){
- const n=normalizeIntentText(t), vars=[], rules=[], actions=[], sources=[], missing=[];
- let trigger='manual', triggerLabel='Cuando lo ejecutes manualmente', output='Resultado preparado';
- let approval=/aproba|revis|antes de enviar|dejamel[ao]|supervis/.test(n);
- const addVar=(key,label,type='text',reason='')=>{if(!vars.some(v=>v[0]===key))vars.push([key,label,type,reason])};
- const addSource=(type,label,reason,required=true)=>{if(!sources.some(x=>x.type===type))sources.push({type,label,reason,required,status:'needs_connection'})};
- if(/cuando (?:llegue|reciba|entre)|al recibir|nuevo correo|nuevo email|nuevo mensaje/.test(n)){trigger='incoming_message';triggerLabel='Cuando llegue un mensaje o correo';addSource('gmail','Gmail','Detectar el mensaje que inicia la automatización')}
- else if(/cuando (?:suba|aparezca|agregue)|nuevo archivo|carpeta/.test(n)){trigger='new_file';triggerLabel='Cuando aparezca un archivo en una carpeta';addSource('drive','Google Drive','Detectar y leer el archivo o carpeta indicada')}
- else if(/cada semana|semanal|todos los lunes|cada lunes/.test(n)){trigger='weekly';triggerLabel='Cada semana'}
- else if(/cada mes|mensual/.test(n)){trigger='monthly';triggerLabel='Cada mes'}
- else if(/cada dia|diario|todos los dias/.test(n)){trigger='daily';triggerLabel='Cada día'}
- // Caso universal: alta/registro de un nuevo usuario + comunicación de bienvenida.
- if(/(?:nuevo usuario|usuario nuevo|se registre|registrarse|registro|se de de alta|alta de usuario|nuevo registro)/.test(n) && /(?:bienvenida|newsletter|correo|email|mail)/.test(n)){
-   trigger='new_user_registration'; triggerLabel='Cuando se registre un usuario por primera vez';
- }
- if(/drive|carpeta|archivo|documento|pdf|excel|csv|lista de familias|familias del colegio|familias de .*grado/.test(n)) addSource('drive','Google Drive','Obtener automáticamente los datos o documentos necesarios');
- if(/correo|email|mail|gmail|enviar|responder|contest/.test(n)) addSource('gmail','Gmail','Preparar o enviar correos con la cuenta autorizada');
- if(/contacto|clientes|familias|destinatarios/.test(n)) addSource('contacts','Contactos','Resolver destinatarios y datos disponibles',false);
- if(/calendar|calendario|agenda|reunion|cita/.test(n)) addSource('calendar','Google Calendar','Consultar o crear eventos',false);
- if(trigger==='new_user_registration'){
-   // El usuario expresa el resultado; CURO infiere evento, datos, canal y control anti-duplicado.
-   addSource('curo_users','Usuarios de CURO','Detectar automáticamente cada alta nueva y obtener nombre/email del registro',true);
-   if(!sources.some(x=>x.type==='gmail')) addSource('gmail','Gmail','Enviar el correo de bienvenida con la cuenta autorizada',true);
-   actions.push('Detectar el primer registro del usuario','Obtener nombre y email del nuevo usuario','Comprobar que la bienvenida no haya sido enviada antes','Preparar el mensaje con la plantilla de bienvenida','Enviar el correo por Gmail','Marcar la bienvenida como enviada','Registrar el resultado en Historial');
-   rules.push('Enviar la bienvenida una sola vez por usuario','No inventar datos que no existan en el registro','No enviar si falta un email válido');
-   output='Email de bienvenida enviado y registrado';
-   approval=false;
- } else if(trigger==='incoming_message'){
-   actions.push('Recibir el mensaje automáticamente','Identificar remitente, asunto e intención','Clasificar y determinar prioridad');
-   if(/respuesta|responder|contestar/.test(n)){actions.push('Preparar una respuesta');output='Respuesta propuesta'} else {actions.push('Preparar la acción solicitada');output='Acción propuesta'}
- } else if(/bienvenida/.test(n)&&/familia|colegio|escuela|grado|curso/.test(n)){
-   // RESOLVER: el usuario expresa el objetivo; CURO infiere las capacidades/fuentes probables.
-   addSource('drive','Google Drive','Buscar una lista o carpeta con las familias y sus datos',false);
-   addSource('contacts','Contactos','Usar una lista de familias ya disponible en CURO',false);
-   if(!sources.some(x=>x.type==='gmail')) addSource('gmail','Gmail','Preparar y, tras aprobación, enviar los correos',true);
-   actions.push('Encontrar automáticamente dónde están las familias','Pedir acceso solo a la fuente elegida','Extraer destinatario, alumno/a y curso disponibles','Validar correos antes de generar','Crear un correo personalizado por familia');
-   output='Correos personalizados de bienvenida'; approval=true;
-   missing.push('Elegir dónde tiene el colegio la lista de familias (CURO puede ayudarte a encontrarla)');
-   addVar('welcome_message','Qué quieres comunicar en la bienvenida','textarea','Solo el contenido que CURO no pueda obtener de Conocimiento o de las fuentes');
- } else if(/publicacion|post|reel|carrusel|contenido|instagram|tiktok|linkedin|youtube/.test(n)){
-   actions.push('Resolver las fuentes disponibles','Crear las piezas solicitadas','Adaptarlas al canal indicado');output='Contenido preparado';
-   addVar('topic','Tema o campaña de esta ejecución','text','Solo si cambia entre ejecuciones');
- } else if(/factura|presupuesto|propuesta|informe|documento|certificado/.test(n)){
-   actions.push('Obtener los datos necesarios','Completar el documento solicitado','Validar que no falten datos críticos');
-   output=/factura/.test(n)?'Facturas preparadas':/presupuesto/.test(n)?'Presupuesto preparado':/propuesta/.test(n)?'Propuesta preparada':/informe/.test(n)?'Informe preparado':'Documento preparado';
- } else if(/actividad|clase|planificacion|evaluacion|rubrica/.test(n)){
-   actions.push('Obtener el contexto educativo disponible','Adaptar el contenido al nivel','Generar el material solicitado');output='Material educativo';
-   addVar('topic','Contenido o tema que cambia','text','Dato variable de cada ejecución');
- } else {
-   actions.push('Interpretar el objetivo','Resolver automáticamente los datos disponibles','Ejecutar la tarea solicitada');
-   missing.push('CURO confirmará únicamente la información que no pueda resolver con tus fuentes');
- }
- if(/clasific/.test(n)) rules.push('Clasificar según el contenido real');
- if(/prioridad|urgente/.test(n)) rules.push('Detectar prioridad sin exagerar urgencias');
- if(/clara|breve|corta/.test(n)) rules.push('Mantener una respuesta clara y breve');
- if(/profesional/.test(n)) rules.push('Mantener tono profesional');
- if(/cercan/.test(n)) rules.push('Mantener tono cercano');
- if(/personaliz/.test(n)||/familia/.test(n)) rules.push('Personalizar sin mezclar datos entre destinatarios');
- rules.push('No inventar datos que no estén disponibles');
- if(approval){actions.push('Dejar cada resultado pendiente de aprobación antes de ejecutar la acción final'); output += ' · pendiente de aprobación'} else actions.push('Registrar el resultado y la ejecución');
- return {trigger,triggerLabel,variables:vars,rules,actions,output,approval,context_sources:sources,missing,objective:t};
+// ---------- Inicio: describir y crear con IA ----------
+const EXAMPLES = [
+  'Cada lunes a las 9, busca en internet las 5 noticias más importantes sobre inteligencia artificial en educación y envíame un resumen por correo.',
+  'Cuando llegue un correo de un cliente preguntando por mis servicios, prepara una respuesta amable con la información de mi negocio y déjamela para aprobar.',
+  'Cada día a las 8, revisa mis correos sin leer y mándame un resumen con lo urgente primero.',
+  'Cuando la ejecute, redacta una propuesta comercial para el cliente que le indique, usando mis servicios y precios.'
+];
+function inicio() {
+  const pending = recall('curo_pending_instruction');
+  const c = me.counts;
+  shell('Inicio', `
+    ${!me.connections.google.connected ? `<div class="notice"><b>Conecta tu Gmail</b> para que CURO pueda leer y enviar correos por ti. <button class="btn smallBtn" onclick="connectGoogle()">Conectar Gmail</button></div>` : ''}
+    <div class="stats">
+      <button class="card stat statLink" onclick="go('Automatizaciones')"><small>AUTOMATIZACIONES</small><b>${c.automations}</b><span class="muted">${c.active} activas</span><span class="statAction">Ver →</span></button>
+      <button class="card stat statLink ${c.pending_approvals ? 'statAttention' : ''}" onclick="go('Aprobaciones')"><small>APROBACIONES</small><b>${c.pending_approvals}</b><span class="muted">pendientes</span><span class="statAction">Revisar →</span></button>
+      <button class="card stat statLink" onclick="go('Conexiones')"><small>GMAIL</small><b class="statText">${me.connections.google.connected ? 'Conectado' : 'Sin conectar'}</b><span class="muted">${esc(me.connections.google.email || 'Necesario para correos')}</span><span class="statAction">Gestionar →</span></button>
+      <button class="card stat statLink" onclick="go('Historial')"><small>HISTORIAL</small><b class="statText">Ver</b><span class="muted">todo lo que hizo CURO</span><span class="statAction">Abrir →</span></button>
+    </div>
+    <div class="prompt">
+      <span class="pill">NUEVA AUTOMATIZACIÓN</span>
+      <h2>¿Qué trabajo quieres delegar?</h2>
+      <p class="muted">Escríbelo con tus palabras: qué debe hacer, cuándo y qué esperas recibir. CURO preparará el plan y te lo enseñará antes de activarlo.</p>
+      <div class="dictationWrap"><textarea id="instruction" rows="4" placeholder="Por ejemplo: cada viernes a las 18:00, resume los correos de clientes de la semana y envíamelo.">${esc(pending || '')}</textarea>
+      <button class="dictateBtn" type="button" onclick="toggleDictation('instruction',this)" aria-label="Dictar">🎙 <span>Dictar</span></button></div>
+      <div class="actions"><button class="btn primary" id="planBtn" onclick="createPlan(this)">Preparar plan con IA</button></div>
+      <div class="examples"><small class="muted">IDEAS PARA EMPEZAR</small>${EXAMPLES.map((e, i) => `<button type="button" class="exampleChip" onclick="document.getElementById('instruction').value=EXAMPLES[${i}]">${esc(e)}</button>`).join('')}</div>
+    </div>`);
+  if (pending) { store('curo_pending_instruction', null); setTimeout(() => createPlan(document.getElementById('planBtn')), 50); }
 }
-function connectorLocalStatus(type){if(type==='contacts')return state.contacts.length>0;return !!state.connections?.[type]?.connected}
-function plannerSourceCard(x){let connected=connectorLocalStatus(x.type);return `<div class="plannerSource"><b>${escapeHtml(x.label)}</b><small>${escapeHtml(x.reason)}</small><span class="badge ${connected?'ok':''}">${connected?'Disponible':(x.required?'Necesaria':'Opción disponible')}</span></div>`}
-function plannerSummary(cfg){return `<div class="plannerPlan"><div class="plannerStep"><small>OBJETIVO</small><b>${escapeHtml(cfg.objective)}</b></div><div class="plannerStep"><small>INICIO</small><b>${escapeHtml(cfg.triggerLabel)}</b></div><div class="plannerStep"><small>FUENTES</small>${cfg.context_sources.length?cfg.context_sources.map(plannerSourceCard).join(''):'<span class="muted">No necesita una fuente externa obligatoria.</span>'}</div><div class="plannerStep"><small>QUÉ HARÁ CURO</small><ol>${cfg.actions.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ol></div><div class="plannerStep"><small>RESULTADO</small><b>${escapeHtml(cfg.output)}</b></div></div>`}
 
-function prepareAuto(){let t=document.getElementById('instruction').value.trim();if(!t)return;let cfg=inferDynamicSchema(t),d=document.createElement('div');d.className='modal';d.dataset.instruction=t;d.dataset.config=JSON.stringify(cfg);d.innerHTML=`<div class="modalbox flowConfirm wide"><span class="pill">CURO AUTOMATION PLANNER</span><h2>CURO ha construido un plan para conseguirlo</h2><p class="muted">No tienes que diseñar el flujo. CURO identifica cómo empieza, dónde están los datos, qué acciones debe realizar y qué información falta.</p>${plannerSummary(cfg)}${cfg.missing.length?`<div class="card plannerMissing"><b>Antes de activarla falta resolver</b><ul>${cfg.missing.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul></div>`:''}<div class="actions"><button class="btn ghost" onclick="this.closest('.modal').remove()">Cancelar</button><button class="btn primary" onclick="configureAuto(this)">Revisar y preparar prueba</button></div></div>`;document.body.appendChild(d)}
-async function configureAuto(btn){await refreshGoogleConnections();let d=btn.closest('.modal'),cfg=JSON.parse(d.dataset.config||'{}');d.dataset.type='reusable';d.dataset.profile='planner';d.dataset.output=cfg.output;let sourceInfo=cfg.context_sources.length?cfg.context_sources.map(x=>`<div class="card sourceNeed"><b>${escapeHtml(x.label)}</b><p>${escapeHtml(x.reason)}</p><span class="badge">${connectorLocalStatus(x.type)?'Conectada':(x.required?'Sin conectar · necesaria':'Opción sugerida')}</span> ${x.type==='curo_users'?'<span class="badge">Fuente interna CURO</span>':(x.type==='gmail'?`<div class="connectorAccount"><small>${connectorLocalStatus('gmail')?'Cuenta emisora: '+escapeHtml(state.connections?.gmail?.email||'Google autorizado (correo no disponible)'):'Cuenta emisora aún sin autorizar'}</small><button class="btn ghost smallBtn" onclick="connectGoogleWorkspace('Gmail',true)">${connectorLocalStatus('gmail')?'Cambiar cuenta Gmail':'Conectar Gmail'}</button> ${connectorLocalStatus('gmail')?'<button class="btn ghost smallBtn" onclick="correo()">Revisar conexión</button>':''}</div>`:(!connectorLocalStatus(x.type)?`<button class="btn ghost smallBtn" onclick="openConnectorFromPlanner('${x.type}')">${x.type==='drive'?'Conectar / explorar Drive':'Conectar'}</button>`:''))}</div>`).join(''):'<div class="card"><span class="muted">Esta automatización no necesita una fuente externa obligatoria.</span></div>';let vars=cfg.variables.length?cfg.variables.map(v=>variableRow(v[0],v[1],v[2])).join(''):'<p class="muted">CURO no detectó datos que debas escribir manualmente en cada ejecución.</p>';d.innerHTML=`<div class="modalbox flowConfirm wide"><span class="pill">PLAN DE AUTOMATIZACIÓN</span><h2>Completa solo lo que CURO no puede obtener automáticamente</h2><p class="muted">Las fuentes contienen los datos. Los campos manuales se reservan únicamente para información que realmente cambia o no existe en esas fuentes.</p><div class="v2grid"><div><h3>Fuentes y conexiones</h3><div id="plannerSources">${sourceInfo}</div><h3>Datos que tendrás que indicar</h3><div id="variableRows">${vars}</div></div><div><h3>Reglas que respetará CURO</h3><div id="ruleRows">${cfg.rules.map(r=>ruleRow(r)).join('')}</div><h3>Resultado</h3><input id="outputType" value="${escapeHtml(cfg.output)}"><div class="card"><b>Secuencia</b><ol>${cfg.actions.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ol></div></div></div><div class="actions"><button class="btn ghost" onclick="this.closest('.modal').remove()">Cancelar</button>${cfg.trigger==='new_user_registration'?'<button class="btn primary" onclick="openDirectGmailTest(this)">Probar Gmail sin guardar</button><button class="btn ghost" onclick="testPlanner(this)">Revisar plan y guardar</button>':'<button class="btn primary" onclick="testPlanner(this)">Preparar prueba</button>'}</div></div>`}
-async function testPlanner(btn){let d=btn.closest('.modal'),base=JSON.parse(d.dataset.config||'{}');await refreshGoogleConnections();const missingRequired=(base.context_sources||[]).filter(x=>x.required&&x.type!=='curo_users'&&!connectorLocalStatus(x.type));if(missingRequired.length){return modal('Falta conectar una fuente',`Antes de preparar la prueba conecta: ${missingRequired.map(x=>x.label).join(', ')}.`)}let variables=[...d.querySelectorAll('.varEdit')].map((r,i)=>{let label=r.querySelector('.varLabel').value.trim();return label?{key:r.querySelector('.varKey').value||slugKey(label,i),label,type:r.querySelector('.varType').value}:null}).filter(Boolean),rules=[...d.querySelectorAll('.ruleText')].map(x=>x.value.trim()).filter(Boolean);let cfg={...base,variables,rules,output:d.querySelector('#outputType').value.trim()||base.output,context_sources:(base.context_sources||[]).map(x=>({...x,source_id:null}))};d.dataset.config=JSON.stringify(cfg);d.innerHTML=`<div class="modalbox flowConfirm"><span class="pill">PRUEBA DEL PLAN</span><h2>CURO ya sabe qué camino debe seguir</h2><p><b>Inicio:</b> ${escapeHtml(cfg.triggerLabel)}</p><p><b>Fuentes:</b> ${escapeHtml(cfg.context_sources.map(x=>x.label).join(', ')||'No requiere conexión externa')}</p><p><b>Resultado:</b> ${escapeHtml(cfg.output)}</p>${cfg.context_sources.some(x=>x.required)?`<div class="card"><b>Prueba real supervisada</b><p>Guarda esta automatización y, en Automatizaciones, pulsa Probar flujo. Introduce un destinatario real, revisa el borrador en Aprobaciones y aprueba el envío por Gmail. El Historial mostrará el resultado. El alta automática de usuarios de CURO sigue pendiente de integración.</p></div>`:''}<div class="actions"><button class="btn ghost" onclick="this.closest('.modal').remove()">Cancelar</button>${cfg.trigger==='new_user_registration'?`<button class="btn ghost" onclick="openDirectGmailTest(this)">Probar Gmail sin guardar</button>`:''}<button class="btn primary" onclick="savePlanner(this)">Guardar y abrir pruebas</button></div></div>`}
-async function savePlanner(btn){let d=btn.closest('.modal'),cfg=JSON.parse(d.dataset.config||'{}');await refreshGoogleConnections();const missingRequired=(cfg.context_sources||[]).filter(x=>x.required&&x.type!=='curo_users'&&!connectorLocalStatus(x.type));if(missingRequired.length){return modal('Automatización todavía no lista',`Conecta primero: ${missingRequired.map(x=>x.label).join(', ')}.`)}let draft={draft_id:'draft-'+Date.now(),instruction:d.dataset.instruction,type:'reusable',config:cfg,profile:'planner'};d.remove();if(!state.user)return requireAccountForDraft(draft);saveAutomation(draft)}
+async function createPlan(btn) {
+  const instruction = document.getElementById('instruction')?.value.trim();
+  if (!instruction) return toast('Describe primero la tarea.', 'warn');
+  if (!me.ai?.configured) return info('IA sin configurar', 'Falta la clave de la IA en el servidor (GROQ_API_KEY en Vercel). Cuando esté, podrás crear automatizaciones.');
+  const done = busy(btn, 'CURO está preparando el plan…');
+  try {
+    const { plan } = await api('plan', { method: 'POST', body: { instruction } });
+    showPlan(instruction, plan);
+  } catch (e) { info('No se pudo preparar el plan', e.message); }
+  finally { done(); }
+}
 
-function renderSourceRows(){let opts=['<option value="">Sin fuente / añadir después</option>'].concat(state.collections.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`)).join('');return `<div class="editableRow sourceEdit"><select class="sourceSelect">${opts}</select><button class="iconBtn" title="Eliminar" onclick="this.parentElement.remove()">×</button></div>`}
-function variableRow(key='',label='',type='text'){return `<div class="editableRow varEdit"><input class="varLabel" value="${escapeHtml(label)}" placeholder="Nombre del dato"><select class="varType"><option value="text" ${type==='text'?'selected':''}>Texto</option><option value="number" ${type==='number'?'selected':''}>Número</option><option value="date" ${type==='date'?'selected':''}>Fecha</option><option value="boolean" ${type==='boolean'?'selected':''}>Sí / No</option></select><input class="varKey" type="hidden" value="${escapeHtml(key)}"><button class="iconBtn" title="Eliminar" onclick="this.parentElement.remove()">×</button></div>`}
-function ruleRow(text=''){return `<div class="editableRow ruleEdit"><input class="ruleText" value="${escapeHtml(text)}" placeholder="Regla que CURO debe respetar"><button class="iconBtn" title="Eliminar" onclick="this.parentElement.remove()">×</button></div>`}
-function addSourceRow(){document.getElementById('sourceRows').insertAdjacentHTML('beforeend',renderSourceRows())}
-function addVariableRow(){document.getElementById('variableRows').insertAdjacentHTML('beforeend',variableRow('','','text'))}
-function addRuleRow(){document.getElementById('ruleRows').insertAdjacentHTML('beforeend',ruleRow(''))}
-function slugKey(s,i){let k=(s||'dato').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');return k||`dato_${i+1}`}
-function collectReusableConfig(d){let variables=[...d.querySelectorAll('.varEdit')].map((r,i)=>{let label=r.querySelector('.varLabel').value.trim();return label?{key:r.querySelector('.varKey').value||slugKey(label,i),label,type:r.querySelector('.varType').value}:null}).filter(Boolean);let rules=[...d.querySelectorAll('.ruleText')].map(x=>x.value.trim()).filter(Boolean);let context_sources=[...d.querySelectorAll('.sourceSelect')].map(s=>{let c=state.collections.find(x=>x.id===s.value);return c?{type:'collection',source_id:c.id,label:c.name,selection_mode:'all',snapshot:c.snapshot||'MVP V2'}:null}).filter(Boolean);return{variables,rules,context_sources,output:d.querySelector('#outputType').value.trim()||'Resultado'}}
-function testAndSaveDirect(followup,btn){let d=btn.closest('.modal'),draft={draft_id:'draft-'+Date.now(),instruction:d.dataset.instruction,type:'direct',followup:followup?'5 días':'No'};d.remove();if(!state.user)return requireAccountForDraft(draft);saveAutomation(draft)}
-function testReusable(btn){let d=btn.closest('.modal'),cfg=collectReusableConfig(d);if(!cfg.variables.length&&!cfg.context_sources.length&&!cfg.rules.length)return modal('Revisa la automatización','Añade al menos un dato, una fuente o una regla para que la automatización reutilizable tenga una estructura que conservar.');d.dataset.config=JSON.stringify(cfg);let vars=cfg.variables.map(v=>v.label).join(' · ')||'Sin datos variables';let sources=cfg.context_sources.map(c=>c.label).join(', ')||'Sin fuentes conectadas';d.innerHTML=`<div class="modalbox flowConfirm"><span class="pill">PRUEBA PREPARADA</span><h2>CURO ha construido una automatización reutilizable</h2><p><b>Datos que cambiarán:</b> ${escapeHtml(vars)}</p><p><b>Fuentes:</b> ${escapeHtml(sources)}</p><p><b>Resultado:</b> ${escapeHtml(cfg.output)}</p><div class="card"><b>Qué hará CURO en cada ejecución</b><p>Pedirá únicamente los datos variables, resolverá las fuentes seleccionadas, aplicará ${cfg.rules.length} regla(s), generará el resultado y registrará la ejecución y sus fuentes en el historial.</p></div><p class="muted">La estructura se guarda una sola vez. Cada nuevo resultado será una ejecución, no una automatización nueva.</p><div class="actions"><button class="btn ghost" onclick="this.closest('.modal').remove()">Cancelar</button><button class="btn primary" onclick="saveReusable(this)">Guardar y activar</button></div></div>`}
-function saveReusable(btn){let d=btn.closest('.modal'),cfg=JSON.parse(d.dataset.config||'{}'),draft={draft_id:'draft-'+Date.now(),instruction:d.dataset.instruction,type:'reusable',config:cfg,profile:d.dataset.profile||'general'};d.remove();if(!state.user)return requireAccountForDraft(draft);saveAutomation(draft)}
-function planLimit(){return ({Gratis:2,Creator:10,Pro:30,Business:100})[state.plan]||2}
-function saveAutomation(o){
- const existing=o.draft_id&&state.automations.find(a=>a.draft_id===o.draft_id);
- if(existing){autos();return modal('Automatización recuperada','CURO recuperó el mismo borrador. No se creó una copia duplicada.')}
- const active=state.automations.filter(a=>a.status==='Activa').length,limit=planLimit();
- if(!hasUnlimitedTestAccess() && state.plan==='Gratis' && state.free_automations_created_total>=2){pendingDraft=o;return plans('limit')}
- if(state.plan!=='Gratis' && active>=limit){pendingDraft=o;return plans('limit')}
- let now=new Date().toISOString(),re=o.type==='reusable',cfg=o.config||{},profile=o.profile||inferProfile(o.instruction),names={planner:'Automatización planificada',dynamic:'Automatización dinámica',docente:'Planificación / actividad reutilizable',community:'Contenido y redes reutilizable',creador:'Contenido reutilizable',negocio:'Proceso comercial reutilizable',general:'Automatización reutilizable'};
- let a={id:Date.now(),draft_id:o.draft_id||('draft-'+Date.now()),name:re?names[profile]:'Automatización directa',description:o.instruction,text:o.instruction,automation_type:o.type,trigger:re?(cfg.trigger||'manual'):'event',inputs:[],context_sources:re?(cfg.context_sources||[]):[],variables:re?(cfg.variables||[]):[],rules:re?(cfg.rules||[]):[],actions:re?(cfg.actions||['Leer variables','Resolver contexto','Aplicar reglas','Generar resultado','Registrar fuentes y resultado']):['Analizar','Preparar acción','Solicitar aprobación','Ejecutar','Registrar'],output:re?(cfg.output||'Resultado'):'Acción supervisada',status:(re&&(cfg.context_sources||[]).some(c=>c.type==='curo_users')?'Preparada':'Activa'),level:'Supervisado',followup:o.followup||'No',runtime_status:'prepared',last_run_at:null,last_error:null,created_at:now,updated_at:now};
- state.automations.push(a);if(state.plan==='Gratis'&&!hasUnlimitedTestAccess())state.free_automations_created_total+=1;log('Automatización creada',`${a.name} · ${re?'Reutilizable':'Directa'}`);save();autos();modal('Automatización guardada',a.trigger==='new_user_registration'?'Se guardó como Preparada: el registro real de CURO todavía no está conectado. Para probar Gmail, pulsa Probar flujo en esta automatización, introduce un destinatario real y aprueba el borrador en Aprobaciones.':'La automatización quedó guardada. Consulta su estado en Automatizaciones antes de ejecutarla.')
+function planBody(plan) {
+  const g = plan.requirements?.google;
+  return `
+    <p class="planSummary">${esc(plan.summary)}</p>
+    ${!plan.feasible ? `<div class="notice danger"><b>Esto no se puede automatizar todavía con CURO.</b> ${esc(plan.limitations.join(' '))}</div>` : ''}
+    <div class="plannerPlan">
+      <div class="plannerStep"><small>NOMBRE</small><input id="planName" value="${esc(plan.name)}" maxlength="80"></div>
+      <div class="plannerStep"><small>CUÁNDO SE EJECUTA</small><b>${esc(plan.trigger.label)}</b>${plan.trigger.type === 'gmail_new_message' ? `<span class="muted mono">Filtro: ${esc(plan.trigger.gmail_query)}</span>` : ''}</div>
+      <div class="plannerStep"><small>QUÉ HARÁ CURO</small><ol>${plan.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol></div>
+      <div class="plannerStep"><small>HERRAMIENTAS</small><div class="chips">${plan.tools.map(t => `<span class="chip">${esc(TOOL_LABELS[t] || t)}</span>`).join('') || '<span class="muted">Solo la IA</span>'}</div></div>
+      ${plan.inputs.length ? `<div class="plannerStep"><small>TE PEDIRÁ EN CADA EJECUCIÓN</small><div class="chips">${plan.inputs.map(i => `<span class="chip">${esc(i.label)}</span>`).join('')}</div></div>` : ''}
+      <div class="plannerStep"><small>RESULTADO</small><b>${esc(plan.output)}</b></div>
+      ${plan.tools.includes('gmail_send') ? `<div class="plannerStep"><small>CONTROL</small><label class="toggle"><input type="checkbox" id="planApproval" ${plan.approval === 'always' ? 'checked' : ''}> Revisar y aprobar cada correo antes de enviarlo <span class="muted">(recomendado)</span></label></div>` : ''}
+    </div>
+    ${plan.limitations.length && plan.feasible ? `<div class="notice"><b>A tener en cuenta:</b><ul>${plan.limitations.map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>` : ''}
+    ${plan.questions.length ? `<div class="notice"><b>Para afinarlo más</b>, puedes añadir esto a tu descripción y volver a preparar el plan:<ul>${plan.questions.map(q => `<li>${esc(q)}</li>`).join('')}</ul></div>` : ''}
+    ${g && !plan.requirements.google_connected ? `<div class="notice warn"><b>Necesita Gmail.</b> Conéctalo para poder activarla. No perderás este plan.</div>` : ''}`;
 }
-function triggerDescriptor(a){
- const t=(a.trigger&&typeof a.trigger==='object')?a.trigger.type:a.trigger;
- const map={manual:'Manual',event:'Evento',new_user_registration:'Nuevo usuario CURO',incoming_message:'Nuevo correo/mensaje',new_file:'Nuevo archivo',daily:'Diaria',weekly:'Semanal',monthly:'Mensual',schedule:'Programada'};
- return map[t]||String(t||'Manual');
-}
-function eventKey(a,event={}){const external=event.event_id||event.id||event.external_id||event.user_id||event.email||event.file_id||event.message_id;return `${a.id}:${external||JSON.stringify(event)}`}
-function wasEventProcessed(a,event={}){return !!state.runtime.processed_events[eventKey(a,event)]}
-function markEventProcessed(a,event={},executionId=null){state.runtime.processed_events[eventKey(a,event)]={automation_id:a.id,execution_id:executionId,processed_at:new Date().toISOString()};save()}
-function supervisorCheck(a,event={}){
- const rt=automationRuntimeState(a,true);if(!rt.ready)return {ok:false,status:'blocked',reason:rt.reason};
- if(wasEventProcessed(a,event))return {ok:false,status:'duplicate',reason:'Este evento ya fue procesado. CURO no lo ejecutará dos veces.'};
- const required=(a.context_sources||[]).filter(c=>c.required&&c.type!=='curo_users'&&!connectorLocalStatus(c.type));if(required.length)return {ok:false,status:'blocked',reason:'Falta conectar: '+required.map(c=>c.label||c.type).join(', ')};
- const needsApproval=a.level!=='Autónomo'||/aprob/i.test((a.output||'')+' '+(a.description||a.text||''));
- return {ok:true,status:needsApproval?'approval':'ready',needsApproval,reason:''};
-}
-function automationOperationalStatus(a){
- if(a.status==='Pausada')return {key:'paused',label:'Pausada',reason:'Automatización pausada'};
- if(a.last_error)return {key:'attention',label:'Requiere atención',reason:a.last_error};
- const rt=automationRuntimeState(a,true);if(!rt.ready)return {key:'prepared',label:'Preparada',reason:rt.reason};
- return {key:'active',label:'Activa',reason:a.last_run_at?`Última ejecución: ${new Date(a.last_run_at).toLocaleString('es-ES')}`:'Esperando el próximo evento'};
-}
-function runnerTick(){
- state.runtime.last_tick=new Date().toISOString();
- for(const a of state.automations){const op=automationOperationalStatus(a);a.runtime_status=op.key;a.runtime_label=op.label}
- save();return {checked:state.automations.length,at:state.runtime.last_tick};
-}
-function runnerEventResult(a,event={}){
- const data=event.data||event||{},name=data.name||data.nombre||data.first_name||'nuevo usuario',email=data.email||event.email||'';
- if(a.trigger==='new_user_registration'){const subject='Bienvenido/a a CURO';const body=`Hola ${name},\n\nTe damos la bienvenida a CURO. Tu registro se ha completado correctamente.\n\nA partir de ahora podrás acceder a los recursos y servicios disponibles en tu cuenta.\n\nUn saludo,\nCURO Group`;return {title:subject,summary:`Bienvenida preparada para ${name}${email?' · '+email:''}.`,body,recipient:email}}
- const g=buildExecutionResult(a,data,[]);return {title:g.title||a.name,summary:g.summary||'Ejecución preparada por CURO.',body:g.body||'',recipient:email};
-}
-function processAutomationEvent(automationId,event={},options={}){
- const a=state.automations.find(x=>String(x.id)===String(automationId));if(!a)return {ok:false,status:'missing',reason:'Automatización no encontrada'};
- const isTest=!!options.test;let check=isTest?{ok:true,status:'approval',needsApproval:true,reason:''}:supervisorCheck(a,event);
- if(!check.ok){log(check.status==='duplicate'?'Evento duplicado ignorado':'Ejecución bloqueada',check.reason);save();return check}
- if(!isTest&&wasEventProcessed(a,event))return {ok:false,status:'duplicate',reason:'Este evento ya fue procesado. CURO no lo ejecutará dos veces.'};
- const prepared=runnerEventResult(a,event);
- const e={id:Date.now(),automation_id:a.id,user_id:state.user?.email||'local',trigger_event:event,input_values:event.data||{},resolved_context:[],started_at:new Date().toISOString(),completed_at:null,status:check.needsApproval?'awaiting_approval':'running',result:prepared.body,result_title:prepared.title,result_summary:prepared.summary,error:null,usage:{mode:isTest?'runner_test':'runner',cost:null}};
- state.executions.unshift(e);a.last_run_at=e.started_at;a.last_error=null;a.updated_at=e.started_at;
- if(check.needsApproval){state.approvals.unshift({id:'ap-'+e.id,execution_id:e.id,automation_id:a.id,title:prepared.title,summary:prepared.summary,content:prepared.body,draft:prepared.body,recipient:prepared.recipient,subject:prepared.title,status:'Pendiente',source:(a.context_sources||[]).some(c=>c.type==='gmail')?'automation_gmail':'automation',created_at:new Date().toISOString()})}
- if(!isTest)markEventProcessed(a,event,e.id);log(isTest?'Runner prueba preparada':'Runner recibió evento',`${a.name} · ${triggerDescriptor(a)}`);save();return {ok:true,status:e.status,execution_id:e.id}
-}
-// Prueba supervisada independiente del cupo de automatizaciones: no crea automatizaciones.
-function openDirectGmailTest(btn){
- const original=btn.closest('.modal');if(!original)return;
- const cfg=JSON.parse(original.dataset.config||'{}');
- if(cfg.trigger!=='new_user_registration')return modal('Prueba no disponible','Esta prueba guiada es exclusiva del correo de bienvenida.');
- const d=document.createElement('div');d.className='modal';
- d.innerHTML=`<div class="modalbox"><span class="pill">PRUEBA REAL SUPERVISADA</span><h2>Preparar bienvenida por Gmail</h2><p>Esta prueba no crea otra automatización ni consume tu cupo gratuito. El envío solo se hará cuando lo apruebes.</p><label>Nombre de prueba<input id="directWelcomeName" value="Usuario de prueba"></label><label>Correo destinatario<input id="directWelcomeEmail" type="email" placeholder="tu@email.com"></label><div class="actions"><button class="btn ghost" onclick="this.closest('.modal').remove()">Cancelar</button><button class="btn primary" onclick="prepareDirectGmailApproval(this)">Crear borrador para aprobar</button></div></div>`;
- document.body.appendChild(d);
-}
-async function prepareDirectGmailApproval(btn){
- const d=btn.closest('.modal');if(!d)return;
- const name=d.querySelector('#directWelcomeName').value.trim(),email=d.querySelector('#directWelcomeEmail').value.trim();
- if(!name||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return modal('Datos incompletos','Escribe un nombre y un correo destinatario válido.');
- btn.disabled=true;btn.textContent='Comprobando Gmail…';let gs;try{gs=await getGmailStatus()}catch(err){btn.disabled=false;btn.textContent='Crear borrador para aprobar';return modal('Error de Gmail',err.message||String(err))}if(!gs.connected){btn.disabled=false;btn.textContent='Crear borrador para aprobar';return modal('Gmail no conectado','Conecta tu cuenta Gmail antes de preparar la prueba.');}
- const now=Date.now(),prepared=runnerEventResult({trigger:'new_user_registration',name:'Bienvenida CURO'},{data:{name,email}});
- const execution={id:now,automation_id:null,user_id:state.user?.email||'local',trigger_event:{event_id:'manual-test-'+now,data:{name,email}},input_values:{name,email},resolved_context:[],started_at:new Date().toISOString(),completed_at:null,status:'awaiting_approval',result:prepared.body,result_title:prepared.title,result_summary:prepared.summary,error:null,usage:{mode:'manual_gmail_test',cost:null}};
- state.executions.unshift(execution);
- state.approvals.unshift({id:'ap-'+now,execution_id:now,automation_id:null,title:prepared.title,summary:prepared.summary,content:prepared.body,draft:prepared.body,recipient:email,subject:prepared.title,status:'Pendiente',source:'automation_gmail',created_at:new Date().toISOString()});
- log('Prueba Gmail preparada',`Correo de bienvenida para ${email} · pendiente de aprobación`);save();
- document.querySelectorAll('.modal').forEach(m=>m.remove());approvals();
-}
-function testPreparedAutomation(id){const a=state.automations.find(x=>String(x.id)===String(id));if(!a)return;let d=document.createElement('div');d.className='modal';d.innerHTML=`<div class="modalbox"><span class="pill">PRUEBA CONTROLADA</span><h2>Simular un nuevo usuario</h2><p class="muted">Esto prueba Runner → Supervisor → Aprobación → Gmail → Historial sin afirmar que el registro real de CURO ya está conectado.</p><label>Nombre<input id="testUserName" value="Usuario de prueba"></label><label>Email real para la prueba<input id="testUserEmail" type="email" placeholder="tu@email.com"></label><div class="actions"><button class="btn ghost" onclick="this.closest('.modal').remove()">Cancelar</button><button class="btn primary" onclick="runPreparedTest(${id},this)">Preparar prueba</button></div></div>`;document.body.appendChild(d)}
-function runPreparedTest(id,btn){const d=btn.closest('.modal'),name=d.querySelector('#testUserName').value.trim(),email=d.querySelector('#testUserEmail').value.trim();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return modal('Email necesario','Introduce un email válido para realizar la prueba controlada.');const r=processAutomationEvent(id,{event_id:'test-'+Date.now(),data:{name,email},email},{test:true});if(!r.ok)return modal('No se pudo preparar la prueba',r.reason||'Error');d.remove();approvals()}
-function automationRuntimeState(a,fromSupervisor=false){
- const internalPending=(a.context_sources||[]).some(c=>c.type==='curo_users');
- if(internalPending)return {ready:false,label:'Preparada',reason:'Pendiente de conectar el registro real de usuarios de CURO'};
- const missing=(a.context_sources||[]).filter(c=>c.required&&c.type!=='curo_users'&&!connectorLocalStatus(c.type));
- if(missing.length)return {ready:false,label:'Configuración pendiente',reason:'Falta conectar: '+missing.map(c=>c.label||c.type).join(', ')};
- if(a.status==='Pausada')return {ready:false,label:'Pausada',reason:'Automatización pausada'};
- return {ready:true,label:'Activa',reason:''};
-}
-function canExecuteAutomation(a){return automationRuntimeState(a).ready}
-function automationsPage(){let active=state.automations.filter(x=>automationRuntimeState(x).ready).length;shell('Automatizaciones',`<div class="row"><p class="muted">Plan ${state.plan} · ${hasUnlimitedTestAccess()?`MODO PRUEBAS · sin límite · ${active} activas`:(state.plan==='Gratis'?`${Math.min(state.free_automations_created_total,2)}/2 automatizaciones gratuitas utilizadas · ${active} activas`:`${active}/${planLimit()} automatizaciones activas`)} · ${state.executions.length} ejecuciones</p><div class="actions"><button class="btn ghost" onclick="plans()">Ver planes</button><button class="btn primary" onclick="dash('Inicio')">Nueva automatización</button></div></div><div class="list">${state.automations.length?state.automations.map((x,i)=>{const rt=automationOperationalStatus(x);return `<div class="card"><div class="row"><div><b>${escapeHtml(x.name||`Automatización ${i+1}`)}</b><div><span class="badge">${x.automation_type==='reusable'?'Reutilizable':'Directa'}</span> <span class="badge ${rt.ready?'ok':'warn'}">${escapeHtml(rt.label)}</span></div></div><small>${state.executions.filter(e=>e.automation_id===x.id).length} ejecuciones</small></div><p>${escapeHtml(x.description||x.text)}</p><p><b>Disparador:</b> ${escapeHtml(triggerDescriptor(x))}</p>${rt.reason?`<p class="muted"><b>Estado:</b> ${escapeHtml(rt.reason)}</p>`:''}${x.context_sources?.length?`<p><b>Fuentes que utilizará CURO:</b> ${x.context_sources.map(c=>escapeHtml(c.label||c.type)).join(', ')}</p>`:''}${x.variables?.length?`<p><b>Datos que cambiarán:</b> ${x.variables.map(v=>escapeHtml(v.label)).join(' · ')}</p>`:''}<div class="actions">${x.automation_type==='reusable'?`<button class="btn primary" ${rt.ready?'':'disabled'} onclick="executeReusable(${x.id})">${rt.ready?'Ejecutar':'Aún no ejecutable'}</button>`:''}${x.trigger==='new_user_registration'?`<button class="btn primary" onclick="testPreparedAutomation(${x.id})">Probar flujo</button>`:''}<button class="btn ghost" onclick="automationHistory(${x.id})">Historial</button><button class="btn ghost" onclick="toggleAuto(${x.id})">${x.status==='Activa'?'Pausar':'Reactivar'}</button><button class="btn ghost" onclick="editAuto(${x.id})">Editar</button><button class="btn danger" onclick="deleteAuto(${x.id})">Eliminar</button></div></div>`}).join(''):'<div class="card">Aún no creaste automatizaciones.</div>'}</div>`) }
-function executeReusable(id){let a=state.automations.find(x=>x.id===id);if(!a)return;const rt=automationRuntimeState(a);if(!rt.ready)return modal('Automatización todavía no ejecutable',rt.reason||'Completa la configuración pendiente antes de ejecutarla.');let d=document.createElement('div');d.className='modal';d.innerHTML=`<div class="modalbox"><span class="pill">NUEVA EJECUCIÓN</span><h2>${escapeHtml(a.name)}</h2><p class="muted">Completa únicamente los datos que cambian en esta ejecución.</p>${a.variables.map(v=>`<label>${escapeHtml(v.label)}${v.type==='textarea'?`<textarea data-vkey="${v.key}" rows="5"></textarea>`:`<input data-vkey="${v.key}" type="${v.type==='number'?'number':v.type==='date'?'date':'text'}">`}</label>`).join('')}<div class="actions"><button class="btn ghost" onclick="this.closest('.modal').remove()">Cancelar</button><button class="btn primary" onclick="runExecution(${id},this)">Ejecutar</button></div></div>`;document.body.appendChild(d)}
-function executionValue(vals,keys,fallback=''){for(const k of keys){if(vals[k]&&vals[k]!=='Sin especificar')return vals[k]}return fallback}
-function executionValue(vals,keys,fallback=''){for(const k of keys){if(vals[k]&&vals[k]!=="Sin especificar")return vals[k]}return fallback}
-function buildExecutionResult(a,vals,ctx){
- const profile=(a.name==='Automatización dinámica'||a.trigger==='incoming_message'||a.trigger==='weekly'||a.trigger==='monthly'||a.trigger==='daily')?'dynamic':inferProfile(a.description||a.text||'');
- if(profile==='dynamic'){const n=normalizeIntentText(a.description||a.text||''), data=Object.entries(vals).map(([k,v])=>`${k}: ${v}`).join('\n'); if(a.trigger==='incoming_message'){const sender=executionValue(vals,['sender'],'Remitente'),subject=executionValue(vals,['subject'],'Sin asunto'),message=executionValue(vals,['message'],'');let category=/reunion|entrevista/.test(normalizeIntentText(message))?'Reunión':/nota|evaluacion|calificacion/.test(normalizeIntentText(message))?'Evaluación':/ausencia|falta/.test(normalizeIntentText(message))?'Asistencia':'Consulta general';let priority=/urgente|hoy|inmediato|emergencia/.test(normalizeIntentText(message))?'Alta':'Normal';let response=`Hola, gracias por tu mensaje sobre “${subject}”. He recibido tu consulta y la revisaré. Me pondré en contacto contigo a la brevedad con una respuesta más completa. Un saludo.`;return {title:`${a.output||'Respuesta propuesta'} · ${sender}`,summary:`Consulta clasificada como ${category} · Prioridad ${priority}${/aprob/.test(n)?' · Pendiente de aprobación':''}.`,body:`CLASIFICACIÓN\n${category}\n\nPRIORIDAD\n${priority}\n\nRESUMEN\n${message.slice(0,280)}\n\nRESPUESTA PROPUESTA\n${response}\n\nESTADO\n${/aprob/.test(n)?'Pendiente de aprobación':'Preparada'}${ctx.length?'\n\nFuentes: '+ctx.map(c=>c.label||c.type).join(', '):''}`}} return {title:a.output||'Resultado de CURO',summary:'CURO ejecutó la automatización con los datos solicitados.',body:`AUTOMATIZACIÓN\n${a.description||a.text}\n\nDATOS DE ESTA EJECUCIÓN\n${data}\n\nACCIONES\n${(a.actions||[]).map(x=>'• '+x).join('\n')}\n\nREGLAS\n${(a.rules||[]).map(x=>'• '+x).join('\n')}`}}
- const topic=executionValue(vals,['topic','tema','content','contenido','objective','objetivo'],'el tema indicado');
- const brand=executionValue(vals,['brand','marca','project','proyecto','client','cliente'],'tu proyecto');
- const period=executionValue(vals,['week','semana','period','periodo','date','fecha'],'este período');
- const course=executionValue(vals,['course','curso','level','nivel'],'');
- const sourceNote=ctx.length?`\n\nFuentes utilizadas: ${ctx.map(c=>c.label||c.type).join(', ')}.`:'';
- if(profile==='community'){const count=(a.description||'').match(/\b(\d+)\s+(?:publicaciones|posts|contenidos)/i)?.[1]||'5';const n=Math.max(1,Math.min(Number(count)||5,5));const posts=[
-['UNA IDEA PARA EMPEZAR',`La inteligencia artificial no tiene que complicar el trabajo: puede ayudarte a recuperar tiempo para lo que realmente importa. Si tu tema esta semana es ${topic}, empieza por una tarea concreta y repetitiva, define el resultado que necesitas y revisa siempre la respuesta antes de utilizarla.`,'¿Qué tarea te gustaría simplificar primero?'],
-['3 USOS PRÁCTICOS',`Tres formas de trabajar ${topic}: 1) preparar un primer borrador, 2) organizar información dispersa y 3) crear variantes adaptadas a diferentes necesidades. La clave no es usar IA por usarla, sino darle contexto, criterios y un objetivo claro.`,'Guarda esta publicación para probar uno de estos usos esta semana.'],
-['ERROR FRECUENTE',`Un error habitual al trabajar con ${topic} es aceptar la primera respuesta sin revisar. Un buen proceso combina una instrucción clara, fuentes fiables cuando sean necesarias y revisión humana. La IA acelera el trabajo; el criterio profesional sigue siendo imprescindible.`,'Compártelo con alguien que esté empezando a utilizar IA.'],
-['MINI GUÍA',`Prueba este proceso en 4 pasos: 1. Define qué quieres conseguir. 2. Explica a la IA el contexto. 3. Indica formato, tono y límites. 4. Revisa, corrige y guarda lo que realmente te sirve. Repetir una estructura útil convierte una prueba aislada en un sistema de trabajo.`,'¿Quieres más ejemplos prácticos como este?'],
-['PREGUNTA A LA COMUNIDAD',`Cada profesional encuentra un uso distinto para ${topic}. Algunas personas empiezan por redactar; otras, por investigar, organizar o planificar. En ${brand} creemos que la mejor automatización es la que resuelve una necesidad real y puede reutilizarse.`,'Cuéntanos en comentarios: ¿qué parte de tu trabajo automatizarías primero?']
-].slice(0,n);return {title:`Contenido semanal · ${brand} · ${period}`,summary:`CURO generó ${posts.length} publicaciones completas sobre “${topic}”.`,body:posts.map((x,i)=>`PUBLICACIÓN ${i+1} — ${x[0]}\n\n${x[1]}\n\nCTA: ${x[2]}\n\nHashtags sugeridos: #InteligenciaArtificial #Productividad #Innovación #${String(brand).replace(/[^a-z0-9]/gi,'')}`).join('\n\n────────────────────────\n\n')+sourceNote}}
- if(profile==='docente')return {title:`Planificación · ${topic}${course?' · '+course:''}`,summary:`CURO preparó una planificación reutilizable para ${period}.`,body:`OBJETIVO\nTrabajar ${topic}${course?' con '+course:''} de forma progresiva y adaptada al nivel.\n\nSECUENCIA\n1. Activación de conocimientos previos.\n2. Desarrollo guiado.\n3. Actividad práctica.\n4. Puesta en común.\n5. Evaluación breve.\n\nEVALUACIÓN\nComprobar comprensión, aplicación y capacidad de explicar lo aprendido.${sourceNote}`};
- if(profile==='creador')return {title:`Contenido reutilizable · ${topic}`,summary:`CURO preparó una propuesta de contenido para ${period}.`,body:`GANCHO\nUna entrada clara que despierte interés por ${topic}.\n\nDESARROLLO\nExplica el valor principal, aporta un ejemplo práctico y estructura el contenido.\n\nCIERRE\nResume la idea central y añade una llamada a la acción coherente con ${brand}.${sourceNote}`};
- if(profile==='negocio')return {title:`Propuesta · ${brand}`,summary:`CURO preparó un borrador profesional sobre ${topic}.`,body:`NECESIDAD DETECTADA\n${topic}.\n\nPROPUESTA DE RESPUESTA\nPresentar la solución con claridad y solicitar los datos que falten. No inventar precios ni condiciones.\n\nSIGUIENTE PASO\nRevisión humana antes de enviar.${sourceNote}`};
- return {title:a.output||'Resultado de CURO',summary:'CURO completó una nueva ejecución.',body:`Tarea: ${a.description||a.text}\n\nDatos utilizados:\n${Object.entries(vals).map(([k,v])=>`• ${k}: ${v}`).join('\n')}\n\nReglas aplicadas:\n${(a.rules||[]).map(r=>`• ${r}`).join('\n')||'• Sin reglas adicionales'}${sourceNote}`};
-}
-function runExecution(id,btn){try{const a=state.automations.find(x=>String(x.id)===String(id));if(!a)throw new Error('No se encontró la automatización.');const d=btn.closest('.modal'),vals={};d.querySelectorAll('[data-vkey]').forEach(el=>vals[el.dataset.vkey]=el.value.trim()||'Sin especificar');const missing=(a.variables||[]).filter(v=>!vals[v.key]||vals[v.key]==='Sin especificar');if(missing.length)return modal('Faltan datos',`Completa: ${missing.map(v=>escapeHtml(v.label)).join(', ')}.`);btn.disabled=true;btn.textContent='CURO está trabajando…';const started=new Date();const ctx=(a.context_sources||[]).filter(c=>c.source_id).map(c=>({type:c.type,source_id:c.source_id,label:c.label,snapshot:c.snapshot,items:state.collections.find(x=>x.id===c.source_id)?.items||[]}));const g=buildExecutionResult(a,vals,ctx);const needsApproval=/aprob/i.test((a.output||'')+' '+(a.description||a.text||''));const e={id:Date.now(),automation_id:a.id,user_id:state.user?.email||'local',input_values:vals,resolved_context:ctx,started_at:started.toISOString(),completed_at:needsApproval?null:new Date().toISOString(),status:needsApproval?'awaiting_approval':'completed',result:g.body,result_title:g.title,result_summary:g.summary,error:null,usage:{mode:'MVP local',cost:null}};state.executions.unshift(e);if(needsApproval){const recipient=executionValue(vals,['email','correo','destinatario','recipient','to'],'');state.approvals.unshift({id:'ap-'+e.id,execution_id:e.id,automation_id:a.id,title:g.title,summary:g.summary,content:g.body,draft:g.body,recipient,subject:g.title,status:'Pendiente',source:(a.context_sources||[]).some(c=>c.type==='gmail')?'automation_gmail':'automation',created_at:new Date().toISOString()});log('Aprobación pendiente',g.title)}log('Ejecución completada',`${a.name} · ${g.title}`);save();d.remove();showExecutionResult(e.id)}catch(err){btn.disabled=false;btn.textContent='Ejecutar';modal('No se pudo ejecutar',escapeHtml(err.message||String(err)))}}
-function showExecutionResult(executionId){const e=state.executions.find(x=>String(x.id)===String(executionId));if(!e)return automationsPage();const a=state.automations.find(x=>String(x.id)===String(e.automation_id));shell('Resultado de CURO',`<div class="resultHero"><span class="pill">${e.status==='completed'?'EJECUCIÓN COMPLETADA':e.status==='awaiting_approval'?'PENDIENTE DE APROBACIÓN':e.status==='failed'?'EJECUCIÓN FALLIDA':'EJECUCIÓN'}</span><h2>${escapeHtml(e.result_title||a?.name||'Resultado')}</h2><p class="muted">${escapeHtml(e.result_summary||(e.status==='awaiting_approval'?'CURO preparó el resultado y espera tu aprobación.':'CURO completó la tarea.'))}</p></div><div class="card resultCard"><div class="resultText">${escapeHtml(e.result||'').replace(/\n/g,'<br>')}</div></div><div class="card"><b>Datos utilizados</b><p class="muted">${Object.entries(e.input_values||{}).map(([k,v])=>`${escapeHtml(k)}: ${escapeHtml(v)}`).join(' · ')}</p><p><b>Fuentes utilizadas:</b> ${(e.resolved_context||[]).map(c=>escapeHtml(c.label||c.type)).join(', ')||'Sin fuentes externas'}</p></div><div class="actions"><button class="btn primary" onclick="executeReusable(${a.id})">Volver a ejecutar</button><button class="btn ghost" onclick="copyExecutionResult(${e.id})">Copiar resultado</button><button class="btn ghost" onclick="downloadExecutionResult(${e.id})">Descargar TXT</button><button class="btn ghost" onclick="automationHistory(${a.id})">Ver historial</button><button class="btn ghost" onclick="automationsPage()">Mis automatizaciones</button></div>`)}
-function copyExecutionResult(id){const e=state.executions.find(x=>String(x.id)===String(id));if(!e)return;navigator.clipboard?.writeText((e.result_title||'Resultado de CURO')+'\n\n'+(e.result||'')).then(()=>modal('Resultado copiado','Ya puedes pegarlo donde quieras.')).catch(()=>modal('Copiar resultado','Tu navegador no permitió copiar automáticamente. Puedes seleccionar el texto del resultado.'))}
-function downloadExecutionResult(id){const e=state.executions.find(x=>String(x.id)===String(id));if(!e)return;const text=(e.result_title||'Resultado de CURO')+'\n\n'+(e.result||''),blob=new Blob([text],{type:'text/plain;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='CURO_resultado_'+id+'.txt';a.click();URL.revokeObjectURL(a.href)}
-function automationHistory(id){let a=state.automations.find(x=>String(x.id)===String(id)),es=state.executions.filter(e=>String(e.automation_id)===String(id));shell('Historial',`<button class="btn ghost" onclick="automationsPage()">← Mis automatizaciones</button><h2>${escapeHtml(a?.name||'Automatización')}</h2><p class="muted">${es.length} ejecución(es). Cada ejecución conserva sus datos, fuentes y resultado.</p><div class="list">${es.length?es.map((e,i)=>`<div class="card"><div class="row"><div><b>Ejecución #${es.length-i} · ${escapeHtml(e.result_title||'Resultado')}</b><br><small>${new Date(e.completed_at||e.started_at).toLocaleString('es-ES')}</small></div><span class="badge">${e.status==='completed'?'Completada':e.status}</span></div><p>${escapeHtml(e.result_summary||'')}</p><p><b>Datos utilizados:</b> ${Object.entries(e.input_values||{}).map(([k,v])=>`${escapeHtml(k)}: ${escapeHtml(v)}`).join(' · ')}</p><p><b>Fuentes utilizadas:</b> ${(e.resolved_context||[]).map(c=>escapeHtml(c.label||c.type)).join(', ')||'Sin fuentes externas'}</p><button class="btn ghost" onclick="showExecutionResult(${e.id})">Ver resultado</button></div>`).join(''):'<div class="card">Esta automatización todavía no tiene ejecuciones.</div>'}</div>`) }
-function toggleAuto(id){let x=state.automations.find(a=>a.id===id);if(!x)return;if((x.context_sources||[]).some(c=>c.type==='curo_users'))return modal('Automatización preparada','Esta automatización queda guardada y reutilizable, pero no puede activarse hasta conectar el registro real de usuarios de CURO.');if(x.status!=='Activa'&&state.plan!=='Gratis'&&state.automations.filter(a=>automationRuntimeState(a).ready).length>=planLimit())return plans('limit');x.status=x.status==='Activa'?'Pausada':'Activa';x.updated_at=new Date().toISOString();log('Automatización '+x.status.toLowerCase(),x.text);save();autos()}
-function editAuto(id){let x=state.automations.find(a=>a.id===id);if(!x)return;let d=document.createElement('div');d.className='modal';d.innerHTML=`<div class="modalbox"><h2>Editar automatización</h2><textarea id="editAutoText" class="modalText">${escapeHtml(x.text)}</textarea><div class="actions"><button class="btn ghost" onclick="this.closest('.modal').remove()">Cancelar</button><button class="btn primary" onclick="saveAutoEdit(${id},this)">Guardar</button></div></div>`;document.body.appendChild(d)}
-function saveAutoEdit(id,btn){let x=state.automations.find(a=>a.id===id),v=document.getElementById('editAutoText').value.trim();if(x&&v){x.text=v;x.description=v;x.updated_at=new Date().toISOString();log('Automatización editada',v);save()}btn.closest('.modal').remove();autos()}
-function deleteAuto(id){let x=state.automations.find(a=>a.id===id);if(!x)return;let msg=state.plan==='Gratis'?'¿Eliminar esta automatización? En el plan Gratis, eliminarla no recupera el cupo utilizado.':'¿Eliminar esta automatización?';if(!confirm(msg))return;state.automations=state.automations.filter(a=>a.id!==id);log('Automatización eliminada',x.text);save();autos()}
-function approvals(){shell('Aprobaciones',`<div class="list">${state.approvals.length?state.approvals.map(a=>`<div class="card"><span class="badge ${a.status==='Pendiente'?'warn':''}">${escapeHtml(a.status||'Pendiente')}</span><h3>${escapeHtml(a.title||'Respuesta preparada')}</h3><p>${escapeHtml(a.summary||'')}</p><div class="resultText">${escapeHtml(a.draft||a.content||'').replace(/\n/g,'<br>')}</div>${a.status==='Pendiente'?`<div class="actions"><button class="btn primary" onclick='approve(${JSON.stringify(String(a.id))})'>Aprobar</button><button class="btn ghost" onclick='editApproval(${JSON.stringify(String(a.id))})'>Editar</button><button class="btn ghost" onclick='reject(${JSON.stringify(String(a.id))})'>Rechazar</button></div>`:''}</div>`).join(''):'<div class="card">No hay acciones pendientes de aprobación.</div>'}</div>`)}
-function editApproval(id){let a=state.approvals.find(x=>String(x.id)===String(id));if(!a)return;let d=document.createElement('div');d.className='modal';d.innerHTML=`<div class="modalbox"><h2>Editar respuesta</h2><textarea id="approvalText" class="modalText">${escapeHtml(a.draft||a.content||'')}</textarea><div class="actions"><button class="btn ghost" onclick="this.closest('.modal').remove()">Cancelar</button><button class="btn primary" id="saveApprovalBtn">Guardar</button></div></div>`;document.body.appendChild(d);d.querySelector('#saveApprovalBtn').onclick=()=>saveApprovalEdit(id,d.querySelector('#saveApprovalBtn'))}
-function saveApprovalEdit(id,btn){let a=state.approvals.find(x=>String(x.id)===String(id)),v=document.getElementById('approvalText').value;if(a){a.draft=v;a.content=v;log('Aprobación editada',a.title||'Respuesta preparada');save()}btn.closest('.modal').remove();approvals()}
-function reject(id){let a=state.approvals.find(x=>String(x.id)===String(id));if(!a)return;a.status='Rechazada';let m=state.mails.find(x=>String(x.id)===String(a.mailId));if(m)m.status='Rechazado';log('Respuesta rechazada','No se realizó ninguna acción externa.');save();approvals()}
-function templates(){shell('Plantillas',`<div class="prompt"><h2>Nueva plantilla</h2><input id="tplTitle" placeholder="Nombre de la plantilla"><textarea id="tplText" placeholder="Hola {{nombre}}, gracias por contactar sobre {{servicio}}..."></textarea><button class="btn primary" onclick="addTemplate()">Guardar plantilla</button></div><div class="list">${state.templates.length?state.templates.map((t,i)=>`<div class="card"><div class="row"><b>${escapeHtml(t.title)}</b><button class="btn mini ghost" onclick="deleteTemplate(${i})">Eliminar</button></div><p>${escapeHtml(t.text)}</p></div>`).join(''):'<div class="card">Todavía no hay plantillas. Puedes usar variables como {{nombre}}, {{empresa}}, {{fecha}} y {{servicio}}.</div>'}</div>`)}
-function addTemplate(){let title=document.getElementById('tplTitle').value.trim(),text=document.getElementById('tplText').value.trim();if(!title||!text)return modal('Plantillas','Completa nombre y contenido.');state.templates.push({title,text});log('Plantilla creada',title);save();templates()}
-function deleteTemplate(i){let t=state.templates[i];state.templates.splice(i,1);log('Plantilla eliminada',t?.title||'');save();templates()}
-function documents(){shell('Documentos',`<div class="prompt"><h2>Preparar documento</h2><input id="docTitle" placeholder="Título"><textarea id="docText" placeholder="Describe el documento que quieres preparar"></textarea><button class="btn primary" onclick="addDocument()">Crear borrador</button></div><div class="list">${state.documents.length?state.documents.map((d,i)=>`<div class="card"><div class="row"><b>${escapeHtml(d.title)}</b><span class="badge">Borrador</span></div><p>${escapeHtml(d.text)}</p><div class="actions"><button class="btn ghost" onclick="downloadDocument(${i})">Descargar TXT</button><button class="btn ghost" onclick="deleteDocument(${i})">Eliminar</button></div></div>`).join(''):'<div class="card">Prepara propuestas, informes, presupuestos, certificados, dossiers o newsletters. En el MVP se generan como borradores.</div>'}</div>`)}
-function addDocument(){let title=document.getElementById('docTitle').value.trim(),text=document.getElementById('docText').value.trim();if(!title||!text)return modal('Documentos','Completa título y descripción.');state.documents.push({title,text,date:new Date().toISOString()});log('Documento creado',title);save();documents()}
-function downloadDocument(i){let d=state.documents[i],blob=new Blob([d.title+'\n\n'+d.text],{type:'text/plain'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(d.title||'documento').replace(/[^a-z0-9áéíóúñ_-]+/gi,'_')+'.txt';a.click();URL.revokeObjectURL(a.href)}
-function deleteDocument(i){let d=state.documents[i];state.documents.splice(i,1);log('Documento eliminado',d?.title||'');save();documents()}
-function historyPage(){const rows=[...(state.executions||[])].sort((a,b)=>new Date(b.started_at||0)-new Date(a.started_at||0));shell('Historial',`<div class="card"><span class="pill">TRAZABILIDAD</span><h2>Actividad y ejecuciones</h2><p class="muted">CURO conserva el estado, resultado y errores de cada ejecución.</p></div><div class="list">${rows.length?rows.map(e=>{const a=state.automations.find(x=>String(x.id)===String(e.automation_id));const label=e.status==='completed'?'Completada':e.status==='awaiting_approval'?'Pendiente de aprobación':e.status==='failed'?'Fallida':e.status;return `<div class="card"><div class="row"><div><b>${escapeHtml(a?.name||e.result_title||'Ejecución')}</b><br><small>${new Date(e.started_at).toLocaleString('es-ES')}</small></div><span class="badge ${e.status==='failed'?'warn':''}">${escapeHtml(label||'')}</span></div><p>${escapeHtml(e.result_summary||'')}</p>${e.delivery?`<p><b>Entrega:</b> Gmail → ${escapeHtml(e.delivery.to||'')} · ${escapeHtml(e.delivery.status||'')}</p>`:''}${e.error?`<p><b>Error:</b> ${escapeHtml(e.error)}</p>`:''}<button class="btn ghost" onclick="showExecutionResult(${e.id})">Ver resultado</button></div>`}).join(''):'<div class="card">Todavía no hay ejecuciones registradas.</div>'}</div>`)}
 
-function account(){shell('Cuenta',`<div class="grid accountGrid"><div class="card"><h3>Perfil</h3><p><b>${escapeHtml(state.user?.name||'Usuario')}</b><br>${escapeHtml(state.user?.email||'')}</p><button class="btn ghost" onclick="editProfile()">Editar perfil</button></div><div class="card"><h3>Plan</h3><div class="priceValue smallPrice">${state.plan}</div><p>${hasUnlimitedTestAccess()?'Modo pruebas local · automatizaciones sin límite':(state.plan==='Gratis'?`${Math.min(state.free_automations_created_total,2)}/2 automatizaciones gratuitas utilizadas`:'Plan seleccionado')}</p><button class="btn primary" onclick="plans()">Ver planes</button></div><div class="card"><h3>Seguridad</h3><p class="muted">El cierre de sesión elimina la sesión visible de este dispositivo, sin borrar tus datos locales del MVP.</p><button class="btn danger" onclick="logout()">Cerrar sesión</button></div></div>`)}
-function editProfile(){let d=document.createElement('div');d.className='modal';d.innerHTML=`<div class="modalbox"><h2>Editar perfil</h2><input id="profileName" value="${escapeHtml(state.user?.name||'')}"><input id="profileEmail" type="email" value="${escapeHtml(state.user?.email||'')}"><div class="actions"><button class="btn ghost" onclick="this.closest('.modal').remove()">Cancelar</button><button class="btn primary" onclick="saveProfile(this)">Guardar</button></div></div>`;document.body.appendChild(d)}
-function saveProfile(btn){let n=document.getElementById('profileName').value.trim(),e=document.getElementById('profileEmail').value.trim();if(n&&e){state.user={name:n,email:e};log('Perfil actualizado',n);save()}btn.closest('.modal').remove();account()}
-function simple(p,t){shell(p,`<div class="card"><h2>${p}</h2><p>${t}</p><span class="badge warn">Preparado para siguiente fase</span></div>`)}
-function log(action,detail){state.audit.unshift({action,detail,date:new Date().toLocaleString('es-ES')})}
-function modal(title,text){let d=document.createElement('div');d.className='modal';d.innerHTML=`<div class="modalbox"><h2>${title}</h2><p>${text}</p><button class="btn primary" onclick="this.closest('.modal').remove()">Continuar</button></div>`;document.body.appendChild(d)}
-function logout(){state.user=null;save();home()}
-home();
-
-
-// --- RESOLVER + CATÁLOGO DE CONEXIONES · V12 ---
-const connectorCatalog={
- gmail:{name:'Gmail',group:'Google',status:'real',capabilities:['Detectar y leer correos','Preparar respuestas','Enviar tras aprobación']},
- drive:{name:'Google Drive',group:'Google',status:'real',capabilities:['Explorar carpetas autorizadas','Leer archivos y listas','Detectar nuevos archivos']},
- calendar:{name:'Google Calendar',group:'Google',status:'next',capabilities:['Consultar agenda','Crear eventos','Usar fechas como disparador']},
- contacts:{name:'Contactos CURO',group:'Datos',status:'local',capabilities:['Resolver destinatarios','Guardar personas y organizaciones','Reutilizar datos']},
- sheets:{name:'Google Sheets',group:'Datos',status:'next',capabilities:['Leer filas','Detectar nuevos registros','Actualizar tablas']},
- whatsapp:{name:'WhatsApp Business',group:'Comunicación',status:'roadmap',capabilities:['Enviar avisos autorizados','Usar plantillas aprobadas','Registrar entregas']},
- mailchimp:{name:'Mailchimp',group:'Marketing',status:'roadmap',capabilities:['Audiencias','Newsletters','Campañas programadas']}
-};
-function connectorStatusText(k){if(k==='contacts')return state.contacts.length?'Disponible':'Sin contactos';if(state.connections?.[k]?.connected)return 'Conectado';let s=connectorCatalog[k].status;return s==='real'?'Disponible para conectar':s==='next'?'Próxima integración':'Planificado'}
-async function refreshGoogleConnections(){try{let g=await getGmailStatus();state.connections.gmail={connected:!!g.connected,email:g.email||''};let r=await fetch('/api/drive/status');if(r.ok){let d=await r.json();state.connections.drive={connected:!!d.connected,email:d.email||g.email||'',scope:!!d.scope}}save()}catch(e){}}
-async function connectionsPage(){await refreshGoogleConnections();let cards=Object.entries(connectorCatalog).map(([k,c])=>`<div class="card connectorCard"><div class="row"><div><span class="badge">${escapeHtml(c.group)}</span><h3>${escapeHtml(c.name)}</h3></div><span class="badge ${connectorLocalStatus(k)?'ok':''}">${escapeHtml(connectorStatusText(k))}</span></div><p class="muted">${c.capabilities.map(x=>'• '+escapeHtml(x)).join('<br>')}</p>${k==='gmail'?`<button class="btn ${connectorLocalStatus(k)?'ghost':'primary'}" onclick="${connectorLocalStatus(k)?'correo()':'connectGoogleWorkspace()'}">${connectorLocalStatus(k)?'Revisar Gmail':'Conectar Google'}</button>`:k==='drive'?`<button class="btn ${connectorLocalStatus(k)?'ghost':'primary'}" onclick="${connectorLocalStatus(k)?'exploreDrive()':'connectGoogleWorkspace()'}">${connectorLocalStatus(k)?'Explorar Drive':'Conectar Google Drive'}</button>`:k==='contacts'?`<button class="btn ghost" onclick="contacts()">Abrir Contactos</button>`:`<button class="btn ghost" disabled>${c.status==='next'?'Próximamente':'Planificado'}</button>`}</div>`).join('');shell('Conexiones',`<div class="card"><span class="pill">CAPACIDADES DE CURO</span><h2>Conecta las herramientas donde ya trabajas</h2><p class="muted">No necesitas saber qué conector usar. Cuando describas un trabajo, el Resolver propondrá las herramientas necesarias y te pedirá autorización solo cuando haga falta.</p></div><div class="grid connectorGrid">${cards}</div>`)}
-function isHostedRuntime(){return location.protocol==='http:'||location.protocol==='https:'}
-function rememberPlannerDraft(){let m=document.querySelector('.modal[data-instruction]');if(m){try{sessionStorage.setItem('curo_planner_draft',JSON.stringify({instruction:m.dataset.instruction||'',config:m.dataset.config||''}))}catch(e){}}}
-function restorePlannerDraft(){try{let raw=sessionStorage.getItem('curo_planner_draft');if(!raw)return false;let d=JSON.parse(raw);sessionStorage.removeItem('curo_planner_draft');if(!d?.instruction)return false;pendingInstruction=d.instruction;setTimeout(()=>{try{prepareAuto();let m=document.querySelector('.modal[data-instruction]');if(m&&d.config)m.dataset.config=d.config}catch(e){}},80);return true}catch(e){return false}}
-function localConnectorNotice(service){let host=document.querySelector('.modal[data-instruction] .modalbox');if(host){let old=host.querySelector('.inlineNotice');if(old)old.remove();let n=document.createElement('div');n.className='inlineNotice';n.innerHTML=`<button class="inlineClose" onclick="this.parentElement.remove()" aria-label="Cerrar">×</button><b>${escapeHtml(service)} necesita la versión web para autorizarse</b><p>Estás probando desde un archivo local. <b>Tu automatización no se perdió.</b> Puedes seguir preparándola ahora y conectar ${escapeHtml(service)} cuando CURO esté desplegado.</p><button class="btn primary mini" onclick="this.closest('.inlineNotice').remove()">Entendido</button>`;host.prepend(n);host.scrollTop=0;return}modal('Conexión '+service,`La autorización real de Google necesita la versión web de CURO. <b>Tu automatización no se perdió.</b>`)}
-function connectGoogleWorkspace(service='Google',changeAccount=false){rememberPlannerDraft();if(!isHostedRuntime())return localConnectorNotice(service);location.href='/api/auth/google/start?services=gmail,drive'+(changeAccount?'&choose_account=1':'')}
-function openConnectorFromPlanner(type){if(type==='drive')return connectGoogleWorkspace('Google Drive');if(type==='gmail')return connectGoogleWorkspace('Gmail');if(type==='contacts')return contacts();connectionsPage()}
-async function exploreDrive(){try{let r=await fetch('/api/drive/folders');let j=await r.json();if(!r.ok)throw new Error(j.error||'No se pudo leer Drive');let items=(j.folders||[]).map(f=>`<div class="card"><b>📁 ${escapeHtml(f.name)}</b><br><small class="muted">${escapeHtml(f.modifiedTime||'')}</small></div>`).join('');modal('Google Drive',items?`CURO puede ver estas carpetas con tu autorización:<div class="list">${items}</div>`:'No se encontraron carpetas accesibles.')}catch(e){modal('Google Drive',e.message+' Si acabas de añadir Drive, vuelve a conectar Google para conceder el permiso.') }}
-
-// --- Gmail real · MASTER V1 ---
-let gmailStatus={connected:false,email:''};
-async function getGmailStatus(){try{let r=await fetch('/api/gmail/status');gmailStatus=await r.json();return gmailStatus}catch{return {connected:false}}}
-function connectGmail(){rememberPlannerDraft();if(!isHostedRuntime())return localConnectorNotice('Gmail');location.href='/api/auth/google/start'}
-async function disconnectGmail(){await fetch('/api/gmail/disconnect',{method:'POST'});gmailStatus={connected:false};correo()}
-function senderEmail(v=''){let m=v.match(/<([^>]+)>/);return (m?m[1]:v).trim()}
-function senderName(v=''){return v.replace(/<[^>]+>/,'').replace(/^"|"$/g,'').trim()||senderEmail(v)}
-function classifyRealMail(m){let t=((m.subject||'')+' '+(m.body||'')+' '+(m.snippet||'')).toLowerCase();let category='Consulta',service='General',priority='Normal';if(/presupuesto|precio|cotiz|consultor|servicio/.test(t)){category='Potencial cliente';service='Consultoría / servicios';priority='Alta'}else if(/factura|pago|cobro/.test(t)){category='Facturación';service='Administración';priority='Alta'}else if(/reuni|cita|agenda/.test(t)){category='Reunión';service='Agenda'}return {category,service,priority}}
-function draftForMail(m,c){let rules=state.knowledge.map(k=>k.text).join(' ');let noPrice=/no.*invent.*precio|falta.*precio/i.test(rules);let name=senderName(m.from).split(' ')[0]||'Hola';return `Hola ${name},\n\nGracias por contactar con CURO. Hemos recibido tu consulta sobre ${c.service.toLowerCase()}. ${noPrice?'Para darte información correcta, revisaremos primero tus necesidades y no indicaremos precios o condiciones que no estén registrados.':'Vamos a revisar la información para darte una respuesta adecuada.'}\n\nUn saludo,\nCURO Group`}
-async function importGmail(){let btn=document.getElementById('gmailLoad');if(btn){btn.disabled=true;btn.textContent='Leyendo Gmail…'}try{let r=await fetch('/api/gmail/messages');let j=await r.json();if(!r.ok)throw new Error(j.error||'No se pudo leer Gmail');let added=0;for(const m of j.messages||[]){if(state.mails.some(x=>x.gmailId===m.id))continue;let c=classifyRealMail(m),id=Date.now()+added;let mail={id,gmailId:m.id,threadId:m.threadId,messageId:m.messageId,from:senderEmail(m.from),fromRaw:m.from,org:senderName(m.from),subject:m.subject,category:c.category,priority:c.priority,summary:m.snippet||m.body.slice(0,280),service:c.service,status:'Requiere aprobación',real:true};state.mails.unshift(mail);if(!state.contacts.some(x=>x.email===mail.from))state.contacts.push({name:senderName(m.from),org:'',email:mail.from,interest:c.service,status:'Nuevo'});state.approvals.unshift({id,mailId:id,status:'Pendiente',source:'gmail',draft:draftForMail(m,c)});added++}if(added)log('Gmail sincronizado',`${added} correo(s) nuevo(s) preparados para revisión.`);save();modal('Gmail actualizado',added?`CURO importó ${added} correo(s) nuevo(s), los clasificó y preparó borradores para aprobación.`:'No hay correos nuevos entre los últimos mensajes de la bandeja.');correo()}catch(e){modal('Gmail',e.message);correo()}}
-async function correo(){let gs=await getGmailStatus();let top=gs.connected?`<div class="card"><div class="row"><div><span class="badge">GMAIL CONECTADO</span><h3 style="margin-bottom:4px">${escapeHtml(gs.email||'Cuenta Google')}</h3><p class="muted">CURO puede leer los últimos mensajes de la bandeja. Los envíos siguen bajo tu aprobación.</p></div><div class="actions"><button id="gmailLoad" class="btn primary" onclick="importGmail()">Revisar Gmail ahora</button><button class="btn ghost" onclick="disconnectGmail()">Desconectar</button></div></div></div>`:`<div class="card"><span class="badge warn">GMAIL SIN CONECTAR</span><h3>Conecta tu correo real</h3><p class="muted">Autoriza CURO Automate con Google. No compartes tu contraseña y cada respuesta seguirá esperando tu aprobación.</p><button class="btn primary" onclick="connectGmail()">Conectar Gmail</button></div>`;shell('Correo',`${top}<div class="list">${state.mails.length?state.mails.map(m=>`<div class="card mail"><div class="row"><div><b>${escapeHtml(m.org||m.from)}</b><br><small>${escapeHtml(m.from)}</small></div><span class="badge ${m.priority==='Alta'?'warn':''}">${m.priority}</span></div><h3>${escapeHtml(m.subject)}</h3><p>${escapeHtml(m.summary||'')}</p><div><span class="badge">${m.category}</span> <span class="badge">${m.service}</span> ${m.real?'<span class="badge">Gmail real</span>':''}</div><p><b>Estado:</b> ${m.status}</p></div>`).join(''):'<div class="card">Todavía no hay correos procesados.</div>'}</div>`)}
-async function approve(id){
- let a=state.approvals.find(x=>String(x.id)===String(id));if(!a)return;
- let m=state.mails.find(x=>String(x.id)===String(a.mailId));
- if(a.source==='gmail'&&m?.real){try{let r=await fetch('/api/gmail/send',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({to:m.from,subject:m.subject,body:a.draft,threadId:m.threadId,messageId:m.messageId})});let j=await r.json();if(!r.ok)throw new Error(j.error||'No se pudo enviar');a.status='Aprobada';m.status='Enviado por Gmail';log('Respuesta enviada por Gmail',`Respuesta aprobada y enviada a ${m.from}.`);save();approvals();return modal('Correo enviado','Gmail confirmó el envío de la respuesta aprobada.')}catch(e){return modal('No se pudo enviar',e.message)}}
- if(a.execution_id){let e=state.executions.find(x=>String(x.id)===String(a.execution_id));let auto=state.automations.find(x=>String(x.id)===String(a.automation_id));if(a.source==='automation_gmail'){if(a.status!=='Pendiente')return modal('Ya procesado','Este correo ya fue aprobado o procesado. No se enviará dos veces.');if(!a.recipient)return modal('Falta destinatario','La ejecución está preparada, pero CURO no dispone de un email real de destino. No se realizará ningún envío.');try{let gs=await getGmailStatus();if(!gs.connected)return modal('Gmail no conectado','Conecta Gmail antes de aprobar este envío.');a.status='Enviando';save();approvals();let r=await fetch('/api/gmail/send',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({to:a.recipient,subject:a.subject||e?.result_title||auto?.name||'Mensaje de CURO',body:a.draft||a.content||e?.result||''})});let j=await r.json();if(!r.ok)throw new Error(j.error||'No se pudo enviar');a.status='Aprobada';a.sent_at=new Date().toISOString();if(e){e.status='completed';e.completed_at=new Date().toISOString();e.delivery={channel:'gmail',to:a.recipient,message_id:j.id||null,status:'sent'}}log('Ejecución aprobada y enviada',`${auto?.name||'Automatización'} · ${a.recipient}`);save();approvals();return modal('Ejecución completada','Gmail confirmó el envío y CURO registró el resultado en el Historial.')}catch(err){a.status='Pendiente';if(e){e.status='failed';e.error=err.message||String(err)}save();approvals();return modal('No se pudo enviar',err.message||String(err))}}
- a.status='Aprobada';a.approved_at=new Date().toISOString();if(e){e.status='completed';e.completed_at=new Date().toISOString()}log('Ejecución aprobada',auto?.name||a.title||'Automatización');save();approvals();return modal('Aprobación registrada','CURO registró la aprobación y completó la ejecución sin realizar una acción externa no autorizada.');}
- a.status='Aprobada';if(m)m.status='Enviado (simulado)';log('Respuesta aprobada','Aprobación registrada sin acción externa.');save();approvals()
+function showPlan(instruction, plan) {
+  closeModals();
+  const needsGoogle = plan.requirements?.google && !plan.requirements.google_connected;
+  const m = modal('CURO ha preparado este plan', planBody(plan), {
+    wide: true,
+    actions: `<button class="btn ghost" onclick="closeModals();document.getElementById('instruction')?.focus()">Cambiar la descripción</button>
+      ${needsGoogle ? `<button class="btn primary" onclick="connectGoogle()">Conectar Gmail</button>` : plan.feasible ? `<button class="btn primary" id="savePlanBtn">Guardar y activar</button>` : ''}`
+  });
+  store('curo_pending_plan', { instruction, plan });
+  m.querySelector('#savePlanBtn')?.addEventListener('click', e => savePlan(e.currentTarget, instruction, plan));
 }
-(async()=>{let q=new URLSearchParams(location.search);if(q.get('gmail')==='connected'){history.replaceState({},'',location.pathname);await refreshGoogleConnections();let restored=restorePlannerDraft();if(!restored&&state.user)await correo();modal('Gmail conectado',restored?'Google quedó conectado y CURO recuperó la automatización que estabas preparando.':'La cuenta de Google quedó conectada. Ya puedes revisar la bandeja real.')}else if(q.get('gmail')==='error'){let reason=q.get('reason')||'Google no pudo completar la autorización.';history.replaceState({},'',location.pathname);restorePlannerDraft();modal('Error al conectar Gmail',reason)}})();
 
-try{runnerTick()}catch(e){console.warn('Runner init',e)}
+async function savePlan(btn, instruction, plan) {
+  const p = { ...plan, name: document.getElementById('planName')?.value.trim() || plan.name };
+  const ap = document.getElementById('planApproval');
+  if (ap) p.approval = ap.checked ? 'always' : 'never';
+  const done = busy(btn, 'Guardando…');
+  try {
+    const { automation } = await api('automations', { method: 'POST', body: { instruction, plan: p } });
+    store('curo_pending_plan', null);
+    closeModals();
+    await refreshMe();
+    afterSave(automation);
+  } catch (e) { done(); info('No se pudo guardar', e.message); }
+}
+
+function afterSave(a) {
+  const t = a.trigger_type;
+  const when = t === 'schedule' ? `Se ejecutará sola: ${esc(a.plan.trigger.label.toLowerCase())}. Próxima vez: <b>${fmtDate(a.next_run_at)}</b>.`
+    : t === 'gmail_new_message' ? 'CURO revisará tu Gmail cada pocos minutos y actuará con cada correo nuevo que cumpla el filtro.'
+    : t === 'curo_new_user' ? 'Se ejecutará cada vez que alguien se registre en CURO.'
+    : 'Ejecútala cuando quieras desde Automatizaciones.';
+  const m = modal('Automatización activada', `<p><b>${esc(a.name)}</b> ya está guardada.</p><p>${when}</p><p class="muted">Te recomendamos hacer una prueba ahora para ver el resultado.</p>`, {
+    actions: `<button class="btn ghost" onclick="closeModals();go('Automatizaciones')">Ver mis automatizaciones</button><button class="btn primary" id="tryNow">Probar ahora</button>`
+  });
+  m.querySelector('#tryNow').addEventListener('click', () => { closeModals(); startRun(a.id); });
+}
+
+// ---------- Automatizaciones ----------
+let automationsCache = [];
+async function automationsPage() {
+  loading('Automatizaciones');
+  try {
+    const { automations } = await api('automations');
+    automationsCache = automations;
+    shell('Automatizaciones', `
+      <div class="row"><p class="muted">${automations.length} automatizaciones · ${automations.filter(a => a.status === 'active').length} activas</p><button class="btn primary" onclick="go('Inicio')">Nueva automatización</button></div>
+      <div class="list">${automations.length ? automations.map(autoCard).join('') : `<div class="card empty"><h3>Aún no tienes automatizaciones</h3><p class="muted">Describe una tarea en Inicio y CURO preparará el plan.</p><button class="btn primary" onclick="go('Inicio')">Crear la primera</button></div>`}</div>`);
+  } catch (e) { shell('Automatizaciones', `<div class="card"><p>${esc(e.message)}</p></div>`); }
+}
+function autoCard(a) {
+  const label = a.plan?.trigger?.label || 'Manual';
+  const paused = a.status === 'paused';
+  return `<div class="card autoCard">
+    <div class="row"><div><h3>${esc(a.name)}</h3><div class="chips"><span class="badge ${paused ? 'warn' : 'ok'}">${paused ? 'Pausada' : 'Activa'}</span><span class="chip">${esc(label)}</span>${a.approval_mode === 'always' && a.plan?.tools?.includes('gmail_send') ? '<span class="chip">Con aprobación</span>' : ''}</div></div></div>
+    <p class="muted">${esc(a.plan?.summary || a.instruction)}</p>
+    <p class="meta">${a.trigger_type === 'schedule' && !paused ? `Próxima ejecución: <b>${fmtDate(a.next_run_at)}</b> · ` : ''}Última: ${fmtDate(a.last_run_at)}</p>
+    ${a.last_error ? `<div class="notice danger"><b>Último error:</b> ${esc(a.last_error)}</div>` : ''}
+    <div class="actions">
+      <button class="btn primary" onclick="startRun('${a.id}')">${a.trigger_type === 'manual' ? 'Ejecutar' : 'Probar ahora'}</button>
+      <button class="btn ghost" onclick="historyPage('${a.id}')">Historial</button>
+      <button class="btn ghost" onclick="toggleAuto('${a.id}','${paused ? 'active' : 'paused'}',this)">${paused ? 'Activar' : 'Pausar'}</button>
+      <button class="btn ghost" onclick="showAutoDetail('${a.id}')">Ver plan</button>
+      <button class="btn ghost danger" onclick="confirmDelete('${a.id}')">Eliminar</button>
+    </div></div>`;
+}
+function showAutoDetail(id) {
+  const a = automationsCache.find(x => x.id === id); if (!a) return;
+  modal(esc(a.name), `<p class="muted">Lo que pediste:</p><blockquote>${esc(a.instruction)}</blockquote>
+    <div class="plannerPlan"><div class="plannerStep"><small>CUÁNDO</small><b>${esc(a.plan?.trigger?.label || '')}</b></div>
+    <div class="plannerStep"><small>PASOS</small><ol>${(a.plan?.steps || []).map(s => `<li>${esc(s)}</li>`).join('')}</ol></div>
+    <div class="plannerStep"><small>HERRAMIENTAS</small><div class="chips">${(a.plan?.tools || []).map(t => `<span class="chip">${esc(TOOL_LABELS[t] || t)}</span>`).join('')}</div></div>
+    ${a.plan?.tools?.includes('gmail_send') ? `<div class="plannerStep"><small>CONTROL</small><label class="toggle"><input type="checkbox" ${a.approval_mode === 'always' ? 'checked' : ''} onchange="setApproval('${a.id}',this.checked)"> Revisar cada correo antes de enviarlo</label></div>` : ''}</div>`, { wide: true });
+}
+async function setApproval(id, on) {
+  try { await api('automations?id=' + id, { method: 'PATCH', body: { approval_mode: on ? 'always' : 'never' } }); toast(on ? 'Cada correo esperará tu aprobación.' : 'Los correos se enviarán sin revisión.'); }
+  catch (e) { info('No se pudo cambiar', e.message); }
+}
+async function toggleAuto(id, status, btn) {
+  const done = busy(btn, '…');
+  try { await api('automations?id=' + id, { method: 'PATCH', body: { status } }); toast(status === 'paused' ? 'Automatización pausada.' : 'Automatización activada.'); automationsPage(); }
+  catch (e) { done(); info('No se pudo cambiar', e.message); }
+}
+function confirmDelete(id) {
+  const a = automationsCache.find(x => x.id === id);
+  modal('¿Eliminar automatización?', `<p>Se eliminará <b>${esc(a?.name)}</b> y todo su historial. No se puede deshacer.</p>`, {
+    actions: `<button class="btn ghost" onclick="closeModals()">Cancelar</button><button class="btn primary dangerBtn" onclick="deleteAuto('${id}',this)">Eliminar</button>`
+  });
+}
+async function deleteAuto(id, btn) {
+  const done = busy(btn, 'Eliminando…');
+  try { await api('automations?id=' + id, { method: 'DELETE' }); closeModals(); toast('Automatización eliminada.'); automationsPage(); }
+  catch (e) { done(); info('No se pudo eliminar', e.message); }
+}
+
+// ---------- Ejecutar ----------
+async function startRun(id) {
+  let a = automationsCache.find(x => x.id === id);
+  if (!a) { const { automations } = await api('automations'); automationsCache = automations; a = automations.find(x => x.id === id); }
+  if (!a) return;
+  const inputs = a.plan?.inputs || [];
+  const note = a.trigger_type === 'gmail_new_message' ? '<p class="muted">Se probará con el correo más reciente que cumpla el filtro.</p>'
+    : a.trigger_type === 'curo_new_user' ? '<p class="muted">Se probará usando tu propia cuenta como si fueras un usuario nuevo.</p>' : '';
+  const sends = a.plan?.tools?.includes('gmail_send');
+  const m = modal(esc(a.name), `${note}${inputs.map(f => `<label class="field">${esc(f.label)}${f.type === 'textarea' ? `<textarea data-k="${esc(f.key)}" rows="4"></textarea>` : `<input data-k="${esc(f.key)}" type="${f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : f.type === 'email' ? 'email' : 'text'}">`}</label>`).join('')}
+    ${sends ? `<p class="notice">${a.approval_mode === 'always' ? 'Los correos quedarán en <b>Aprobaciones</b> para que los revises antes de enviarlos.' : '<b>Atención:</b> esta automatización envía correos sin revisión.'}</p>` : ''}
+    <p class="muted">CURO trabajará con herramientas reales. Puede tardar hasta un minuto.</p>`, {
+    actions: `<button class="btn ghost" onclick="closeModals()">Cancelar</button><button class="btn primary" id="runBtn">Ejecutar ahora</button>`
+  });
+  m.querySelector('#runBtn').addEventListener('click', async e => {
+    const vals = {}; m.querySelectorAll('[data-k]').forEach(el => vals[el.dataset.k] = el.value.trim());
+    const missing = inputs.filter(f => !vals[f.key]);
+    if (missing.length) return toast('Completa: ' + missing.map(f => f.label).join(', '), 'warn');
+    const done = busy(e.currentTarget, 'CURO está trabajando…');
+    try { const { run } = await api('run', { method: 'POST', body: { automation_id: id, inputs: vals } }); closeModals(); await refreshMe(); showRun(run, a.name); }
+    catch (err) { done(); info('No se pudo ejecutar', err.message); }
+  });
+}
+
+function showRun(run, name) {
+  const [label, kind] = RUN_STATUS[run.status] || [run.status, ''];
+  const steps = run.steps || [];
+  const m = modal(esc(run.result_title || name || 'Resultado'), `
+    <div class="chips"><span class="badge ${kind}">${label}</span><span class="chip">${esc(SOURCE_LABEL[run.trigger_source] || run.trigger_source || '')}</span><span class="chip">${fmtDate(run.started_at)}</span></div>
+    ${run.error ? `<div class="notice danger"><b>Qué falló:</b> ${esc(run.error)}</div>` : ''}
+    ${run.status === 'awaiting_approval' ? `<div class="notice warn">Hay correos esperando tu aprobación. Revísalos antes de que se envíen.</div>` : ''}
+    ${run.result_body ? `<div class="resultText">${esc(run.result_body)}</div>` : ''}
+    ${steps.length ? `<details class="stepsLog"><summary>Ver los ${steps.length} pasos que hizo CURO</summary><ol>${steps.map(s => `<li><b>${esc(TOOL_LABELS[s.tool] || (s.tool === 'finish' ? 'Terminar' : s.tool))}</b> ${s.args?.query ? `“${esc(s.args.query)}”` : s.args?.url ? esc(s.args.url) : s.args?.to ? `para ${esc(s.args.to)}` : ''} <span class="muted">— ${esc(s.preview || (s.ok === false ? 'Error' : 'Hecho'))}</span></li>`).join('')}</ol></details>` : ''}`, {
+    wide: true,
+    actions: `${run.result_body ? '<button class="btn ghost" id="copyRes">Copiar resultado</button>' : ''}${run.status === 'awaiting_approval' ? `<button class="btn primary" onclick="closeModals();go('Aprobaciones')">Revisar aprobaciones</button>` : `<button class="btn primary" onclick="closeModals()">Cerrar</button>`}`
+  });
+  m.querySelector('#copyRes')?.addEventListener('click', () => navigator.clipboard?.writeText(run.result_body).then(() => toast('Resultado copiado.'), () => toast('No se pudo copiar.', 'warn')));
+}
+
+// ---------- Aprobaciones ----------
+async function approvalsPage() {
+  loading('Aprobaciones');
+  try {
+    const { approvals } = await api('approvals?status=pending');
+    shell('Aprobaciones', `<p class="muted">Correos que CURO ha preparado y esperan tu visto bueno. Puedes editarlos antes de enviarlos.</p>
+      <div class="list">${approvals.length ? approvals.map(apCard).join('') : `<div class="card empty"><h3>Todo al día</h3><p class="muted">No hay nada pendiente de aprobar.</p></div>`}</div>
+      <button class="btn linkbtn" onclick="approvalsHistory()">Ver aprobaciones anteriores</button>`);
+  } catch (e) { shell('Aprobaciones', `<div class="card"><p>${esc(e.message)}</p></div>`); }
+}
+function apCard(ap) {
+  const p = ap.action_payload || {};
+  return `<div class="card apCard" id="ap-${ap.id}">
+    <div class="row"><div><small class="muted">${esc(ap.automate_automations?.name || 'Automatización')} · ${fmtDate(ap.created_at)}</small><h3>Correo para ${esc(p.to)}</h3></div><span class="badge warn">Pendiente</span></div>
+    ${ap.result?.error ? `<div class="notice danger"><b>Último intento falló:</b> ${esc(ap.result.error)}</div>` : ''}
+    <label class="field">Para<input data-f="to" value="${esc(p.to)}"></label>
+    <label class="field">Asunto<input data-f="subject" value="${esc(p.subject)}"></label>
+    <label class="field">Mensaje<textarea data-f="body" rows="9">${esc(p.body)}</textarea></label>
+    <div class="actions"><button class="btn ghost" onclick="decide('${ap.id}','reject',this)">Descartar</button><button class="btn primary" onclick="decide('${ap.id}','approve',this)">Aprobar y enviar</button></div>
+  </div>`;
+}
+async function decide(id, decision, btn) {
+  const card = document.getElementById('ap-' + id);
+  const payload = {}; card.querySelectorAll('[data-f]').forEach(el => payload[el.dataset.f] = el.value);
+  const done = busy(btn, decision === 'approve' ? 'Enviando…' : 'Descartando…');
+  try {
+    await api('approvals', { method: 'POST', body: { id, decision, payload } });
+    toast(decision === 'approve' ? `Correo enviado a ${payload.to}.` : 'Correo descartado.');
+    await refreshMe(); approvalsPage();
+  } catch (e) { done(); info('No se pudo completar', e.message); }
+}
+async function approvalsHistory() {
+  const { approvals } = await api('approvals?status=all');
+  const done = approvals.filter(a => a.status !== 'pending');
+  modal('Aprobaciones anteriores', done.length ? `<table class="table"><thead><tr><th>Fecha</th><th>Para</th><th>Asunto</th><th>Estado</th></tr></thead><tbody>${done.map(a => `<tr><td>${fmtDate(a.decided_at || a.created_at)}</td><td>${esc(a.action_payload?.to)}</td><td>${esc(a.action_payload?.subject)}</td><td>${a.status === 'approved' ? '<span class="badge ok">Enviado</span>' : a.status === 'rejected' ? '<span class="badge">Descartado</span>' : '<span class="badge danger">Error</span>'}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Aún no hay aprobaciones anteriores.</p>', { wide: true });
+}
+
+// ---------- Historial ----------
+let runsCache = [];
+async function historyPage(automationId) {
+  loading('Historial');
+  try {
+    const { runs } = await api('runs' + (typeof automationId === 'string' ? '?automation_id=' + automationId : ''));
+    runsCache = runs;
+    const filtered = typeof automationId === 'string';
+    shell('Historial', `<div class="row"><p class="muted">${filtered ? `Ejecuciones de <b>${esc(runs[0]?.automate_automations?.name || 'esta automatización')}</b>` : 'Todo lo que ha hecho CURO, lo más reciente primero.'}</p>${filtered ? `<button class="btn ghost" onclick="historyPage()">Ver todo</button>` : ''}</div>
+      ${runs.length ? `<div class="tableWrap"><table class="table"><thead><tr><th>Fecha</th><th>Automatización</th><th>Origen</th><th>Estado</th><th>Resultado</th></tr></thead><tbody>${runs.map(r => {
+        const [label, kind] = RUN_STATUS[r.status] || [r.status, ''];
+        return `<tr class="clickRow" onclick="openRun('${r.id}')"><td>${fmtDate(r.started_at)}</td><td>${esc(r.automate_automations?.name || '—')}</td><td>${esc(SOURCE_LABEL[r.trigger_source] || r.trigger_source)}</td><td><span class="badge ${kind}">${label}</span></td><td class="muted">${esc((r.error || r.result_title || '').slice(0, 80))}</td></tr>`;
+      }).join('')}</tbody></table></div>` : `<div class="card empty"><h3>Sin ejecuciones todavía</h3><p class="muted">Cuando una automatización se ejecute, verás aquí qué hizo y su resultado.</p></div>`}`);
+  } catch (e) { shell('Historial', `<div class="card"><p>${esc(e.message)}</p></div>`); }
+}
+function openRun(id) { const r = runsCache.find(x => x.id === id); if (r) showRun(r, r.automate_automations?.name); }
+
+// ---------- Conexiones ----------
+function connectionsPage() {
+  const g = me.connections.google;
+  shell('Conexiones', `<p class="muted">Las aplicaciones que CURO puede usar en tu nombre. Solo actúa con las que conectes y puedes desconectarlas cuando quieras.</p>
+    <div class="connGrid">
+      <div class="card conn"><div class="row"><h3>Gmail</h3><span class="badge ${g.connected ? 'ok' : 'warn'}">${g.connected ? 'Conectado' : 'Sin conectar'}</span></div>
+        <p class="muted">${g.connected ? `Cuenta: <b>${esc(g.email)}</b>. CURO puede leer tu bandeja y enviar correos (siempre con tu aprobación si así lo eliges).` : 'Permite a CURO leer correos y enviar respuestas desde tu cuenta.'}</p>
+        <div class="actions">${g.connected ? `<button class="btn ghost" onclick="connectGoogle()">Cambiar de cuenta</button><button class="btn ghost danger" onclick="disconnectGoogle(this)">Desconectar</button>` : `<button class="btn primary" onclick="connectGoogle()">Conectar Gmail</button>`}</div></div>
+      <div class="card conn"><div class="row"><h3>Internet</h3><span class="badge ok">Disponible</span></div><p class="muted">Buscar información y leer páginas web públicas. No necesita conexión.</p></div>
+      ${['Outlook', 'Google Drive y Sheets', 'Google Calendar', 'WhatsApp Business'].map(n => `<div class="card conn soon"><div class="row"><h3>${n}</h3><span class="badge">Próximamente</span></div><p class="muted">Estamos preparando esta conexión.</p></div>`).join('')}
+    </div>`);
+}
+async function connectGoogle() {
+  try {
+    const instruction = document.getElementById('instruction')?.value.trim();
+    if (instruction && !recall('curo_pending_plan')) store('curo_pending_instruction', instruction);
+    const { url } = await api('google?action=connect', { method: 'POST' });
+    location.href = url;
+  } catch (e) { info('No se pudo conectar', e.message); }
+}
+async function disconnectGoogle(btn) {
+  const done = busy(btn, 'Desconectando…');
+  try { await api('google?action=disconnect', { method: 'POST' }); toast('Gmail desconectado.'); go('Conexiones'); }
+  catch (e) { done(); info('No se pudo desconectar', e.message); }
+}
+
+// ---------- Conocimiento ----------
+async function knowledgePage() {
+  loading('Conocimiento');
+  const { items } = await api('knowledge');
+  shell('Conocimiento', `<p class="muted">Lo que CURO debe saber de tu negocio: servicios, precios, horarios, tono, normas. Lo usará al redactar y nunca inventará lo que no esté aquí.</p>
+    <div class="card"><h3>Añadir información</h3><label class="field">Título<input id="kTitle" placeholder="Ej.: Servicios y precios"></label><label class="field">Contenido<textarea id="kBody" rows="5" placeholder="Ej.: Consultoría IA para colegios: diagnóstico 300 €, formación 90 €/hora…"></textarea></label><div class="actions"><button class="btn primary" onclick="addKnowledge(this)">Guardar</button></div></div>
+    <div class="list">${items.map(k => `<div class="card"><div class="row"><h3>${esc(k.title)}</h3><button class="btn ghost danger smallBtn" onclick="delKnowledge('${k.id}',this)">Eliminar</button></div><p class="preLine">${esc(k.body)}</p></div>`).join('') || '<p class="muted">Aún no has añadido información.</p>'}</div>`);
+}
+async function addKnowledge(btn) {
+  const title = kTitle.value.trim(), body = kBody.value.trim();
+  if (!title || !body) return toast('Escribe un título y un contenido.', 'warn');
+  const done = busy(btn, 'Guardando…');
+  try { await api('knowledge', { method: 'POST', body: { title, body } }); toast('Guardado.'); knowledgePage(); }
+  catch (e) { done(); info('No se pudo guardar', e.message); }
+}
+async function delKnowledge(id, btn) {
+  const done = busy(btn, '…');
+  try { await api('knowledge?id=' + id, { method: 'DELETE' }); knowledgePage(); } catch (e) { done(); info('No se pudo eliminar', e.message); }
+}
+
+// ---------- Cuenta ----------
+function accountPage() {
+  shell('Cuenta', `<div class="card"><h3>${esc(me.user.name)}</h3><p class="muted">${esc(me.user.email)}${me.user.is_admin ? ' · Administrador de CURO' : ''}</p>
+    <p>Tu cuenta de CURO Automate es la misma que la de la plataforma CURO Group.</p>
+    <p class="muted">Motor de IA: ${esc(me.ai.provider === 'anthropic' ? 'Claude (Anthropic)' : 'Groq')} · ${esc(me.ai.model)} ${me.ai.configured ? '' : '· sin configurar'}</p>
+    <div class="actions"><button class="btn ghost" onclick="logout()">Cerrar sesión</button></div></div>`);
+}
+
+// ---------- Arranque ----------
+async function boot() {
+  const q = new URLSearchParams(location.search);
+  const googleResult = q.get('google'), reason = q.get('reason');
+  if (googleResult) history.replaceState({}, '', location.pathname);
+  const { data } = await sb.auth.getSession();
+  session = data.session;
+  if (!session) {
+    if (recall('curo_pending_instruction')) return login('login', 'Inicia sesión y CURO preparará el plan de tu automatización.');
+    return home();
+  }
+  await go('Inicio');
+  if (googleResult === 'connected') {
+    toast('Gmail conectado correctamente.');
+    const pend = recall('curo_pending_plan');
+    if (pend) { try { const { plan } = await api('plan', { method: 'POST', body: { instruction: pend.instruction } }); showPlan(pend.instruction, plan); } catch { showPlan(pend.instruction, { ...pend.plan, requirements: { ...pend.plan.requirements, google_connected: true } }); } }
+  } else if (googleResult === 'error') info('No se pudo conectar Gmail', reason || 'Google no completó la autorización.');
+}
+sb.auth.onAuthStateChange((event, s) => {
+  const had = !!session; session = s;
+  if (event === 'SIGNED_IN' && !had) go('Inicio');
+  if (event === 'SIGNED_OUT') { me = null; home(); }
+  if (event === 'PASSWORD_RECOVERY') newPassword();
+});
+function newPassword() {
+  modal('Nueva contraseña', `<label class="field">Nueva contraseña<input id="np" type="password" minlength="8"></label>`, {
+    actions: `<button class="btn primary" onclick="sb.auth.updateUser({password:np.value}).then(({error})=>{closeModals();toast(error?translateAuth(error.message):'Contraseña actualizada.',error?'warn':'ok')})">Guardar</button>`
+  });
+}
+boot();

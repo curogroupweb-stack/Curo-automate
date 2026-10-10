@@ -1,49 +1,27 @@
-# CURO Automate · MASTER V2 · Navegación y persistencia RC
+# CURO Automate · V2 conectada
 
-Base: MASTER V2 Resultado Completo.
+Describe con tus palabras el trabajo que quieres delegar. CURO prepara un plan con IA, lo ejecuta con herramientas reales (Gmail, búsqueda web, lectura de páginas) y te pide aprobación antes de enviar correos.
 
-Correcciones aisladas:
-- Backup físico completo antes de editar.
-- Ver ideas funciona independientemente del límite del plan.
-- El usuario puede describir, preparar y probar una automatización aunque esté en 2/2.
-- El límite se aplica únicamente al intentar guardar/activar una nueva automatización.
-- Automatizaciones permanece accesible en 2/2 y muestra las automatizaciones existentes.
-- La comprobación de draft_id ocurre antes del límite para no duplicar un borrador recuperado.
-- Se conserva la misma clave localStorage (curoAutomateV02), por lo que no se resetean los datos existentes del navegador.
-- Gmail/API y motor de Execution/Resultado/Historial se conservan sin cambios.
+## Arquitectura
+| Capa | Pieza |
+|---|---|
+| Web | `index.html`, `app.js`, `style.css` (Vercel) |
+| Usuarios y datos | Supabase "Curo group Plataforma" — mismo login que CURO; tablas `automate_*` con RLS |
+| IA | `api/_lib/llm.js` — `LLM_PROVIDER=groq` (gratis, pruebas) o `anthropic` (Claude, producción) |
+| Planificador | `api/_lib/planner.js` — petición → plan JSON (disparador, pasos, herramientas, aprobación) |
+| Ejecutor | `api/_lib/executor.js` — bucle de herramientas: `gmail_search`, `gmail_read`, `gmail_send`, `web_search`, `fetch_url` |
+| Motor 24/7 | `api/runner/tick.js`, llamado por `pg_cron` de Supabase cada 5 min (clave en Vault) |
+| Conexiones | Gmail OAuth por usuario, permisos cifrados (AES-GCM) en `automate_connections` |
 
+## Disparadores
+- `manual` · `schedule` (hora de Madrid) · `gmail_new_message` (filtro Gmail, anti-duplicados) · `curo_new_user` (solo administradores; evento creado por trigger en `profiles`).
 
-## FIX 05 — Historial y ejecuciones
-- Historial general robustecido para datos guardados de versiones anteriores.
-- Botón Ver resultado por ejecución.
-- Botón Volver a ejecutar sin duplicar la automatización.
-- Acceso al historial específico de cada automatización.
-- Cache bust actualizado a history05.
+## Variables de entorno (Vercel, Production)
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` (= `https://curo-automate.vercel.app/api/auth/google/callback`)
+- `SUPABASE_SERVICE_ROLE_KEY` (proyecto Curo group Plataforma)
+- `GROQ_API_KEY` y/o `ANTHROPIC_API_KEY`; `LLM_PROVIDER`, `LLM_MODEL` (opcional)
+- `RUNNER_SECRET` (igual que el secreto `automate_runner_secret` de Vault), `TOKEN_ENC_KEY` (no cambiar)
+- Opcional: `TAVILY_API_KEY` (búsqueda web más fiable), `MAX_AUTOMATIONS_PER_USER`
 
-## V12 · Resolver + Conexiones
-- Añade catálogo de capacidades/conectores y pantalla Conexiones.
-- El Resolver infiere Drive/Contactos/Gmail para una petición sencilla de bienvenida a familias, aunque el usuario no mencione tecnología.
-- OAuth Google solicita Gmail + Drive readonly; Drive expone estado y exploración de carpetas mediante API.
-- Calendar, Sheets, WhatsApp Business y Mailchimp aparecen como hoja de ruta, no se simulan como conectados.
-- Para Drive real, Google Drive API debe estar habilitada en el proyecto Google Cloud y el usuario debe volver a autorizar Google.
-
-
-## V14 UX
-- Se elimina “Probar gratis” del encabezado público.
-- Dictado por voz en los campos principales de automatización (SpeechRecognition del navegador).
-- Planner/modal adaptable con scroll interno y acciones siempre visibles.
-- Aviso local de conexión integrado en el Planner para evitar doble modal.
-
-
-## V15 · Semantic Welcome + Web Ready
-- El Planner reconoce altas/registros de nuevos usuarios como trigger específico.
-- Construye el flujo: alta → datos del usuario → anti-duplicado → plantilla → Gmail → registro.
-- La fuente de usuarios CURO se muestra como fuente interna, no como aplicación externa a configurar.
-- Gmail sigue requiriendo ejecución web real para OAuth; no se simula conexión desde file://.
-
-- V16: OAuth web conserva y recupera el borrador del Planner al volver de Google; valida configuración OAuth del servidor antes de redirigir.
-
-- V17: corrige OAuth state entre dominios de deployment y dominio de producción usando state firmado HMAC con caducidad de 10 minutos; elimina dependencia de cookie de state.
-- Bloque Gmail consolidado: no permite preparar/guardar un plan con fuentes obligatorias desconectadas; refresca el estado real de Google al volver de OAuth; distingue cancelación/código ausente/state inválido; valida destinatario; y no fuerza `Re:` en correos nuevos.
-- Bloque ejecución/aprobación: Historial global reparado; ejecuciones que requieren aprobación quedan `awaiting_approval`; aprobación de automatizaciones Gmail valida conexión y destinatario, envía por API y registra entrega; errores quedan trazados; fuentes internas CURO aún no conectadas quedan `Preparada` y no se presentan falsamente como activas.
-- Bloque persistencia/reutilización: estado operativo calculado antes de ejecutar; automatizaciones con fuente interna CURO quedan guardadas como Preparadas y no pueden activarse/ejecutarse hasta conectar el registro real; historial tolera ejecuciones pendientes; resultado distingue Pendiente/Completada/Fallida; edición y pausa actualizan estado sin duplicar automatizaciones.
+## Pasar a Claude
+Añadir `ANTHROPIC_API_KEY` y cambiar `LLM_PROVIDER=anthropic`. Sin cambios de código.

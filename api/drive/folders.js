@@ -1,2 +1,0 @@
-const {token,json}=require('../_gmail');
-module.exports=async(req,res)=>{try{const t=await token(req,res);const q=new URLSearchParams({q:"mimeType='application/vnd.google-apps.folder' and trashed=false",pageSize:'100',fields:'files(id,name,modifiedTime,parents)',orderBy:'name'});const r=await fetch('https://www.googleapis.com/drive/v3/files?'+q,{headers:{authorization:`Bearer ${t.access_token}`}});const j=await r.json();if(!r.ok)throw new Error(j.error?.message||'Google Drive rechazó la consulta');json(res,200,{folders:j.files||[]})}catch(e){json(res,400,{error:e.message})}}

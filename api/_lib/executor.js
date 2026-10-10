@@ -1,0 +1,133 @@
+// Ejecutor: la IA realiza la automatización paso a paso usando herramientas reales.
+const { chat } = require('./llm');
+const tools = require('./tools');
+const google = require('./google');
+const { db, enc } = require('./db');
+
+const MAX_TURNS = 10;
+
+async function connectionsFor(userId) {
+  const g = await google.status(userId).catch(() => ({ connected: false }));
+  return { google: !!g.connected };
+}
+
+async function knowledgeFor(userId) {
+  const rows = await db.select('automate_knowledge', `user_id=eq.${enc(userId)}&select=title,body&order=created_at.desc&limit=20`).catch(() => []);
+  return rows.map(k => `• ${k.title}: ${k.body}`).join('\n').slice(0, 4000);
+}
+
+function systemPrompt({ automation, knowledge, now }) {
+  const plan = automation.plan || {};
+  return `Eres el ejecutor de CURO Automate. Realizas automatizaciones reales en nombre del usuario usando las herramientas disponibles.
+
+OBJETIVO DEL USUARIO (con sus palabras):
+"""${automation.instruction}"""
+
+PLAN APROBADO:
+${(plan.steps || []).map((s, i) => `${i + 1}. ${s}`).join('\n') || '(sin pasos detallados)'}
+Resultado esperado: ${plan.output || 'el resultado de la tarea'}
+
+CONOCIMIENTO DEL NEGOCIO DEL USUARIO (úsalo; no inventes nada que no esté aquí o en las herramientas):
+${knowledge || '(sin notas)'}
+
+FECHA Y HORA ACTUAL (Madrid): ${now}
+
+REGLAS
+- Usa las herramientas para obtener datos reales. Nunca inventes precios, datos personales, enlaces ni hechos.
+- Si falta información imprescindible, no la inventes: explícalo en el resultado final.
+- Para enviar correos usa gmail_send con un texto completo, cordial y listo para enviar, en el idioma del destinatario.
+- No envíes correos a direcciones que no aparezcan en el evento, en los correos leídos o en la petición del usuario.
+- Sé eficiente: no repitas llamadas iguales.
+- Termina SIEMPRE llamando a "finish" con un título corto y el resultado completo para el usuario, en español.`;
+}
+
+function trimResult(value) {
+  const s = JSON.stringify(value ?? null);
+  return s.length > 9000 ? s.slice(0, 9000) + '…(recortado)' : s;
+}
+
+// opts: { automation, userId, source, event, inputs, deadline }
+async function run({ automation, userId, source = 'manual', event = {}, inputs = {}, deadline = Date.now() + 50000 }) {
+  const runRow = await db.insert('automate_runs', {
+    automation_id: automation.id, user_id: userId, trigger_source: source, trigger_event: event, inputs, status: 'running'
+  });
+  const steps = [];
+  const usage = { input: 0, output: 0, turns: 0 };
+  const ctx = { userId, automation, runId: runRow.id, approvalMode: automation.approval_mode || 'always', approvals: [] };
+  const finishRun = async patch => {
+    const row = { steps, usage, finished_at: new Date().toISOString(), ...patch };
+    await db.update('automate_runs', `id=eq.${runRow.id}`, row);
+    await db.update('automate_automations', `id=eq.${automation.id}`, {
+      last_run_at: new Date().toISOString(), last_error: patch.status === 'failed' ? patch.error : null, updated_at: new Date().toISOString()
+    });
+    return { ...runRow, ...row };
+  };
+
+  try {
+    const connections = await connectionsFor(userId);
+    const allowed = (automation.plan?.tools || []).filter(n => tools.available(connections).includes(n));
+    const missing = (automation.plan?.tools || []).filter(n => !allowed.includes(n));
+    if (missing.some(n => tools.CATALOG[n]?.needs === 'google')) {
+      return finishRun({ status: 'failed', error: 'Gmail no está conectado. Conéctalo en Conexiones y vuelve a ejecutar.' });
+    }
+    const defs = tools.definitions(allowed);
+    const now = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', dateStyle: 'full', timeStyle: 'short' }).format(new Date());
+    const system = systemPrompt({ automation, knowledge: await knowledgeFor(userId), now });
+    const first = [
+      Object.keys(inputs || {}).length ? `Datos de esta ejecución:\n${Object.entries(inputs).map(([k, v]) => `- ${k}: ${v}`).join('\n')}` : '',
+      event && Object.keys(event).length ? `Evento que ha iniciado la automatización:\n${JSON.stringify(event).slice(0, 6000)}` : '',
+      'Realiza la automatización ahora.'
+    ].filter(Boolean).join('\n\n');
+    const messages = [{ role: 'user', content: first }];
+
+    for (let turn = 0; turn < MAX_TURNS; turn++) {
+      if (Date.now() > deadline) throw new Error('La ejecución tardó demasiado y se detuvo por seguridad.');
+      const res = await chat({ system, messages, tools: defs, maxTokens: 2000 });
+      usage.input += res.usage.input; usage.output += res.usage.output; usage.turns++;
+
+      if (!res.tool_calls.length) {
+        // El modelo respondió sin herramientas: lo tratamos como resultado final.
+        const status = ctx.approvals.length ? 'awaiting_approval' : 'completed';
+        return finishRun({ status, result_title: automation.name, result_body: res.text || 'Ejecución completada.' });
+      }
+      messages.push({ role: 'assistant', content: res.text || '', tool_calls: res.tool_calls });
+
+      for (const call of res.tool_calls) {
+        if (call.name === 'finish') {
+          const status = ctx.approvals.length ? 'awaiting_approval' : 'completed';
+          steps.push({ tool: 'finish', at: new Date().toISOString() });
+          return finishRun({ status, result_title: String(call.args.title || automation.name).slice(0, 200), result_body: String(call.args.body || '') });
+        }
+        const started = Date.now();
+        let result, ok = true;
+        if (!allowed.includes(call.name)) { result = { error: `La herramienta ${call.name} no está disponible en esta automatización.` }; ok = false; }
+        else {
+          try { result = await tools.execute(call.name, call.args || {}, ctx); }
+          catch (e) { result = { error: e.message }; ok = false; }
+        }
+        steps.push({ tool: call.name, args: redact(call.args), ok, ms: Date.now() - started, preview: preview(result), at: new Date().toISOString() });
+        messages.push({ role: 'tool', tool_call_id: call.id, content: trimResult(result) });
+      }
+    }
+    const status = ctx.approvals.length ? 'awaiting_approval' : 'completed';
+    return finishRun({ status, result_title: automation.name, result_body: 'La automatización alcanzó el número máximo de pasos. Revisa el detalle de los pasos realizados.' });
+  } catch (e) {
+    return finishRun({ status: 'failed', error: e.message || String(e) });
+  }
+}
+
+function redact(args = {}) {
+  const a = { ...args };
+  if (a.body && a.body.length > 400) a.body = a.body.slice(0, 400) + '…';
+  return a;
+}
+function preview(r) {
+  if (r?.error) return 'Error: ' + r.error;
+  if (Array.isArray(r)) return `${r.length} resultado(s)`;
+  if (r?.status) return String(r.status);
+  if (r?.subject) return `Correo: ${r.subject}`;
+  if (r?.text) return `${r.text.length} caracteres leídos`;
+  return 'Hecho';
+}
+
+module.exports = { run, connectionsFor };
