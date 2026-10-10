@@ -45,10 +45,21 @@ async function openaiCompatChat({ system, messages, tools, maxTokens, temperatur
     body.tools = tools.map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }));
     body.tool_choice = 'auto';
   }
-  const r = await fetchRetry('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' }, body: JSON.stringify(body)
-  }, deadline);
-  const j = await r.json();
+  // Los modelos abiertos a veces escriben mal el nombre de una herramienta y Groq rechaza la respuesta
+  // (tool_use_failed). Reintentamos con temperatura 0 y, si vuelve a fallar, con un modelo alternativo.
+  const fallback = process.env.LLM_FALLBACK_MODEL || 'llama-3.3-70b-versatile';
+  const attempts = [body, { ...body, temperature: 0 }, ...(tools.length && body.model !== fallback ? [{ ...body, temperature: 0, model: fallback }] : [])];
+  let r, j;
+  for (let i = 0; i < attempts.length; i++) {
+    r = await fetchRetry('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' }, body: JSON.stringify(attempts[i])
+    }, deadline);
+    j = await r.json();
+    const toolFail = r.status === 400 && (j.error?.code === 'tool_use_failed' || /tool call validation failed/i.test(j.error?.message || ''));
+    if (!toolFail) break;
+    const recovered = recoverFailedGeneration(j.error?.failed_generation, tools);
+    if (recovered) return { text: '', tool_calls: [recovered], usage: { input: 0, output: 0 } };
+  }
   if (!r.ok) throw new HttpError(502, r.status === 429
     ? 'La IA gratuita (Groq) ha alcanzado su límite por minuto. Espera un minuto y vuelve a intentarlo.'
     : 'IA (Groq): ' + (j.error?.message || r.status));
@@ -110,6 +121,21 @@ async function fetchRetry(url, opts, deadline = Date.now() + 45000, tries = 5) {
 
 // Algunos modelos abiertos devuelven nombres como "functions.finish" o "name=finish".
 function cleanName(n) { return String(n || '').replace(/^name=/, '').replace(/^.*functions\./, '').replace(/[<|>].*$/, '').trim(); }
+
+// Intenta recuperar la llamada que el modelo quiso hacer a partir del texto rechazado.
+function recoverFailedGeneration(text, tools) {
+  if (!text) return null;
+  const names = tools.map(t => t.name);
+  try {
+    const parsed = JSON.parse(String(text).trim());
+    const list = Array.isArray(parsed) ? parsed : [parsed];
+    for (const c of list) {
+      const name = cleanName(c.name || c.function?.name);
+      if (names.includes(name)) return { id: 'rec_' + Date.now(), name, args: safeParse(c.arguments || c.parameters || c.function?.arguments || {}) };
+    }
+  } catch {}
+  return null;
+}
 
 function safeParse(s) { try { return typeof s === 'string' ? JSON.parse(s || '{}') : (s || {}); } catch { return {}; } }
 

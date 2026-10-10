@@ -136,6 +136,12 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
     const status = ctx.approvals.length ? 'awaiting_approval' : 'completed';
     return finishRun({ status, result_title: automation.name, result_body: 'La automatización alcanzó el número máximo de pasos. Revisa el detalle de los pasos realizados.' });
   } catch (e) {
+    // Si las acciones importantes ya se hicieron (p. ej. el correo se envió), no lo marcamos como fallo.
+    const done = steps.filter(st => st.ok && st.tool === 'gmail_send');
+    if (done.length) {
+      const status = ctx.approvals.length ? 'awaiting_approval' : 'completed';
+      return finishRun({ status, result_title: automation.name, result_body: `Tarea realizada: ${done.map(st => `correo para ${st.args?.to} («${st.args?.subject}»)`).join(', ')}.\n\nNota: la IA no pudo redactar el resumen final (${e.message}).` });
+    }
     return finishRun({ status: 'failed', error: e.message || String(e) });
   }
 }

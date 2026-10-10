@@ -14,21 +14,27 @@ function linkify(htmlEscaped) {
 
 // Convierte el texto plano que redacta la IA en bloques HTML: párrafos, viñetas y listas numeradas.
 function textToHtml(text) {
-  const blocks = String(text || '').replace(/\r/g, '').split(/\n\s*\n/);
+  const bullet = /^([•\-–*·]|\d+[.)])\s+/;
   const out = [];
-  for (const block of blocks) {
+  for (const block of String(text || '').replace(/\r/g, '').split(/\n\s*\n/)) {
     const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
-    if (!lines.length) continue;
-    const bullet = /^([•\-–*·]|\d+[.)])\s+/;
-    if (lines.every(l => bullet.test(l))) {
-      const ordered = /^\d/.test(lines[0]);
-      const items = lines.map(l => `<li style="margin:0 0 8px">${linkify(esc(l.replace(bullet, '')))}</li>`).join('');
-      out.push(ordered
-        ? `<ol style="margin:0 0 18px;padding-left:22px">${items}</ol>`
-        : `<ul style="margin:0 0 18px;padding-left:22px">${items}</ul>`);
-    } else {
-      out.push(`<p style="margin:0 0 16px">${lines.map(l => linkify(esc(l))).join('<br>')}</p>`);
+    // Agrupa líneas consecutivas: texto normal -> párrafo; viñetas/números -> lista.
+    let run = [], runIsList = null;
+    const flush = () => {
+      if (!run.length) return;
+      if (runIsList) {
+        const ordered = /^\d/.test(run[0]);
+        const items = run.map(l => `<li style="margin:0 0 8px">${linkify(esc(l.replace(bullet, '')))}</li>`).join('');
+        out.push(ordered ? `<ol style="margin:0 0 18px;padding-left:22px">${items}</ol>` : `<ul style="margin:0 0 18px;padding-left:22px">${items}</ul>`);
+      } else out.push(`<p style="margin:0 0 16px">${run.map(l => linkify(esc(l))).join('<br>')}</p>`);
+      run = [];
+    };
+    for (const l of lines) {
+      const isList = bullet.test(l);
+      if (runIsList !== null && isList !== runIsList) flush();
+      runIsList = isList; run.push(l);
     }
+    flush();
   }
   return out.join('\n');
 }
