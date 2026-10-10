@@ -21,13 +21,13 @@ function info() {
 // messages: [{role:'user'|'assistant'|'tool', content, tool_calls?, tool_call_id?}]
 // tools: [{name, description, parameters(JSON Schema)}]
 // Devuelve { text, tool_calls:[{id,name,args}], usage:{input,output} }
-async function chat({ system, messages, tools = [], maxTokens = 1800, temperature = 0.2, deadline }) {
+async function chat({ system, messages, tools = [], maxTokens = 1800, temperature = 0.2, deadline, toolChoice = 'auto' }) {
   const p = provider();
-  if (p === 'anthropic') return anthropicChat({ system, messages, tools, maxTokens, temperature, deadline });
-  return openaiCompatChat({ system, messages, tools, maxTokens, temperature, deadline });
+  if (p === 'anthropic') return anthropicChat({ system, messages, tools, maxTokens, temperature, deadline, toolChoice });
+  return openaiCompatChat({ system, messages, tools, maxTokens, temperature, deadline, toolChoice });
 }
 
-async function openaiCompatChat({ system, messages, tools, maxTokens, temperature, deadline }) {
+async function openaiCompatChat({ system, messages, tools, maxTokens, temperature, deadline, toolChoice }) {
   const key = process.env.GROQ_API_KEY;
   if (!key) throw new HttpError(500, 'Falta configurar GROQ_API_KEY en Vercel.');
   const body = {
@@ -43,7 +43,7 @@ async function openaiCompatChat({ system, messages, tools, maxTokens, temperatur
   };
   if (tools.length) {
     body.tools = tools.map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }));
-    body.tool_choice = 'auto';
+    body.tool_choice = toolChoice === 'none' ? 'none' : 'auto';
   }
   // Los modelos abiertos a veces escriben mal el nombre de una herramienta y Groq rechaza la respuesta
   // (tool_use_failed). Reintentamos con temperatura 0 y, si vuelve a fallar, con un modelo alternativo.
@@ -55,7 +55,7 @@ async function openaiCompatChat({ system, messages, tools, maxTokens, temperatur
       method: 'POST', headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' }, body: JSON.stringify(attempts[i])
     }, deadline);
     j = await r.json();
-    const toolFail = r.status === 400 && (j.error?.code === 'tool_use_failed' || /tool call validation failed/i.test(j.error?.message || ''));
+    const toolFail = r.status === 400 && (j.error?.code === 'tool_use_failed' || /tool call validation failed|parse tool call arguments/i.test(j.error?.message || ''));
     if (!toolFail) break;
     const recovered = recoverFailedGeneration(j.error?.failed_generation, tools);
     if (recovered) return { text: '', tool_calls: [recovered], usage: { input: 0, output: 0 } };
@@ -78,7 +78,7 @@ async function openaiCompatChat({ system, messages, tools, maxTokens, temperatur
   };
 }
 
-async function anthropicChat({ system, messages, tools, maxTokens, temperature, deadline }) {
+async function anthropicChat({ system, messages, tools, maxTokens, temperature, deadline, toolChoice }) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new HttpError(500, 'Falta configurar ANTHROPIC_API_KEY en Vercel.');
   const out = [];
@@ -93,7 +93,7 @@ async function anthropicChat({ system, messages, tools, maxTokens, temperature, 
     } else out.push({ role: m.role, content: m.content });
   }
   const body = { model: process.env.LLM_MODEL || DEFAULTS.anthropic, system, max_tokens: maxTokens, temperature, messages: out };
-  if (tools.length) body.tools = tools.map(t => ({ name: t.name, description: t.description, input_schema: t.parameters }));
+  if (tools.length) { body.tools = tools.map(t => ({ name: t.name, description: t.description, input_schema: t.parameters })); if (toolChoice === 'none') body.tool_choice = { type: 'none' }; }
   const r = await fetchRetry('https://api.anthropic.com/v1/messages', {
     method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' }, body: JSON.stringify(body)
   }, deadline);

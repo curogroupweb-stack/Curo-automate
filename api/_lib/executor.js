@@ -105,11 +105,27 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
       // En los últimos pasos, si el plan manda un correo y aún no se ha hecho, obligamos a escribirlo ya.
       const sentAlready = steps.some(s => s.tool === 'gmail_send');
       const searchesDone = steps.filter(s => s.tool === 'web_search').length >= 3;
-      if (planSends && !sentAlready && (turn >= MAX_TURNS - 3 || searchesDone)) {
-        if (!ctx.forced) {
-          ctx.forced = true;
-          messages.push({ role: 'user', content: 'Ya tienes información suficiente. No busques más: redacta ahora el correo completo con lo que has encontrado y envíalo con gmail_send. Después llama a finish.' });
-        }
+      // Informes para el propio usuario (programados o manuales): cuando ya hay datos, la IA escribe el correo
+      // como texto normal y lo enviamos nosotros. Así evitamos que un texto largo rompa la llamada a la herramienta.
+      const selfReport = planSends && !sentAlready && ['schedule', 'manual'].includes(automation.trigger_type) && connections.email;
+      if (selfReport && (turn >= MAX_TURNS - 3 || searchesDone)) {
+        messages.push({ role: 'user', content: 'Ya tienes información suficiente. No uses más herramientas. Escribe ahora el correo completo, listo para enviar, como respuesta normal. La primera línea debe ser "Asunto: ..." y a continuación el cuerpo del correo en texto limpio (sin Markdown).' });
+        const res = await chat({ system, messages: compact(messages), tools: defs, toolChoice: 'none', maxTokens: 2000, deadline });
+        usage.input += res.usage.input; usage.output += res.usage.output; usage.turns++;
+        const text = String(res.text || '').trim();
+        if (!text) throw new Error('La IA no devolvió el texto del correo.');
+        const m = text.match(/^\s*asunto\s*:\s*(.+)$/im);
+        const subject = (m ? m[1] : automation.name).trim().slice(0, 200);
+        const body = (m ? text.replace(m[0], '') : text).trim();
+        const args = { to: connections.email, subject, body };
+        const started = Date.now();
+        const result = await tools.execute('gmail_send', args, ctx);
+        steps.push({ tool: 'gmail_send', args: redact(args), ok: true, ms: Date.now() - started, preview: preview(result), at: new Date().toISOString() });
+        return finishRun({ status: ctx.approvals.length ? 'awaiting_approval' : 'completed', result_title: subject, result_body: body });
+      }
+      if (planSends && !sentAlready && (turn >= MAX_TURNS - 3 || searchesDone) && !ctx.forced) {
+        ctx.forced = true;
+        messages.push({ role: 'user', content: 'Ya tienes información suficiente. No busques más: redacta ahora el correo completo con lo que has encontrado y envíalo con gmail_send. Después llama a finish.' });
       }
       const res = await chat({ system, messages: compact(messages), tools: defs, maxTokens: 1600, deadline });
       usage.input += res.usage.input; usage.output += res.usage.output; usage.turns++;
