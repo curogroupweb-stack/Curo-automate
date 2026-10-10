@@ -1,5 +1,5 @@
 // Ejecutor: la IA realiza la automatización paso a paso usando herramientas reales.
-const { chat } = require('./llm');
+const { chat, extractJson } = require('./llm');
 const tools = require('./tools');
 const google = require('./google');
 const { db, enc } = require('./db');
@@ -112,7 +112,13 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
         messages.push({ role: 'user', content: 'Ya tienes información suficiente. No uses más herramientas. Escribe ahora el correo completo, listo para enviar, como respuesta normal. La primera línea debe ser "Asunto: ..." y a continuación el cuerpo del correo en texto limpio (sin Markdown).' });
         const res = await chat({ system, messages: compact(messages), tools: defs, toolChoice: 'none', maxTokens: 2000, deadline });
         usage.input += res.usage.input; usage.output += res.usage.output; usage.turns++;
-        const text = String(res.text || '').trim();
+        let text = String(res.text || '').trim();
+        // A veces el modelo envuelve el correo en JSON ({"title","body"}): nos quedamos con el texto.
+        if (/^\s*[{`]/.test(text)) {
+          const j = extractJson(text);
+          if (j && (j.body || j.cuerpo)) text = `${/asunto\s*:/i.test(j.body || j.cuerpo) ? '' : `Asunto: ${j.subject || j.asunto || j.title || automation.name}\n\n`}${j.body || j.cuerpo}`;
+        }
+        text = cleanText(text);
         if (!text) throw new Error('La IA no devolvió el texto del correo.');
         const m = text.match(/^\s*asunto\s*:\s*(.+)$/im);
         const subject = (m ? m[1] : automation.name).trim().slice(0, 200);
@@ -178,6 +184,15 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
     }
     return finishRun({ status: 'failed', error: e.message || String(e) });
   }
+}
+
+// Quita restos de Markdown (negritas, títulos, separadores) para que el correo se lea limpio.
+function cleanText(t) {
+  return String(t || '')
+    .replace(/\*\*(.+?)\*\*/g, '$1').replace(/__(.+?)__/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '').replace(/^\s*[-*_]{3,}\s*$/gm, '')
+    .replace(/^\s*[*-]\s+/gm, '• ')
+    .replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function redact(args = {}) {

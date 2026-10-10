@@ -96,6 +96,16 @@ async function googleNews(query) {
   // 6 resultados con fecha corta: suficiente para resumir y gasta menos del cupo por minuto de la IA gratuita.
   return rssItems(xml, 6).map(x => { const d = new Date(x.date); return { ...x, snippet: undefined, date: isNaN(d) ? x.date : d.toISOString().slice(0, 10) }; });
 }
+// Bing Noticias: los enlaces llevan el destino real en el parámetro url= (enlaces cortos y directos al medio).
+async function bingNews(query) {
+  const xml = await getText(`https://www.bing.com/news/search?format=rss&setlang=es&cc=ES&q=${encodeURIComponent(query)}`);
+  return rssItems(xml, 6).map(x => {
+    let url = x.url; const u = url.match(/[?&]url=([^&]+)/i);
+    if (u) { try { url = decodeURIComponent(u[1]); } catch {} }
+    const d = new Date(x.date);
+    return { title: x.title, url, source: x.source, date: isNaN(d) ? x.date : d.toISOString().slice(0, 10) };
+  }).filter(x => /^https?:\/\//.test(x.url));
+}
 async function bingWeb(query) {
   const xml = await getText(`https://www.bing.com/search?format=rss&setlang=es&cc=ES&q=${encodeURIComponent(query)}`);
   return rssItems(xml, 6);
@@ -122,7 +132,7 @@ async function webSearch(query, news) {
       if (j.results?.length) return j.results.map(x => ({ title: x.title, url: x.url, snippet: (x.content || '').slice(0, 220) }));
     } catch {}
   }
-  const order = news ? [googleNews, bingWeb] : [bingWeb, ddgLite, googleNews];
+  const order = news ? [bingNews, googleNews, bingWeb] : [bingWeb, ddgLite, googleNews];
   for (const fn of order) {
     const res = await fn(query);
     if (res.length) return res;
