@@ -231,7 +231,7 @@ function planBody(plan) {
       <div class="plannerStep"><small>HERRAMIENTAS</small><div class="chips">${plan.tools.map(t => `<span class="chip">${esc(TOOL_LABELS[t] || t)}</span>`).join('') || '<span class="muted">Solo la IA</span>'}</div></div>
       ${plan.inputs.length ? `<div class="plannerStep"><small>TE PEDIRÁ EN CADA EJECUCIÓN</small><div class="chips">${plan.inputs.map(i => `<span class="chip">${esc(i.label)}</span>`).join('')}</div></div>` : ''}
       <div class="plannerStep"><small>RESULTADO</small><b>${esc(plan.output)}</b></div>
-      ${plan.tools.includes('gmail_send') ? `<div class="plannerStep"><small>CONTROL</small><label class="toggle"><input type="checkbox" id="planApproval" ${plan.approval === 'always' ? 'checked' : ''}> Revisar y aprobar cada correo antes de enviarlo <span class="muted">(recomendado)</span></label></div>` : ''}
+      ${plan.tools.includes('gmail_send') ? `<div class="plannerStep"><small>CONTROL</small><label class="toggle"><input type="checkbox" id="planApproval" ${plan.approval === 'always' ? 'checked' : ''}> Revisar y aprobar cada correo a otras personas antes de enviarlo <span class="muted">(recomendado; los correos para ti llegan directamente)</span></label></div>` : ''}
     </div>
     ${plan.limitations.length && plan.feasible ? `<div class="notice"><b>A tener en cuenta:</b><ul>${plan.limitations.map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>` : ''}
     ${plan.questions.length ? `<div class="notice"><b>Para afinarlo más</b>, puedes añadir esto a tu descripción y volver a preparar el plan:<ul>${plan.questions.map(q => `<li>${esc(q)}</li>`).join('')}</ul></div>` : ''}
@@ -343,7 +343,7 @@ async function startRun(id) {
     : a.trigger_type === 'curo_new_user' ? '<p class="muted">Se probará usando tu propia cuenta como si fueras un usuario nuevo.</p>' : '';
   const sends = a.plan?.tools?.includes('gmail_send');
   const m = modal(esc(a.name), `${note}${inputs.map(f => `<label class="field">${esc(f.label)}${f.type === 'textarea' ? `<textarea data-k="${esc(f.key)}" rows="4"></textarea>` : `<input data-k="${esc(f.key)}" type="${f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : f.type === 'email' ? 'email' : 'text'}">`}</label>`).join('')}
-    ${sends ? `<p class="notice">${a.approval_mode === 'always' ? 'Los correos quedarán en <b>Aprobaciones</b> para que los revises antes de enviarlos.' : '<b>Atención:</b> esta automatización envía correos sin revisión.'}</p>` : ''}
+    ${sends ? `<p class="notice">${a.approval_mode === 'always' ? 'Los correos para otras personas quedarán en <b>Aprobaciones</b> para que los revises. Los que sean para ti te llegarán directamente.' : '<b>Atención:</b> esta automatización envía correos sin revisión.'}</p>` : ''}
     <p class="muted">CURO trabajará con herramientas reales. Puede tardar hasta un minuto.</p>`, {
     actions: `<button class="btn ghost" onclick="closeModals()">Cancelar</button><button class="btn primary" id="runBtn">Ejecutar ahora</button>`
   });

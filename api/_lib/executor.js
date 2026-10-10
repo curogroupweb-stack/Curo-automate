@@ -79,6 +79,7 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
 
   try {
     const connections = await connectionsFor(userId);
+    if (connections.email) ctx.selfEmails = [connections.email.toLowerCase()];
     const allowed = (automation.plan?.tools || []).filter(n => tools.available(connections).includes(n));
     const missing = (automation.plan?.tools || []).filter(n => !allowed.includes(n));
     if (missing.some(n => tools.CATALOG[n]?.needs === 'google')) {

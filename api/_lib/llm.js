@@ -55,7 +55,7 @@ async function openaiCompatChat({ system, messages, tools, maxTokens, temperatur
   const msg = j.choices?.[0]?.message || {};
   return {
     text: msg.content || '',
-    tool_calls: (msg.tool_calls || []).map(t => ({ id: t.id, name: t.function?.name, args: safeParse(t.function?.arguments) })),
+    tool_calls: (msg.tool_calls || []).map(t => ({ id: t.id, name: cleanName(t.function?.name), args: safeParse(t.function?.arguments) })),
     usage: { input: j.usage?.prompt_tokens || 0, output: j.usage?.completion_tokens || 0 }
   };
 }
@@ -107,6 +107,9 @@ async function fetchRetry(url, opts, deadline = Date.now() + 45000, tries = 5) {
     return r;
   }
 }
+
+// Algunos modelos abiertos devuelven nombres como "functions.finish" o "name=finish".
+function cleanName(n) { return String(n || '').replace(/^name=/, '').replace(/^.*functions\./, '').replace(/[<|>].*$/, '').trim(); }
 
 function safeParse(s) { try { return typeof s === 'string' ? JSON.parse(s || '{}') : (s || {}); } catch { return {}; } }
 

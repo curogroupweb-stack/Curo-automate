@@ -19,7 +19,7 @@ const CATALOG = {
   gmail_send: {
     needs: 'google',
     label: 'Enviar correo por Gmail',
-    description: 'Envía un correo desde el Gmail del usuario. Si la automatización requiere aprobación, el correo queda como borrador pendiente y el usuario lo aprueba antes de enviarlo. Para responder, pasa reply_to_message_id.',
+    description: 'Envía un correo desde el Gmail del usuario. Los correos al propio usuario se envían al momento. Si van a otra persona y la automatización requiere aprobación, el correo queda como borrador pendiente y el usuario lo aprueba antes de enviarlo. Para responder, pasa reply_to_message_id.',
     parameters: { type: 'object', properties: { to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' }, reply_to_message_id: { type: 'string' } }, required: ['to', 'subject', 'body'] }
   },
   web_search: {
@@ -150,7 +150,9 @@ async function execute(name, args, ctx) {
     case 'gmail_search': return google.searchMessages(ctx.userId, args.query, args.max_results || 5);
     case 'gmail_read': return google.readMessage(ctx.userId, args.message_id);
     case 'gmail_send': {
-      if (ctx.approvalMode === 'always') {
+      // Los correos para el propio usuario no necesitan aprobación: la aprobación protege los envíos a terceros.
+      const toSelf = (ctx.selfEmails || []).includes(String(args.to || '').trim().toLowerCase().replace(/^.*<([^>]+)>.*$/, '$1'));
+      if (ctx.approvalMode === 'always' && !toSelf) {
         const ap = await db.insert('automate_approvals', {
           run_id: ctx.runId, automation_id: ctx.automation?.id || null, user_id: ctx.userId,
           action_type: 'gmail_send',
@@ -161,7 +163,7 @@ async function execute(name, args, ctx) {
         return { status: 'pendiente_de_aprobacion', note: 'El correo se ha guardado como borrador. El usuario lo revisará y lo enviará desde Aprobaciones. No lo vuelvas a crear.' };
       }
       const sent = await google.sendMessage(ctx.userId, args);
-      return { status: 'enviado', ...sent };
+      return { status: toSelf ? 'enviado_al_usuario' : 'enviado', ...sent };
     }
     case 'web_search': return webSearch(args.query, !!args.news);
     case 'fetch_url': return fetchUrl(args.url);
