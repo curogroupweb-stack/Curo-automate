@@ -149,7 +149,8 @@ function shell(page, body) {
     <main class="main"><div class="dashhead"><div><small class="muted">CURO AUTOMATE</small><h1>${esc(page)}</h1></div>${aiBadge()}</div><div id="page">${body}</div></main></div>`;
 }
 function aiBadge() {
-  if (!me) return '';
+  // Solo el administrador ve el estado técnico de la IA.
+  if (!me || !me.user?.is_admin) return '';
   if (!me.ai?.configured) return `<span class="badge danger" title="Falta configurar la clave de IA en el servidor">IA sin configurar</span>`;
   return `<span class="badge ok" title="Proveedor de IA activo">IA activa · ${esc(me.ai.provider === 'anthropic' ? 'Claude' : 'Groq')}</span>`;
 }
@@ -207,7 +208,9 @@ function inicio() {
 async function createPlan(btn) {
   const instruction = document.getElementById('instruction')?.value.trim();
   if (!instruction) return toast('Describe primero la tarea.', 'warn');
-  if (!me.ai?.configured) return info('IA sin configurar', 'Falta la clave de la IA en el servidor (GROQ_API_KEY en Vercel). Cuando esté, podrás crear automatizaciones.');
+  if (!me.ai?.configured) return me.user?.is_admin
+    ? info('IA sin configurar', 'Falta la clave de la IA en el servidor (GROQ_API_KEY en Vercel). Cuando esté, podrás crear automatizaciones.')
+    : info('Servicio no disponible', 'La creación de automatizaciones no está disponible en este momento. Inténtalo de nuevo más tarde.');
   const done = busy(btn, 'CURO está preparando el plan…');
   try {
     const { plan } = await api('plan', { method: 'POST', body: { instruction } });
@@ -473,7 +476,7 @@ async function delKnowledge(id, btn) {
 function accountPage() {
   shell('Cuenta', `<div class="card"><h3>${esc(me.user.name)}</h3><p class="muted">${esc(me.user.email)}${me.user.is_admin ? ' · Administrador de CURO' : ''}</p>
     <p>Tu cuenta de CURO Automate es la misma que la de la plataforma CURO Group.</p>
-    <p class="muted">Motor de IA: ${esc(me.ai.provider === 'anthropic' ? 'Claude (Anthropic)' : 'Groq')} · ${esc(me.ai.model)} ${me.ai.configured ? '' : '· sin configurar'}</p>
+    ${me.user.is_admin ? `<p class="muted">Motor de IA: ${esc(me.ai.provider === 'anthropic' ? 'Claude (Anthropic)' : 'Groq')} · ${esc(me.ai.model)} ${me.ai.configured ? '' : '· sin configurar'}</p>` : ''}
     <div class="actions"><button class="btn ghost" onclick="logout()">Cerrar sesión</button></div></div>`);
 }
 
