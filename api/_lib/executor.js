@@ -45,6 +45,7 @@ REGLAS
 - Sé eficiente: como máximo 3 búsquedas y 2 lecturas de páginas. No repitas llamadas iguales.
 - Para noticias usa web_search con news=true: el título, el medio, la fecha y el enlace suelen bastar para resumir sin abrir las páginas.
 - Nunca inventes enlaces: usa solo los que aparezcan en los resultados.
+- Cuando el correo recoja noticias o artículos: una por bloque (separadas por línea en blanco), con el título en la primera línea, 2-3 líneas de resumen y, en la última línea del bloque, SOLO el enlace completo (https://…) copiado de los resultados. Sin enlace no se puede ilustrar la noticia con su imagen.
 - Completa TODOS los pasos del plan, incluido el envío de correos si el plan lo indica, antes de terminar.
 - Escribe en texto limpio, sin Markdown: nada de asteriscos, almohadillas ni tablas con barras. Para listas usa "•" o números, y separa bloques con líneas en blanco.
 - Las fechas, siempre en hora de Madrid.
@@ -109,7 +110,7 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
       // como texto normal y lo enviamos nosotros. Así evitamos que un texto largo rompa la llamada a la herramienta.
       const selfReport = planSends && !sentAlready && ['schedule', 'manual'].includes(automation.trigger_type) && connections.email;
       if (selfReport && (turn >= MAX_TURNS - 3 || searchesDone)) {
-        messages.push({ role: 'user', content: 'Ya tienes información suficiente. No uses más herramientas. Escribe ahora el correo completo, listo para enviar, como respuesta normal. La primera línea debe ser "Asunto: ..." y a continuación el cuerpo del correo en texto limpio (sin Markdown).' });
+        messages.push({ role: 'user', content: 'Ya tienes información suficiente. No uses más herramientas. Escribe ahora el correo completo, listo para enviar, como respuesta normal. La primera línea debe ser "Asunto: ..." y a continuación el cuerpo del correo en texto limpio (sin Markdown). Si son noticias o artículos: un bloque por cada una (título, 2-3 líneas de resumen y, como última línea del bloque, solo el enlace completo https://… tomado de los resultados).' });
         const res = await chat({ system, messages: compact(messages), tools: defs, toolChoice: 'none', maxTokens: 2000, deadline });
         usage.input += res.usage.input; usage.output += res.usage.output; usage.turns++;
         let text = String(res.text || '').trim();
