@@ -93,7 +93,19 @@ function toggleDictation(targetId, btn) {
 }
 
 // ---------- Acceso ----------
+// El acceso normal es desde la plataforma CURO Group. El formulario propio queda solo como acceso de emergencia (?directo=1).
 function login(mode = 'login', note = '') {
+  if (/[?&]directo=1/.test(location.search)) return loginForm(mode, note);
+  A.innerHTML = `<div class="login"><div class="loginbox">
+    <div class="brand"><span class="grad">CURO</span> Automate</div>
+    <h2>Entra desde CURO Group</h2>
+    <p class="muted">${esc(note || 'CURO Automate forma parte de la plataforma CURO Group. Inicia sesión allí y entrarás aquí directamente con tu misma cuenta.')}</p>
+    <a class="btn primary wideBtn" href="https://curogroup.net/">Ir a CURO Group</a>
+    <button class="btn ghost wideBtn" type="button" onclick="home()">Volver</button>
+    <p class="muted helpLine">¿Problemas para entrar? Escríbenos a ${contactLink()}</p>
+  </div></div>`;
+}
+function loginForm(mode = 'login', note = '') {
   const signup = mode === 'signup';
   A.innerHTML = `<div class="login"><form class="loginbox" onsubmit="event.preventDefault();${signup ? 'doSignup' : 'doLogin'}(this)">
     <div class="brand"><span class="grad">CURO</span> Automate</div>
