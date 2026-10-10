@@ -139,17 +139,30 @@ function encodeHeader(s) {
   return /^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${Buffer.from(s).toString('base64')}?=`;
 }
 
-async function sendMessage(userId, { to, subject, body, reply_to_message_id }) {
-  to = String(to || '').trim();
+async function sendMessage(userId, { to, subject, body, reply_to_message_id, html }) {
+  to = String(to || '').trim().replace(/^.*<([^>]+)>.*$/, '$1');
   if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(to)) throw new HttpError(400, `El destinatario "${to}" no es un email válido.`);
   if (!subject || !body) throw new HttpError(400, 'Faltan el asunto o el texto del correo.');
   let threadId, refs;
   if (reply_to_message_id) {
     try { const orig = await readMessage(userId, reply_to_message_id); threadId = orig.thread_id; refs = orig.message_id_header; } catch {}
   }
-  const headers = [`To: ${to}`, `Subject: ${encodeHeader(subject)}`, 'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: 8bit'];
+  const headers = [`To: ${to}`, `Subject: ${encodeHeader(subject)}`, 'MIME-Version: 1.0'];
   if (refs) headers.push(`In-Reply-To: ${refs}`, `References: ${refs}`);
-  const raw = Buffer.from(headers.join('\r\n') + '\r\n\r\n' + body).toString('base64url');
+  const b64 = s => Buffer.from(s, 'utf8').toString('base64').replace(/.{76}/g, '$&\r\n');
+  let mime;
+  if (html) {
+    const boundary = 'curo_' + Math.random().toString(36).slice(2);
+    headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+    mime = headers.join('\r\n') + '\r\n\r\n' +
+      `--${boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${b64(body)}\r\n` +
+      `--${boundary}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${b64(html)}\r\n` +
+      `--${boundary}--`;
+  } else {
+    headers.push('Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64');
+    mime = headers.join('\r\n') + '\r\n\r\n' + b64(body);
+  }
+  const raw = Buffer.from(mime).toString('base64url');
   const sent = await gmail(userId, '/messages/send', { method: 'POST', body: JSON.stringify({ raw, ...(threadId ? { threadId } : {}) }) });
   return { id: sent.id, thread_id: sent.threadId, to };
 }

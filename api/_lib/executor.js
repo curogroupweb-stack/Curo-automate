@@ -3,6 +3,7 @@ const { chat } = require('./llm');
 const tools = require('./tools');
 const google = require('./google');
 const { db, enc } = require('./db');
+const { isAdmin } = require('./account');
 
 const MAX_TURNS = 8;
 const KEEP_FULL_TOOL_RESULTS = 2; // los resultados antiguos se resumen para ahorrar tokens
@@ -80,6 +81,7 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
   try {
     const connections = await connectionsFor(userId);
     if (connections.email) ctx.selfEmails = [connections.email.toLowerCase()];
+    ctx.brand = await isAdmin(userId); // la cuenta de CURO Group envía con la plantilla de marca
     const allowed = (automation.plan?.tools || []).filter(n => tools.available(connections).includes(n));
     const missing = (automation.plan?.tools || []).filter(n => !allowed.includes(n));
     if (missing.some(n => tools.CATALOG[n]?.needs === 'google')) {

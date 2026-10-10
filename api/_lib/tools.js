@@ -2,6 +2,7 @@
 // Cada herramienta declara qué conexión necesita; el planificador solo ofrece las disponibles.
 const google = require('./google');
 const { db } = require('./db');
+const { renderBranded } = require('./email_template');
 
 const CATALOG = {
   gmail_search: {
@@ -162,7 +163,7 @@ async function execute(name, args, ctx) {
         ctx.approvals.push(ap.id);
         return { status: 'pendiente_de_aprobacion', note: 'El correo se ha guardado como borrador. El usuario lo revisará y lo enviará desde Aprobaciones. No lo vuelvas a crear.' };
       }
-      const sent = await google.sendMessage(ctx.userId, args);
+      const sent = await google.sendMessage(ctx.userId, { ...args, html: ctx.brand ? renderBranded({ subject: args.subject, body: args.body }) : undefined });
       return { status: toSelf ? 'enviado_al_usuario' : 'enviado', ...sent };
     }
     case 'web_search': return webSearch(args.query, !!args.news);
