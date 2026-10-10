@@ -5,6 +5,8 @@ const SB_KEY = 'sb_publishable_RPo3-Vb7rZ9A7R1dXsH11Q_h5iKXT64';
 const A = document.getElementById('app');
 const sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
 let session = null, me = null, currentPage = 'Inicio';
+const CONTACT_EMAIL = 'hola@curogroup.net';
+const contactLink = (label = CONTACT_EMAIL) => `<a href="mailto:${CONTACT_EMAIL}">${label}</a>`;
 
 const TOOL_LABELS = {
   gmail_search: 'Buscar en tu Gmail', gmail_read: 'Leer correos', gmail_send: 'Enviar correos desde tu Gmail',
@@ -44,7 +46,9 @@ function modal(title, html, { wide = false, actions = '' } = {}) {
   document.body.appendChild(d);
   return d;
 }
-function info(title, text) { return modal(esc(title), `<p>${esc(text)}</p>`, { actions: `<button class="btn primary" onclick="this.closest('.modal').remove()">Entendido</button>` }); }
+function info(title, text) {
+  const isProblem = /^No se pudo|error|falló|Servicio no disponible/i.test(title);
+  return modal(esc(title), `<p>${esc(text)}</p>${isProblem ? `<p class="muted helpLine">Si el problema continúa, escríbenos a ${contactLink()}.</p>` : ''}`, { actions: `<button class="btn primary" onclick="this.closest('.modal').remove()">Entendido</button>` }); }
 function toast(text, kind = 'ok') {
   const t = document.createElement('div');
   t.className = 'toast ' + kind; t.textContent = text; t.setAttribute('role', 'status');
@@ -103,6 +107,7 @@ function login(mode = 'login', note = '') {
     ${signup ? '' : '<button class="btn linkbtn" type="button" onclick="resetPassword()">He olvidado mi contraseña</button>'}
     <p class="muted switchAuth">${signup ? '¿Ya tienes cuenta? <a href="#" onclick="login(\'login\');return false">Inicia sesión</a>' : '¿Aún no tienes cuenta? <a href="#" onclick="login(\'signup\');return false">Créala gratis</a>'}</p>
     <button class="btn ghost wideBtn" type="button" onclick="home()">Volver</button>
+    <p class="muted helpLine">¿Problemas para entrar? Escríbenos a ${contactLink()}</p>
   </form></div>`;
   document.getElementById(signup ? 'authName' : 'authEmail')?.focus();
 }
@@ -127,7 +132,7 @@ async function doSignup(form) {
   done();
   if (error) return authError(translateAuth(error.message));
   if (!data.session) {
-    A.innerHTML = `<div class="login"><div class="loginbox"><div class="brand"><span class="grad">CURO</span> Automate</div><h2>Revisa tu correo</h2><p>Te hemos enviado un enlace a <b>${esc(authEmail.value)}</b> para confirmar tu cuenta. Después vuelve aquí e inicia sesión.</p><p class="muted">Lo que estabas preparando se recuperará al entrar.</p><button class="btn primary wideBtn" onclick="login('login')">Ir a iniciar sesión</button></div></div>`;
+    A.innerHTML = `<div class="login"><div class="loginbox"><div class="brand"><span class="grad">CURO</span> Automate</div><h2>Revisa tu correo</h2><p>Te hemos enviado un enlace a <b>${esc(authEmail.value)}</b> para confirmar tu cuenta. Después vuelve aquí e inicia sesión.</p><p class="muted">Lo que estabas preparando se recuperará al entrar.</p><p class="muted helpLine">¿No te llega el correo? Revisa la carpeta de spam o escríbenos a ${contactLink()}.</p><button class="btn primary wideBtn" onclick="login('login')">Ir a iniciar sesión</button></div></div>`;
   }
 }
 async function resetPassword() {
@@ -138,6 +143,18 @@ async function resetPassword() {
 }
 async function logout() { await sb.auth.signOut(); me = null; home(); }
 
+function showHelp() {
+  modal('Ayuda y contacto', `
+    <p>¿Tienes una duda, una idea de automatización o algo no funciona? Escríbenos y te respondemos lo antes posible.</p>
+    <p class="contactBig">${contactLink()}</p>
+    <div class="plannerPlan">
+      <div class="plannerStep"><small>PARA CREAR UNA AUTOMATIZACIÓN</small>En <b>Inicio</b>, describe con tus palabras qué quieres delegar, cuándo y qué esperas recibir. CURO te enseñará el plan antes de activarlo.</div>
+      <div class="plannerStep"><small>SI ALGO FALLA</small>En <b>Historial</b> verás qué hizo CURO paso a paso y qué falló. Si nos escribes, cuéntanos el nombre de la automatización y la hora.</div>
+      <div class="plannerStep"><small>TU CORREO Y TUS DATOS</small>CURO solo usa Gmail cuando una automatización lo necesita. Puedes desconectarlo cuando quieras en <b>Conexiones</b>.</div>
+    </div>`, { actions: `<button class="btn ghost" id="copyMail">Copiar email</button><a class="btn primary" href="mailto:${CONTACT_EMAIL}">Escribir a ${CONTACT_EMAIL}</a>` });
+  document.getElementById('copyMail')?.addEventListener('click', () => navigator.clipboard?.writeText(CONTACT_EMAIL).then(() => toast('Email copiado.'), () => toast(CONTACT_EMAIL, 'warn')));
+}
+
 // ---------- Estructura del espacio privado ----------
 const NAV = ['Inicio', 'Automatizaciones', 'Aprobaciones', 'Historial', 'Conexiones', 'Conocimiento', 'Cuenta'];
 function shell(page, body) {
@@ -145,8 +162,8 @@ function shell(page, body) {
   const pending = me?.counts?.pending_approvals || 0;
   A.innerHTML = `<div class="shell"><aside class="side"><div class="brand"><span class="grad">CURO</span> Automate</div><nav>${NAV.map(n =>
     `<button class="navbtn ${n === page ? 'active' : ''}" onclick="go('${n}')">${n}${n === 'Aprobaciones' && pending ? ` <span class="navCount">${pending}</span>` : ''}</button>`).join('')}</nav>
-    <div class="sideFoot"><small>${esc(me?.user?.email || '')}</small><button class="navbtn" onclick="logout()">Salir</button></div></aside>
-    <main class="main"><div class="dashhead"><div><small class="muted">CURO AUTOMATE</small><h1>${esc(page)}</h1></div>${aiBadge()}</div><div id="page">${body}</div></main></div>`;
+    <div class="sideFoot"><small>${esc(me?.user?.email || '')}</small><button class="navbtn" onclick="showHelp()">Ayuda y contacto</button><button class="navbtn" onclick="logout()">Salir</button></div></aside>
+    <button class="helpFab" onclick="showHelp()" aria-label="Ayuda y contacto">?</button><main class="main"><div class="dashhead"><div><small class="muted">CURO AUTOMATE</small><h1>${esc(page)}</h1></div>${aiBadge()}</div><div id="page">${body}</div></main></div>`;
 }
 function aiBadge() {
   // Solo el administrador ve el estado técnico de la IA.
@@ -477,7 +494,8 @@ function accountPage() {
   shell('Cuenta', `<div class="card"><h3>${esc(me.user.name)}</h3><p class="muted">${esc(me.user.email)}${me.user.is_admin ? ' · Administrador de CURO' : ''}</p>
     <p>Tu cuenta de CURO Automate es la misma que la de la plataforma CURO Group.</p>
     ${me.user.is_admin ? `<p class="muted">Motor de IA: ${esc(me.ai.provider === 'anthropic' ? 'Claude (Anthropic)' : 'Groq')} · ${esc(me.ai.model)} ${me.ai.configured ? '' : '· sin configurar'}</p>` : ''}
-    <div class="actions"><button class="btn ghost" onclick="logout()">Cerrar sesión</button></div></div>`);
+    <div class="actions"><button class="btn ghost" onclick="logout()">Cerrar sesión</button></div></div>
+    <div class="card"><h3>Ayuda y contacto</h3><p class="muted">Para dudas, sugerencias o problemas con tu cuenta, escríbenos a ${contactLink()}.</p></div>`);
 }
 
 // ---------- Arranque ----------

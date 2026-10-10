@@ -101,3 +101,9 @@ button.starterCard:hover{border-color:#c4b5fd}
 @media (max-width:760px){.notice .btn{margin:8px 0 0}.modalbox.wide{max-width:100%}}
 .shell>*{min-width:0}
 @media (max-width:850px){.sideFoot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding-top:10px}.sideFoot .navbtn{width:auto;margin:0}}
+.helpLine{font-size:13px;margin-top:12px}
+.helpLine a,.contactBig a{color:#4c1d95;font-weight:700}
+.contactBig{font-size:20px;margin:6px 0 14px}
+.helpFab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:15;width:48px;height:48px;border-radius:50%;border:0;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font:800 20px/1 Inter,system-ui,sans-serif;box-shadow:0 10px 24px rgba(37,99,235,.35);cursor:pointer}
+.helpFab:focus-visible{outline:3px solid #7c3aed66;outline-offset:3px}
+a.btn{display:inline-flex;align-items:center;text-decoration:none}
