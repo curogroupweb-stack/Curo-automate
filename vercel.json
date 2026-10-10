@@ -3,12 +3,6 @@
   "trailingSlash": false,
   "functions": {
     "api/**/*.js": {
-      "maxDuration": 60
-    },
-    "api/run.js": {
-      "maxDuration": 300
-    },
-    "api/runner/tick.js": {
       "maxDuration": 300
     }
   },
