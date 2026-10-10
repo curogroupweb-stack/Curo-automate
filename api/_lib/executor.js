@@ -18,7 +18,7 @@ async function knowledgeFor(userId) {
   return rows.map(k => `• ${k.title}: ${k.body}`).join('\n').slice(0, 4000);
 }
 
-function systemPrompt({ automation, knowledge, now, userEmail }) {
+function systemPrompt({ automation, knowledge, now, userEmail, brand }) {
   const plan = automation.plan || {};
   return `Eres el ejecutor de CURO Automate. Realizas automatizaciones reales en nombre del usuario usando las herramientas disponibles.
 
@@ -33,7 +33,7 @@ CONOCIMIENTO DEL NEGOCIO DEL USUARIO (úsalo; no inventes nada que no esté aqu�
 ${knowledge || '(sin notas)'}
 
 FECHA Y HORA ACTUAL (Madrid): ${now}
-EMAIL DEL USUARIO: ${userEmail || '(desconocido)'} — cuando pida "envíame", "mándame" o "avísame", envía a este email.
+${brand ? 'ESTÁS ESCRIBIENDO EN NOMBRE DE CURO GROUP (Madrid, España). Email de contacto público: hola@curogroup.net (ponlo en las firmas e invita a escribir ahí; nunca des otro email de contacto). Eslogan: "Descubre lo que importa."\n' : ''}EMAIL DEL USUARIO: ${userEmail || '(desconocido)'} — cuando pida "envíame", "mándame" o "avísame", envía a este email.
 
 REGLAS
 - Usa las herramientas para obtener datos reales. Nunca inventes precios, datos personales, enlaces ni hechos.
@@ -89,7 +89,7 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
     }
     const defs = tools.definitions(allowed);
     const now = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', dateStyle: 'full', timeStyle: 'short' }).format(new Date());
-    const system = systemPrompt({ automation, knowledge: await knowledgeFor(userId), now, userEmail: connections.email });
+    const system = systemPrompt({ automation, knowledge: await knowledgeFor(userId), now, userEmail: connections.email, brand: ctx.brand });
     const first = [
       Object.keys(inputs || {}).length ? `Datos de esta ejecución:\n${Object.entries(inputs).map(([k, v]) => `- ${k}: ${v}`).join('\n')}` : '',
       event && Object.keys(event).length ? `Evento que ha iniciado la automatización:\n${JSON.stringify(event).slice(0, 6000)}` : '',

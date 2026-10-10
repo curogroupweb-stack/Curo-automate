@@ -3,7 +3,7 @@ const { handler, json, readBody, query, requireUser, HttpError } = require('./_l
 const { db, enc } = require('./_lib/db');
 const google = require('./_lib/google');
 const { isAdmin } = require('./_lib/account');
-const { renderBranded } = require('./_lib/email_template');
+const { sendEmail } = require('./_lib/mailer');
 
 async function refreshRunStatus(runId) {
   if (!runId) return;
@@ -46,7 +46,7 @@ module.exports = handler(async (req, res) => {
   try {
     if (ap.action_type !== 'gmail_send') throw new Error('Tipo de acción no soportado.');
     const brand = await isAdmin(user.id);
-    const sent = await google.sendMessage(user.id, { ...action, html: brand ? renderBranded({ subject: action.subject, body: action.body }) : undefined });
+    const sent = await sendEmail(user.id, action, { brand });
     await db.update('automate_approvals', `id=eq.${enc(id)}`, { action_payload: action, result: { sent: true, ...sent } });
     await refreshRunStatus(ap.run_id);
     return json(res, 200, { status: 'approved', sent });

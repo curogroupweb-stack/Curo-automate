@@ -139,7 +139,7 @@ function encodeHeader(s) {
   return /^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${Buffer.from(s).toString('base64')}?=`;
 }
 
-async function sendMessage(userId, { to, subject, body, reply_to_message_id, html }) {
+async function sendMessage(userId, { to, subject, body, reply_to_message_id, html, replyTo }) {
   to = String(to || '').trim().replace(/^.*<([^>]+)>.*$/, '$1');
   if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(to)) throw new HttpError(400, `El destinatario "${to}" no es un email válido.`);
   if (!subject || !body) throw new HttpError(400, 'Faltan el asunto o el texto del correo.');
@@ -149,6 +149,7 @@ async function sendMessage(userId, { to, subject, body, reply_to_message_id, htm
   }
   const headers = [`To: ${to}`, `Subject: ${encodeHeader(subject)}`, 'MIME-Version: 1.0'];
   if (refs) headers.push(`In-Reply-To: ${refs}`, `References: ${refs}`);
+  if (replyTo) headers.push(`Reply-To: ${replyTo}`);
   const b64 = s => Buffer.from(s, 'utf8').toString('base64').replace(/.{76}/g, '$&\r\n');
   let mime;
   if (html) {

@@ -25,3 +25,8 @@ Describe con tus palabras el trabajo que quieres delegar. CURO prepara un plan c
 
 ## Pasar a Claude
 Añadir `ANTHROPIC_API_KEY` y cambiar `LLM_PROVIDER=anthropic`. Sin cambios de código.
+
+## Correos de CURO Group (cuenta administradora)
+- Plantilla de marca (`api/_lib/email_template.js`) con cabecera `brand/email-header.jpg`.
+- Remitente: si existe `BREVO_API_KEY`, se envía por Brevo desde `hola@curogroup.net` (`BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`); si Brevo falla o no está configurado, por Gmail.
+- "Responder a": `hola@curogroup.net` (`CURO_REPLY_TO`). Las respuestas a un correo recibido van siempre por Gmail para mantener el hilo.
