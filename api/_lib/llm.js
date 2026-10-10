@@ -47,7 +47,7 @@ async function openaiCompatChat({ system, messages, tools, maxTokens, temperatur
   }
   // Los modelos abiertos a veces escriben mal el nombre de una herramienta y Groq rechaza la respuesta
   // (tool_use_failed). Reintentamos con temperatura 0 y, si vuelve a fallar, con un modelo alternativo.
-  const fallback = process.env.LLM_FALLBACK_MODEL || 'llama-3.3-70b-versatile';
+  const fallback = process.env.LLM_FALLBACK_MODEL || 'openai/gpt-oss-20b';
   const attempts = [body, { ...body, temperature: 0 }, ...(tools.length && body.model !== fallback ? [{ ...body, temperature: 0, model: fallback }] : [])];
   let r, j;
   for (let i = 0; i < attempts.length; i++) {
@@ -107,7 +107,7 @@ async function anthropicChat({ system, messages, tools, maxTokens, temperature, 
 }
 
 // Reintenta si el proveedor pide esperar (límite por minuto del plan gratuito) o falla temporalmente.
-async function fetchRetry(url, opts, deadline = Date.now() + 45000, tries = 5) {
+async function fetchRetry(url, opts, deadline = Date.now() + 45000, tries = 8) {
   for (let i = 0; ; i++) {
     const r = await fetch(url, opts);
     if ((r.status === 429 || r.status >= 500) && i < tries - 1) {
@@ -117,7 +117,7 @@ async function fetchRetry(url, opts, deadline = Date.now() + 45000, tries = 5) {
         const m = txt.match(/try again in ([\d.]+)\s*(ms|s)/i);
         wait = m ? Math.ceil(parseFloat(m[1]) * (m[2].toLowerCase() === 'ms' ? 1 : 1000)) + 500 : 2000 * (i + 1);
       }
-      wait = Math.min(wait, 20000);
+      wait = Math.min(wait, 30000);
       if (Date.now() + wait > deadline - 5000) return r; // no hay tiempo: devolvemos el error
       await new Promise(s => setTimeout(s, wait));
       continue;

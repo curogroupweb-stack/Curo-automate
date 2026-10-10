@@ -10,7 +10,7 @@ const executor = require('../_lib/executor');
 const google = require('../_lib/google');
 const { isAdmin } = require('../_lib/account');
 
-const BUDGET_MS = 50000;
+const BUDGET_MS = 200000; // el motor se activa cada 5 min; dejamos margen para no solaparse
 
 function authorized(req) {
   const secret = process.env.RUNNER_SECRET;

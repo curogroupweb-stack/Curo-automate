@@ -28,6 +28,6 @@ module.exports = handler(async (req, res) => {
     event = { type: 'curo_new_user', test: true, name: user.name, email: user.email, note: 'Prueba manual: se usa tu propia cuenta como si fuera un usuario nuevo.' };
   }
 
-  const result = await executor.run({ automation: a, userId: user.id, source: 'manual', event, inputs: cleanInputs, deadline: Date.now() + 52000 });
+  const result = await executor.run({ automation: a, userId: user.id, source: 'manual', event, inputs: cleanInputs, deadline: Date.now() + 240000 });
   json(res, 200, { run: result });
 });
