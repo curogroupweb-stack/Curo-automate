@@ -25,11 +25,17 @@ REGLAS
 - inputs: solo para disparador manual y solo datos que cambian en cada ejecución y no se pueden obtener con las herramientas. Máximo 4. Para otros disparadores, inputs = [].
 - Si algo no se puede hacer con estas herramientas (WhatsApp, Instagram, pagos, Excel, calendario...), dilo en limitations y propone la parte que sí se puede. feasible=false solo si no se puede hacer nada útil.
 - questions: máximo 2 preguntas imprescindibles; si se puede suponer algo razonable, supónlo y no preguntes.
-- Escribe todo en español claro, sin jerga técnica. steps: 3 a 7 pasos cortos que entienda cualquiera.
+- Escribe todo en español claro, sin jerga técnica. steps: 3 a 7 pasos cortos que entienda cualquiera. Nunca menciones nombres internos (curo_new_user, gmail_send, web_search, etc.).
+- name: 2 a 5 palabras en español normal, con mayúscula inicial y espacios (por ejemplo "Bienvenida a nuevos usuarios"), nunca con guiones bajos.
 - gmail_query usa la sintaxis de Gmail. Por defecto: "in:inbox -category:promotions -category:social -from:me".
 
 Responde SOLO con este JSON:
 {"name":"nombre corto","summary":"una frase de lo que hará","trigger":{"type":"manual|schedule|gmail_new_message|curo_new_user","frequency":"hourly|daily|weekly|monthly","time":"HH:MM","weekday":1,"monthday":1,"gmail_query":"..."},"steps":["..."],"tools":["..."],"inputs":[{"key":"tema","label":"Tema","type":"text"}],"approval":"always|never","output":"qué recibirá el usuario","feasible":true,"limitations":["..."],"questions":["..."]}`;
+}
+
+function prettyName(n) {
+  let s = String(n || 'Mi automatización').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function normalize(raw, { connections, isAdmin, instruction }) {
@@ -73,7 +79,7 @@ function normalize(raw, { connections, isAdmin, instruction }) {
     : [];
 
   return {
-    name: String(p.name || 'Mi automatización').slice(0, 80),
+    name: prettyName(p.name),
     summary: String(p.summary || instruction).slice(0, 300),
     trigger,
     steps: (Array.isArray(p.steps) ? p.steps : []).map(String).filter(Boolean).slice(0, 8),
