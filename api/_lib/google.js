@@ -101,6 +101,12 @@ async function gmail(userId, path, opts = {}) {
   return j;
 }
 
+function madridDate(v) {
+  const d = new Date(v);
+  if (isNaN(d)) return v || '';
+  return new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', dateStyle: 'medium', timeStyle: 'short' }).format(d) + ' (hora de Madrid)';
+}
+
 const hdr = (m, n) => (m.payload?.headers || []).find(h => h.name.toLowerCase() === n.toLowerCase())?.value || '';
 
 function bodyText(p) {
@@ -116,7 +122,7 @@ async function searchMessages(userId, q, max = 10) {
   const out = [];
   for (const m of list.messages || []) {
     const full = await gmail(userId, `/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`);
-    out.push({ id: full.id, thread_id: full.threadId, from: hdr(full, 'From'), subject: hdr(full, 'Subject') || '(Sin asunto)', date: hdr(full, 'Date'), snippet: full.snippet || '' });
+    out.push({ id: full.id, thread_id: full.threadId, from: hdr(full, 'From'), subject: hdr(full, 'Subject') || '(Sin asunto)', date: madridDate(hdr(full, 'Date')), snippet: full.snippet || '' });
   }
   return out;
 }
@@ -125,7 +131,7 @@ async function readMessage(userId, id) {
   const m = await gmail(userId, `/messages/${enc(id)}?format=full`);
   return {
     id: m.id, thread_id: m.threadId, from: hdr(m, 'From'), to: hdr(m, 'To'), subject: hdr(m, 'Subject') || '(Sin asunto)',
-    date: hdr(m, 'Date'), message_id_header: hdr(m, 'Message-ID'), body: bodyText(m.payload).slice(0, 8000)
+    date: madridDate(hdr(m, 'Date')), message_id_header: hdr(m, 'Message-ID'), body: bodyText(m.payload).slice(0, 8000)
   };
 }
 

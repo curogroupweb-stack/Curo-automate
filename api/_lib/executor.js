@@ -9,7 +9,7 @@ const KEEP_FULL_TOOL_RESULTS = 2; // los resultados antiguos se resumen para aho
 
 async function connectionsFor(userId) {
   const g = await google.status(userId).catch(() => ({ connected: false }));
-  return { google: !!g.connected };
+  return { google: !!g.connected, email: g.email || '' };
 }
 
 async function knowledgeFor(userId) {
@@ -17,7 +17,7 @@ async function knowledgeFor(userId) {
   return rows.map(k => `• ${k.title}: ${k.body}`).join('\n').slice(0, 4000);
 }
 
-function systemPrompt({ automation, knowledge, now }) {
+function systemPrompt({ automation, knowledge, now, userEmail }) {
   const plan = automation.plan || {};
   return `Eres el ejecutor de CURO Automate. Realizas automatizaciones reales en nombre del usuario usando las herramientas disponibles.
 
@@ -32,6 +32,7 @@ CONOCIMIENTO DEL NEGOCIO DEL USUARIO (úsalo; no inventes nada que no esté aqu�
 ${knowledge || '(sin notas)'}
 
 FECHA Y HORA ACTUAL (Madrid): ${now}
+EMAIL DEL USUARIO: ${userEmail || '(desconocido)'} — cuando pida "envíame", "mándame" o "avísame", envía a este email.
 
 REGLAS
 - Usa las herramientas para obtener datos reales. Nunca inventes precios, datos personales, enlaces ni hechos.
@@ -41,6 +42,9 @@ REGLAS
 - Sé eficiente: como máximo 3 búsquedas y 2 lecturas de páginas. No repitas llamadas iguales.
 - Para noticias usa web_search con news=true: el título, el medio, la fecha y el enlace suelen bastar para resumir sin abrir las páginas.
 - Nunca inventes enlaces: usa solo los que aparezcan en los resultados.
+- Completa TODOS los pasos del plan, incluido el envío de correos si el plan lo indica, antes de terminar.
+- Escribe en texto limpio, sin Markdown: nada de asteriscos, almohadillas ni tablas con barras. Para listas usa "•" o números, y separa bloques con líneas en blanco.
+- Las fechas, siempre en hora de Madrid.
 - Termina SIEMPRE llamando a "finish" con un título corto y el resultado completo para el usuario, en español.`;
 }
 
@@ -82,7 +86,7 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
     }
     const defs = tools.definitions(allowed);
     const now = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', dateStyle: 'full', timeStyle: 'short' }).format(new Date());
-    const system = systemPrompt({ automation, knowledge: await knowledgeFor(userId), now });
+    const system = systemPrompt({ automation, knowledge: await knowledgeFor(userId), now, userEmail: connections.email });
     const first = [
       Object.keys(inputs || {}).length ? `Datos de esta ejecución:\n${Object.entries(inputs).map(([k, v]) => `- ${k}: ${v}`).join('\n')}` : '',
       event && Object.keys(event).length ? `Evento que ha iniciado la automatización:\n${JSON.stringify(event).slice(0, 6000)}` : '',
@@ -104,6 +108,13 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
 
       for (const call of res.tool_calls) {
         if (call.name === 'finish') {
+          const planSends = allowed.includes('gmail_send') && automation.trigger_type !== 'gmail_new_message';
+          const sentSomething = steps.some(s => s.tool === 'gmail_send');
+          if (planSends && !sentSomething && !ctx.nudged && turn < MAX_TURNS - 1) {
+            ctx.nudged = true;
+            messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ error: 'Todavía no has hecho el envío por correo que indica el plan. Llama ahora a gmail_send con el resultado completo (al email del usuario si es para él) y después a finish.' }) });
+            continue;
+          }
           const status = ctx.approvals.length ? 'awaiting_approval' : 'completed';
           steps.push({ tool: 'finish', at: new Date().toISOString() });
           return finishRun({ status, result_title: String(call.args.title || automation.name).slice(0, 200), result_body: String(call.args.body || '') });
