@@ -55,7 +55,7 @@ function renderBranded({ subject, body }) {
     <tr><td style="padding:0 36px 28px">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-top:1px solid ${C.line};padding-top:18px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.5;color:${C.muted}">
         <b style="color:${C.navy}">Curo Group</b> · <span style="color:${C.teal};font-weight:bold">Descubre</span> lo que importa.<br>
-        Madrid, España · <a href="mailto:curogroup.web@gmail.com" style="color:${C.muted}">curogroup.web@gmail.com</a>
+        Madrid, España · <a href="mailto:hola@curogroup.net" style="color:${C.muted}">hola@curogroup.net</a>
       </td></tr></table>
     </td></tr>
   </table>
