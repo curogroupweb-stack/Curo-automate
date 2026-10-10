@@ -99,9 +99,20 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
     ].filter(Boolean).join('\n\n');
     const messages = [{ role: 'user', content: first }];
 
+    const planSends = allowed.includes('gmail_send') && automation.trigger_type !== 'gmail_new_message';
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       if (Date.now() > deadline) throw new Error('La ejecución tardó demasiado y se detuvo por seguridad.');
-      const res = await chat({ system, messages: compact(messages), tools: defs, maxTokens: 1200, deadline });
+      // En los últimos pasos, si el plan manda un correo y aún no se ha hecho, obligamos a escribirlo ya.
+      let turnDefs = defs;
+      const sentAlready = steps.some(s => s.tool === 'gmail_send');
+      if (planSends && !sentAlready && turn >= MAX_TURNS - 3) {
+        turnDefs = defs.filter(d => ['gmail_send', 'finish'].includes(d.function?.name || d.name));
+        if (!ctx.forced) {
+          ctx.forced = true;
+          messages.push({ role: 'user', content: 'Ya tienes información suficiente. No busques más: redacta ahora el correo completo con lo que has encontrado y envíalo con gmail_send. Después llama a finish.' });
+        }
+      }
+      const res = await chat({ system, messages: compact(messages), tools: turnDefs, maxTokens: 1600, deadline });
       usage.input += res.usage.input; usage.output += res.usage.output; usage.turns++;
 
       if (!res.tool_calls.length) {
@@ -113,7 +124,6 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
 
       for (const call of res.tool_calls) {
         if (call.name === 'finish') {
-          const planSends = allowed.includes('gmail_send') && automation.trigger_type !== 'gmail_new_message';
           const sentSomething = steps.some(s => s.tool === 'gmail_send');
           if (planSends && !sentSomething && !ctx.nudged && turn < MAX_TURNS - 1) {
             ctx.nudged = true;
@@ -126,7 +136,11 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
         }
         const started = Date.now();
         let result, ok = true;
+        const used = steps.filter(st => st.tool === call.name).length;
         if (!allowed.includes(call.name)) { result = { error: `La herramienta ${call.name} no está disponible en esta automatización.` }; ok = false; }
+        else if ((call.name === 'web_search' && used >= 3) || (call.name === 'fetch_url' && used >= 2)) {
+          result = { error: 'Ya has hecho las búsquedas y lecturas permitidas. Usa la información que ya tienes y continúa con el siguiente paso del plan.' }; ok = false;
+        }
         else {
           try { result = await tools.execute(call.name, call.args || {}, ctx); }
           catch (e) { result = { error: e.message }; ok = false; }

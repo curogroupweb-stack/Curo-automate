@@ -132,6 +132,9 @@ async function webSearch(query, news) {
 
 async function fetchUrl(url) {
   if (!isPublicUrl(url)) return { error: 'Solo se pueden leer páginas web públicas (http/https).' };
+  if (/^https?:\/\/news\.google\.com\//i.test(url)) {
+    return { error: 'Los enlaces de Google Noticias no se pueden abrir. Resume la noticia con su título, medio y fecha, y usa ese mismo enlace en el texto.' };
+  }
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 12000);
   try {
