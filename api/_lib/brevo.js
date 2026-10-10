@@ -8,7 +8,8 @@ const REPLY_TO = () => process.env.CURO_REPLY_TO || 'hola@curogroup.net';
 
 function enabled() { return !!process.env.BREVO_API_KEY; }
 
-async function send({ to, subject, body, html }) {
+// threadRef: Message-ID del correo al que se responde (para que la respuesta quede en el mismo hilo).
+async function send({ to, subject, body, html, threadRef }) {
   to = String(to || '').trim().replace(/^.*<([^>]+)>.*$/, '$1');
   if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(to)) throw new HttpError(400, `El destinatario "${to}" no es un email válido.`);
   const r = await fetch('https://api.brevo.com/v3/smtp/email', {
@@ -18,7 +19,8 @@ async function send({ to, subject, body, html }) {
       sender: { name: SENDER_NAME(), email: SENDER_EMAIL() },
       to: [{ email: to }],
       replyTo: { email: REPLY_TO(), name: SENDER_NAME() },
-      subject, textContent: body, ...(html ? { htmlContent: html } : {})
+      subject, textContent: body, ...(html ? { htmlContent: html } : {}),
+      ...(threadRef ? { headers: { 'In-Reply-To': threadRef, References: threadRef } } : {})
     })
   });
   const j = await r.json().catch(() => ({}));

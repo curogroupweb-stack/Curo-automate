@@ -1,6 +1,8 @@
 // Decide cómo se envía un correo:
-// - Cuenta de CURO (administrador): plantilla de marca; por Brevo desde hola@curogroup.net si está configurado,
-//   o por su Gmail con "Responder a" hola@curogroup.net. Las respuestas a un correo recibido siempre van por Gmail (mismo hilo).
+// - Cuenta de CURO (administrador): plantilla de marca y remitente hola@curogroup.net vía Brevo, también las
+//   respuestas a clientes (en el mismo hilo). Nunca sale desde el Gmail administrativo si Brevo está configurado:
+//   si Brevo falla, el correo no se envía y se muestra el error (la aprobación queda pendiente para reintentar).
+//   Mientras no exista BREVO_API_KEY, se usa el Gmail conectado con "Responder a" hola@curogroup.net.
 // - Resto de usuarios: su propio Gmail, sin marca CURO.
 const google = require('./google');
 const brevo = require('./brevo');
@@ -9,9 +11,14 @@ const { renderBranded } = require('./email_template');
 async function sendEmail(userId, args, { brand }) {
   if (!brand) return { ...(await google.sendMessage(userId, args)), via: 'gmail' };
   const html = renderBranded({ subject: args.subject, body: args.body });
-  if (brevo.enabled() && !args.reply_to_message_id) {
-    try { return await brevo.send({ ...args, html }); }
-    catch (e) { console.error('[curo-automate] Brevo falló, se usa Gmail:', e.message); }
+  if (brevo.enabled()) {
+    let threadRef, subject = args.subject;
+    if (args.reply_to_message_id) {
+      const orig = await google.readMessage(userId, args.reply_to_message_id).catch(() => null);
+      threadRef = orig?.message_id_header || undefined;
+      if (orig?.subject && !/^re:/i.test(subject || '')) subject = `Re: ${orig.subject}`;
+    }
+    return brevo.send({ ...args, subject, html, threadRef });
   }
   return { ...(await google.sendMessage(userId, { ...args, html, replyTo: brevo.REPLY_TO() })), via: 'gmail' };
 }
