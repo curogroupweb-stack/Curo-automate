@@ -139,7 +139,7 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
       if (!res.tool_calls.length) {
         // El modelo respondió sin herramientas: lo tratamos como resultado final.
         const status = ctx.approvals.length ? 'awaiting_approval' : 'completed';
-        return finishRun({ status, result_title: automation.name, result_body: res.text || 'Ejecución completada.' });
+        return finishRun({ status, result_title: automation.name, result_body: cleanText(res.text) || 'Ejecución completada.' });
       }
       messages.push({ role: 'assistant', content: res.text || '', tool_calls: res.tool_calls });
 
@@ -153,7 +153,7 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
           }
           const status = ctx.approvals.length ? 'awaiting_approval' : 'completed';
           steps.push({ tool: 'finish', at: new Date().toISOString() });
-          return finishRun({ status, result_title: String(call.args.title || automation.name).slice(0, 200), result_body: String(call.args.body || '') });
+          return finishRun({ status, result_title: String(call.args.title || automation.name).slice(0, 200), result_body: cleanText(call.args.body) });
         }
         const started = Date.now();
         let result, ok = true;
@@ -187,8 +187,25 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
 }
 
 // Quita restos de Markdown (negritas, títulos, separadores) para que el correo se lea limpio.
+// Algunos modelos escriben el resultado como JSON ({"title":…,"body":"…\n…"}) en vez de texto: lo desenvolvemos.
+function unwrapJson(t) {
+  let s = String(t || '').trim();
+  for (let i = 0; i < 2 && s.startsWith('{'); i++) {
+    let o; try { o = JSON.parse(s); } catch { o = extractJson(s); }
+    if (!o || typeof o !== 'object') break;
+    const inner = o.arguments || o.parameters || o;
+    const body = inner.body ?? inner.text ?? inner.content;
+    if (typeof body !== 'string') break;
+    const title = typeof inner.title === 'string' ? inner.title : (typeof inner.subject === 'string' ? inner.subject : '');
+    s = (title && !/^\s*asunto\s*:/im.test(body) ? `Asunto: ${title}\n\n` : '') + body.trim();
+  }
+  // \n escritos como texto (barra + n) se convierten en saltos de línea reales
+  if (!/\n/.test(s) || (s.match(/\\n/g) || []).length > 2) s = s.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+  return s;
+}
+
 function cleanText(t) {
-  return String(t || '')
+  return unwrapJson(t)
     .replace(/\*\*(.+?)\*\*/g, '$1').replace(/__(.+?)__/g, '$1')
     .replace(/^#{1,6}\s+/gm, '').replace(/^\s*[-*_]{3,}\s*$/gm, '')
     .replace(/^\s*[*-]\s+/gm, '• ')
