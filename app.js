@@ -156,6 +156,10 @@ function toggleDictation(targetId, btn) {
 // El acceso normal es desde la plataforma CURO Group. El formulario propio queda solo como acceso de emergencia (?directo=1).
 function login(mode = 'login', note = '') {
   if (/[?&]directo=1/.test(location.search)) return loginForm(mode, note);
+  // Directo a la ventana de usuario y contraseña de CURO Group (sin pantalla intermedia); al entrar vuelve aquí.
+  A.innerHTML = `<div class="login"><div class="loginbox"><div class="brand"><span class="grad">CURO</span> Automate</div><p class="muted"><span class="spin"></span> Abriendo el inicio de sesión de CURO Group…</p></div></div>`;
+  location.href = CURO_LOGIN_URL;
+  return;
   A.innerHTML = `<div class="login"><div class="loginbox">
     <div class="brand"><span class="grad">CURO</span> Automate</div>
     <h2>Entra desde CURO Group</h2>
