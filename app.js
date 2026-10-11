@@ -9,6 +9,7 @@ const CONTACT_EMAIL = 'hola@curogroup.net';
 const contactLink = (label = CONTACT_EMAIL) => `<a href="mailto:${CONTACT_EMAIL}">${label}</a>`;
 
 const TOOL_LABELS = {
+  curo_stats: 'Datos de la plataforma CURO',
   gmail_search: 'Buscar en tu Gmail', gmail_read: 'Leer correos', gmail_send: 'Enviar correos desde tu Gmail',
   web_search: 'Buscar en internet', fetch_url: 'Leer páginas web'
 };

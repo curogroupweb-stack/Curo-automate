@@ -6,8 +6,8 @@ const { describe } = require('./schedule');
 const TRIGGERS = ['manual', 'schedule', 'gmail_new_message', 'curo_new_user'];
 
 function systemPrompt({ connections, isAdmin }) {
-  const tools = Object.entries(CATALOG).map(([n, t]) =>
-    `- ${n}: ${t.label}${t.needs && !connections[t.needs] ? ' (requiere conectar Google; aún NO conectado, pero puedes incluirla)' : ''}`).join('\n');
+  const tools = Object.entries(CATALOG).filter(([, t]) => t.needs !== 'admin' || isAdmin).map(([n, t]) =>
+    `- ${n}: ${t.label}${t.needs === 'google' && !connections.google ? ' (requiere conectar Google; aún NO conectado, pero puedes incluirla)' : ''}`).join('\n');
   return `Eres el planificador de CURO Automate, un servicio que automatiza tareas a personas sin conocimientos técnicos.
 Tu trabajo: leer lo que el usuario quiere delegar y devolver un plan en JSON. No ejecutas nada.
 
@@ -65,7 +65,7 @@ function normalize(raw, { connections, isAdmin, instruction }) {
     trigger.label = 'Cuando alguien se registre en CURO';
   } else trigger.label = 'Cuando la ejecutes desde la app';
 
-  const tools = [...new Set((Array.isArray(p.tools) ? p.tools : []).filter(n => CATALOG[n]))];
+  const tools = [...new Set((Array.isArray(p.tools) ? p.tools : []).filter(n => CATALOG[n] && (CATALOG[n].needs !== 'admin' || isAdmin)))];
   if (type === 'gmail_new_message') { if (!tools.includes('gmail_read')) tools.unshift('gmail_read'); }
   if (type === 'curo_new_user' && !tools.includes('gmail_send')) tools.push('gmail_send');
   const needsGoogle = tools.some(n => CATALOG[n].needs === 'google') || type === 'gmail_new_message';

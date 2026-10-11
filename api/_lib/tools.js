@@ -29,6 +29,12 @@ const CATALOG = {
     description: 'Busca en internet. Con news=true busca NOTICIAS recientes (Google Noticias: título, medio, fecha y enlace; normalmente basta con eso para resumir). Con news=false busca páginas web en general. Usa consultas cortas (3-6 palabras), en el idioma del tema.',
     parameters: { type: 'object', properties: { query: { type: 'string' }, news: { type: 'boolean' } }, required: ['query'] }
   },
+  curo_stats: {
+    needs: 'admin',
+    label: 'Consultar datos de la plataforma CURO',
+    description: 'Solo administradores. Devuelve cifras reales de la plataforma CURO Group de los últimos N días (por defecto 7) comparadas con el periodo anterior: usuarios nuevos y total, compras e importe, suscriptores de newsletter, solicitudes de creadores pendientes, comentarios denunciados, búsquedas realizadas, contenidos guardados y uso de CURO Automate. No incluye datos personales.',
+    parameters: { type: 'object', properties: { days: { type: 'integer', minimum: 1, maximum: 90 } } }
+  },
   fetch_url: {
     needs: null,
     label: 'Leer una página web',
@@ -159,6 +165,42 @@ async function fetchUrl(url) {
   } finally { clearTimeout(timer); }
 }
 
+// ---------- Datos de la plataforma CURO (solo administradores, solo cifras) ----------
+async function countRows(table, filter) {
+  const rows = await db.select(table, `${filter ? filter + '&' : ''}select=*&limit=5000`).catch(() => null);
+  return rows;
+}
+async function curoStats(days) {
+  const n = Math.min(Math.max(parseInt(days, 10) || 7, 1), 90);
+  const now = Date.now(), from = new Date(now - n * 864e5).toISOString(), prev = new Date(now - 2 * n * 864e5).toISOString();
+  const between = (col, a, b) => `${col}=gte.${encodeURIComponent(a)}${b ? `&${col}=lt.${encodeURIComponent(b)}` : ''}`;
+  const len = r => (Array.isArray(r) ? r.length : null);
+  const [profAll, profNew, profPrev, purNew, purPrev, nlAll, nlNew, creatorsPending, reportsNew, searchNew, searchPrev, savedNew, autoNew, runsNew] = await Promise.all([
+    countRows('profiles', ''), countRows('profiles', between('created_at', from)), countRows('profiles', between('created_at', prev, from)),
+    countRows('purchases', between('created_at', from)), countRows('purchases', between('created_at', prev, from)),
+    countRows('newsletter_subscribers', 'unsubscribed_at=is.null'), countRows('newsletter_subscribers', between('consent_at', from)),
+    countRows('creator_requests', 'status=eq.pending'), countRows('comment_reports', between('created_at', from)),
+    countRows('searches', between('created_at', from)), countRows('searches', between('created_at', prev, from)),
+    countRows('saved_items', between('created_at', from)),
+    countRows('automate_automations', between('created_at', from)), countRows('automate_runs', between('started_at', from))
+  ]);
+  const paid = (purNew || []).filter(p => p.status === 'paid');
+  const byCur = {};
+  for (const p of paid) byCur[p.currency || 'EUR'] = (byCur[p.currency || 'EUR'] || 0) + Number(p.amount || 0);
+  const runs = runsNew || [];
+  return {
+    periodo: `últimos ${n} días (hasta ${new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', dateStyle: 'long' }).format(new Date(now))})`,
+    usuarios: { nuevos: len(profNew), periodo_anterior: len(profPrev), total: len(profAll) },
+    compras: { pagadas: paid.length, periodo_anterior: (purPrev || []).filter(p => p.status === 'paid').length, importe: Object.entries(byCur).map(([c, v]) => `${v.toFixed(2)} ${c}`).join(' + ') || '0' },
+    newsletter_plataforma: { suscriptores_activos: len(nlAll), nuevos: len(nlNew), nota: 'Las altas desde la web se guardan en Brevo; aquí solo cuentan las de la plataforma.' },
+    solicitudes_creadores_pendientes: len(creatorsPending),
+    comentarios_denunciados: len(reportsNew),
+    busquedas: { realizadas: len(searchNew), periodo_anterior: len(searchPrev), nota: 'Por privacidad no se guarda el texto de las búsquedas.' },
+    contenidos_guardados: len(savedNew),
+    curo_automate: { automatizaciones_creadas: len(autoNew), ejecuciones: runs.length, con_error: runs.filter(r => r.status === 'failed').length }
+  };
+}
+
 // ctx: { userId, automation, runId, approvalMode, approvals:[] }
 async function execute(name, args, ctx) {
   switch (name) {
@@ -180,6 +222,10 @@ async function execute(name, args, ctx) {
       }
       const sent = await sendEmail(ctx.userId, args, { brand: ctx.brand });
       return { status: toSelf ? 'enviado_al_usuario' : 'enviado', ...sent };
+    }
+    case 'curo_stats': {
+      if (!ctx.brand) return { error: 'Solo la cuenta administradora de CURO puede consultar los datos de la plataforma.' };
+      return curoStats(args.days);
     }
     case 'web_search': return webSearch(args.query, !!args.news);
     case 'fetch_url': return fetchUrl(args.url);

@@ -85,6 +85,7 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
     const connections = await connectionsFor(userId);
     if (connections.email) ctx.selfEmails = [connections.email.toLowerCase()];
     ctx.brand = await isAdmin(userId); // la cuenta de CURO Group envía con la plantilla de marca
+    connections.admin = ctx.brand; // habilita herramientas solo para administradores (datos de la plataforma)
     const allowed = (automation.plan?.tools || []).filter(n => tools.available(connections).includes(n));
     const missing = (automation.plan?.tools || []).filter(n => !allowed.includes(n));
     if (missing.some(n => tools.CATALOG[n]?.needs === 'google')) {
