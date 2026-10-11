@@ -624,13 +624,13 @@ function agentsLanding() {
       <span class="pill">TU AGENTE IA PERSONAL · AGENTES AIA</span>
       <h1>Un compañero que te conoce y <span class="grad">no empieza de cero</span> cada vez</h1>
       <p>Elige el agente que más se parece a ti. Recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>
-      <div class="agHeroRow" aria-hidden="true">${AGENTS.map(a => `<img src="${agentImg(a.key)}" alt="">`).join('')}</div>
+      <div class="agHeroRow">${AGENTS.map(a => `<button type="button" class="agHeroPick" onclick="showAgentCard('${a.key}')" aria-label="Ver a ${esc(a.name)}"><img src="${agentImg(a.key)}" alt=""><span>${esc(a.name)}</span></button>`).join('')}</div>
       <a class="btn primary" href="#elige">Conocer a los agentes</a>
     </section>
     <section class="section" id="elige">
       <div class="sectionIntro"><span class="eyebrow">LOS 9 AGENTES AIA</span><h2>¿Quién quieres que te acompañe?</h2><p class="muted">Todos hacen lo mismo por dentro. Cambia lo que saben de tu trabajo, cómo te hablan y qué te proponen.</p></div>
       <div class="agCards">${AGENTS.map(a => `
-        <article class="agCard">
+        <article class="agCard" id="agente-${a.key}">
           <div class="agCardPic"><img src="${agentImg(a.key)}" alt="${esc(a.name)}, ${esc(a.animal || 'agente AIA')}" loading="lazy"></div>
           <div class="agCardBody">
             <span class="agCardFor">${esc(a.label)}</span>
@@ -655,6 +655,13 @@ function agentsLanding() {
   <footer class="footer"><div class="footerBottom"><span>© 2026 CURO Group · Madrid, España</span><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></div></footer>`;
 }
 // Al elegir: con sesión va directo a crear el agente con ese perfil; sin sesión, pide entrar y vuelve aquí.
+// Al tocar un personaje de arriba, baja hasta su perfil y lo resalta un momento.
+function showAgentCard(key) {
+  const c = document.getElementById('agente-' + key); if (!c) return;
+  c.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  document.querySelectorAll('.agCard.flash').forEach(x => x.classList.remove('flash'));
+  c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 2200);
+}
 function pickAgent(key) {
   lstore('curo_agent_pick', { key, ts: Date.now() });
   if (session) return go('Mi agente');

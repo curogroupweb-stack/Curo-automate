@@ -203,3 +203,8 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 @media(max-width:1000px){.agCards{grid-template-columns:repeat(2,minmax(0,1fr))}.agCards .agCard:last-child:nth-child(odd){grid-column:1/-1;justify-self:center;width:calc(50% - 9px)}}
 @media(max-width:560px){.agCards .agCard:last-child:nth-child(odd){width:calc(50% - 5px)}}
 .agHeroRow{max-width:980px}
+.agHeroPick{border:0;background:none;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;font:inherit;color:#344054;font-size:13px;font-weight:700}
+.agHeroPick img{transition:transform .15s}
+.agHeroPick:hover img,.agHeroPick:focus-visible img{transform:translateY(-4px) scale(1.05)}
+.agCard{scroll-margin-top:90px}
+.agCard.flash{box-shadow:0 0 0 4px #7c3aed,0 14px 30px #7c3aed33;transform:translateY(-3px)}
