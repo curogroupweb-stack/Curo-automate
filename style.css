@@ -208,3 +208,15 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 .agHeroPick:hover img,.agHeroPick:focus-visible img{transform:translateY(-4px) scale(1.05)}
 .agCard{scroll-margin-top:90px}
 .agCard.flash{box-shadow:0 0 0 4px #7c3aed,0 14px 30px #7c3aed33;transform:translateY(-3px)}
+/* Bienvenida del agente, aviso al elegir e ideas para empezar */
+.agWelcome{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.agWelcomePic{width:150px;height:150px;border-radius:24px;object-fit:cover;flex:none;background:#f9e6c8}
+.agBubble{position:relative;flex:1;min-width:220px;background:#f2f4ff;border-radius:18px;padding:14px 16px}
+.agBubble b{display:block;font-size:19px;margin-bottom:4px}.agBubble p{margin:0;color:#344054;line-height:1.5}
+.agWelcome .agBubble::before{content:"";position:absolute;left:-8px;top:28px;border:8px solid transparent;border-right-color:#f2f4ff;border-left:0}
+.agQ{font-weight:800;color:#0d1426}
+.agOther summary{cursor:pointer;color:#3b4ff0;font-weight:700;margin-bottom:10px}
+.agPickModal{display:flex;gap:14px;align-items:center;flex-wrap:wrap}.agPickModal img{width:120px;height:120px;border-radius:20px;object-fit:cover;background:#f9e6c8}
+.agStarters{display:flex;flex-direction:column;gap:6px;margin-top:6px;align-self:stretch}
+.agStarters .exampleChip{text-align:left}
+@media(max-width:560px){.agWelcomePic{width:110px;height:110px}.agWelcome .agBubble::before{display:none}}

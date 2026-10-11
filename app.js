@@ -615,6 +615,18 @@ const AGENTS = [
 ];
 const agentImg = k => `img/agentes/${k}.jpg`;
 const agentByKey = k => AGENTS.find(a => a.key === k) || AGENTS[AGENTS.length - 1];
+// Frases para empezar a hablar con el agente (chat vacío), según el perfil.
+const AGENT_STARTERS = {
+  docente: ['Tengo que preparar las evaluaciones del trimestre', 'El jueves a las 17 tengo reunión con familias', 'Ayúdame a organizar mis clases de esta semana'],
+  autonomo: ['Tengo que enviar dos presupuestos esta semana', 'Recuérdame cobrar la factura de un cliente el día 30', 'Ayúdame a ordenar mis proyectos de clientes'],
+  estudiante: ['El 20 tengo examen de Historia', 'Tengo que entregar un trabajo el viernes', 'Ayúdame a armar un plan de estudio'],
+  emprendedor: ['Quiero lanzar un producto nuevo el mes que viene', 'Tengo que escribir a tres clientes esta semana', 'Ayúdame a ordenar mis ventas'],
+  community: ['Tengo 3 clientes y publico para cada uno', 'El lunes empieza una campaña nueva', 'Ayúdame a armar el calendario de la semana'],
+  creador: ['Tengo una colaboración con una marca el día 15', 'Quiero publicar dos vídeos por semana', 'Guárdame estas ideas de contenido'],
+  pyme: ['El martes tengo reunión con el equipo', 'Quiero revisar los objetivos del trimestre', 'Ayúdame a repartir tareas esta semana'],
+  profesional: ['Mañana tengo 5 consultas, ayúdame a organizar el día', 'Tengo que presentar unos papeles el viernes', 'Recuérdame llamar a un cliente el lunes'],
+  descubridor: ['Quiero aprender a usar la IA en mi día a día', 'Estoy pensando en un viaje para el verano', 'Guárdame cosas que me gustaría comprar']
+};
 
 function agentsLanding() {
   window.scrollTo(0, 0);
@@ -665,8 +677,11 @@ function showAgentCard(key) {
 function pickAgent(key) {
   lstore('curo_agent_pick', { key, ts: Date.now() });
   if (session) return go('Mi agente');
-  lstore('curo_ir', 'agente');
-  login('signup');
+  const a = agentByKey(key);
+  closeModals();
+  modal(`¡Genial! Elegiste a ${esc(a.name)}`, `<div class="agPickModal"><img src="${agentImg(a.key)}" alt="${esc(a.name)}"><div class="agBubble"><b>¡Hola! Soy ${esc(a.name)}.</b><p>Para poder recordar lo que me cuentes, necesito que entres con tu cuenta de CURO. Si todavía no tienes, la creas gratis en un minuto y vuelves aquí conmigo.</p></div></div>`, {
+    actions: `<button class="btn ghost" onclick="closeModals()">Seguir mirando</button><button class="btn primary" onclick="lstore('curo_ir','agente');closeModals();login('signup')">Entrar o crear mi cuenta</button>`
+  });
 }
 function takeAgentPick() {
   const p = lrecall('curo_agent_pick');
@@ -693,21 +708,28 @@ async function agentPage() {
 function agentSetup(edit = false) {
   const s = { ...(agentState.settings || {}) };
   const pick = takeAgentPick(); if (pick) s.profile = pick;
+  const chosen = s.profile ? agentByKey(s.profile) : null;
   const time = String(s.brief_time || '08:00').slice(0, 5);
+  const first = (me?.user?.name || '').split(' ')[0];
+  const grid = `<div class="profileGrid">${AGENTS.map(a => `<button type="button" class="profileCard ${s.profile === a.key ? 'sel' : ''}" data-p="${a.key}" aria-pressed="${s.profile === a.key}" onclick="selectSetupAgent('${a.key}')"><img class="profilePic" src="${agentImg(a.key)}" alt=""><b>${esc(a.name)}</b><small class="profileFor">${esc(a.label)}</small><small>${esc(a.help)}</small></button>`).join('')}</div>`;
   shell('Mi agente', `<div class="card agentSetup">
-    <span class="pill">${edit ? 'AJUSTES DE TU AGENTE' : 'CREA TU AGENTE IA PERSONAL'}</span>
-    <h2>${edit ? 'Cambia cómo te ayuda tu agente' : 'Un asistente que te conoce y recuerda lo importante'}</h2>
-    <p class="muted">Elige el agente que más se parece a ti. Recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>
-    <small class="muted">1. ELIGE A TU AGENTE</small>
-    <div class="profileGrid">${AGENTS.map(a => `<button type="button" class="profileCard ${s.profile === a.key ? 'sel' : ''}" data-p="${a.key}" aria-pressed="${s.profile === a.key}" onclick="document.querySelectorAll('.profileCard').forEach(b=>{b.classList.toggle('sel',b===this);b.setAttribute('aria-pressed',b===this)})"><img class="profilePic" src="${agentImg(a.key)}" alt=""><b>${esc(a.name)}</b><small class="profileFor">${esc(a.label)}</small><small>${esc(a.help)}</small></button>`).join('')}</div>
-    <label class="field">2. Cuéntale un poco de ti <span class="muted">(opcional)</span><textarea id="agAbout" rows="3" maxlength="2000" placeholder="Por ejemplo: soy profesora de primaria en Madrid y doy clases de inglés por las tardes.">${esc(s.about || '')}</textarea></label>
-    <label class="field">3. ¿En qué quieres que te ayude? <span class="muted">(opcional)</span><textarea id="agGoals" rows="3" maxlength="2000" placeholder="Por ejemplo: organizar mis clases de la semana, no olvidarme de las entregas y preparar materiales.">${esc(s.goals || '')}</textarea></label>
-    <div class="plannerStep"><small>4. RESUMEN DE LA MAÑANA</small>
-      <label class="toggle"><input type="checkbox" id="agBrief" ${s.brief_enabled === false ? '' : 'checked'}> Enviarme cada día un correo con mi agenda, pendientes y siguientes pasos</label>
+    <div class="agWelcome" id="agWelcome">${setupWelcome(chosen, first, edit)}</div>
+    ${chosen ? `<details class="agOther" ${edit ? '' : ''}><summary>¿Prefieres otro agente? Elige aquí</summary>${grid}</details>` : `<small class="muted">1. ELIGE A TU AGENTE</small>${grid}`}
+    <label class="field"><span class="agQ">¿A qué te dedicas?</span> <span class="muted">(opcional)</span><textarea id="agAbout" rows="3" maxlength="2000" placeholder="Por ejemplo: soy profesora de primaria en Madrid y doy clases de inglés por las tardes.">${esc(s.about || '')}</textarea></label>
+    <label class="field"><span class="agQ">¿En qué quieres que te ayude?</span> <span class="muted">(opcional)</span><textarea id="agGoals" rows="3" maxlength="2000" placeholder="Por ejemplo: organizar mis clases de la semana, no olvidarme de las entregas y preparar materiales.">${esc(s.goals || '')}</textarea></label>
+    <div class="plannerStep"><small class="agQ">¿TE MANDO CADA MAÑANA UN RESUMEN?</small>
+      <label class="toggle"><input type="checkbox" id="agBrief" ${s.brief_enabled === false ? '' : 'checked'}> Sí, un correo con mi agenda, mis pendientes y el siguiente paso</label>
       <label class="field inlineField">Hora (Madrid)<input id="agTime" type="time" value="${esc(time)}"></label></div>
     <p class="muted small">No le cuentes contraseñas, datos bancarios ni de salud. Puedes borrar cualquier cosa que recuerde cuando quieras.</p>
-    <div class="actions">${edit ? `<button class="btn ghost" onclick="renderAgent()">Cancelar</button>` : ''}<button class="btn primary" id="agSave">${edit ? 'Guardar cambios' : 'Crear mi agente'}</button></div>
+    <div class="actions">${edit ? `<button class="btn ghost" onclick="renderAgent()">Cancelar</button>` : ''}<button class="btn primary" id="agSave">${edit ? 'Guardar cambios' : chosen ? `Empezar con ${esc(chosen.name)}` : 'Crear mi agente'}</button></div>
   </div>`);
+  // Si al registrarse en CURO marcó intereses, se proponen como punto de partida.
+  if (!edit && !s.goals && sb.auth.getUser) Promise.resolve().then(() => sb.auth.getUser()).then(({ data }) => {
+    const ints = data?.user?.user_metadata?.interests;
+    const list = Array.isArray(ints) ? ints : typeof ints === 'string' ? ints.split(',') : [];
+    const g = document.getElementById('agGoals');
+    if (g && !g.value && list.length) g.value = 'Me interesa: ' + list.map(x => String(x).trim()).filter(Boolean).join(', ') + '.';
+  }).catch(() => {});
   document.getElementById('agSave').addEventListener('click', async e => {
     const profile = document.querySelector('.profileCard.sel')?.dataset.p;
     if (!profile) return toast('Elige primero a tu agente.', 'warn');
@@ -719,6 +741,16 @@ function agentSetup(edit = false) {
       renderAgent();
     } catch (err) { done(); info('No se pudo guardar', err.message); }
   });
+}
+function setupWelcome(a, first, edit) {
+  if (!a) return `<span class="pill">CREA TU AGENTE IA PERSONAL</span><h2>Un asistente que te conoce y recuerda lo importante</h2><p class="muted">Elige el agente que más se parece a ti. Recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>`;
+  return `<img class="agWelcomePic" src="${agentImg(a.key)}" alt="${esc(a.name)}"><div class="agBubble"><b>${edit ? `Aquí puedes cambiar cómo te ayudo${first ? `, ${esc(first)}` : ''}.` : `¡Hola${first ? `, ${esc(first)}` : ''}! Soy ${esc(a.name)}.`}</b><p>${edit ? 'Cuéntame si algo cambió en tu trabajo o en lo que necesitas.' : `Voy a ser tu agente personal${a.label ? ` (${esc(a.label.toLowerCase())})` : ''}. Cuéntame un poco de ti para ayudarte mejor: con tres respuestas ya podemos empezar.`}</p></div>`;
+}
+function selectSetupAgent(key) {
+  document.querySelectorAll('.profileCard').forEach(b => { const on = b.dataset.p === key; b.classList.toggle('sel', on); b.setAttribute('aria-pressed', on); });
+  const w = document.getElementById('agWelcome'); const first = (me?.user?.name || '').split(' ')[0];
+  if (w && w.querySelector('.agBubble')) w.innerHTML = setupWelcome(agentByKey(key), first, false);
+  const btn = document.getElementById('agSave'); if (btn && !/Guardar/.test(btn.textContent)) btn.textContent = `Empezar con ${agentByKey(key).name}`;
 }
 function agentMsgHtml(m) {
   const txt = `<div class="agMsg ${m.role === 'user' ? 'me' : 'bot'}">${esc(m.content).replace(/\n/g, '<br>')}</div>`;
@@ -744,9 +776,9 @@ function renderAgent() {
       <div class="actions"><button class="btn ghost smallBtn" id="agBriefNow">Enviarme el resumen ahora</button><button class="btn ghost smallBtn" onclick="agentSetup(true)">Ajustes</button></div></div>
     <div class="agGrid">
       <div class="card agChat">
-        <div class="agMsgs" id="agMsgs">${msgs.length ? msgs.map(agentMsgHtml).join('') : `<div class="agMsg bot">Hola${first ? `, ${esc(first)}` : ''}. Soy ${esc(agentByKey(s.profile).name)}, tu agente personal. Cuéntame en qué estás trabajando, qué tienes que hacer esta semana o qué te gustaría organizar, y lo iré recordando por ti.</div>`}</div>
+        <div class="agMsgs" id="agMsgs">${msgs.length ? msgs.map(agentMsgHtml).join('') : agentMsgHtml({ role: 'assistant', content: `Hola${first ? `, ${first}` : ''}. Soy ${agentByKey(s.profile).name}, tu agente personal. Cuéntame en qué estás trabajando, qué tienes que hacer esta semana o qué te gustaría organizar, y lo iré recordando por ti.` }) + `<div class="agStarters"><small class="muted">PUEDES EMPEZAR POR AQUÍ</small>${(AGENT_STARTERS[s.profile] || AGENT_STARTERS.descubridor).map((t, i) => `<button type="button" class="exampleChip" onclick="agentStarter(${i})">${esc(t)}</button>`).join('')}</div>`}</div>
         <form class="agForm" onsubmit="event.preventDefault();agentSend()">
-          <div class="dictationWrap"><textarea id="agInput" rows="2" maxlength="2000" placeholder="Escribe a tu agente… (por ejemplo: el jueves a las 17 tengo reunión con familias)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();agentSend()}"></textarea>
+          <div class="dictationWrap"><textarea id="agInput" rows="2" maxlength="2000" placeholder="Escribe a ${esc(agentByKey(s.profile).name)}…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();agentSend()}"></textarea>
           <button class="dictateBtn" type="button" onclick="toggleDictation('agInput',this)" aria-label="Dictar">🎙 <span>Dictar</span></button></div>
           <button class="btn primary" id="agSend" type="submit">Enviar</button>
         </form>
@@ -766,6 +798,12 @@ function renderAgent() {
   });
 }
 function renderAgentPanel() { const keep = document.getElementById('agInput')?.value || ''; renderAgent(); const i = document.getElementById('agInput'); if (i) i.value = keep; }
+function agentStarter(i) {
+  const t = (AGENT_STARTERS[agentState?.settings?.profile] || AGENT_STARTERS.descubridor)[i];
+  const input = document.getElementById('agInput'); if (!t || !input) return;
+  document.querySelector('.agStarters')?.remove();
+  input.value = t; agentSend();
+}
 async function agentSend() {
   const input = document.getElementById('agInput'), text = input?.value.trim();
   if (!text) return;
