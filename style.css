@@ -162,3 +162,36 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 .agDone{margin-top:10px}.agDone summary{cursor:pointer;color:#667085;font-size:14px;margin-bottom:6px}
 .agAdd{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}.agAdd input{flex:1;min-width:140px}
 @media(max-width:850px){.shell{grid-template-columns:minmax(0,1fr)}.side{min-width:0}.sideFoot{flex-wrap:wrap;justify-content:flex-start;word-break:normal}.sideFoot small{flex-basis:100%;overflow-wrap:anywhere}.agForm{flex-direction:column;align-items:stretch}}
+
+/* Presentación de los 8 agentes AIA */
+.agLanding{background:#fbf7f1}
+.agHero{text-align:center;padding:64px 6vw 48px;background:radial-gradient(circle at 50% 0,#fde9cf,transparent 60%)}
+.agHero h1{font-size:clamp(32px,5vw,58px);line-height:1.05;max-width:900px;margin:14px auto}
+.agHero p{font-size:18px;color:#566176;max-width:720px;margin:0 auto 26px}
+.agHeroRow{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin:0 auto 28px;max-width:900px}
+.agHeroRow img{width:96px;height:96px;border-radius:50%;object-fit:cover;border:3px solid #fff;box-shadow:0 6px 18px #1f2a4414}
+.agHero .btn{display:inline-flex;text-decoration:none}
+.agCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px}
+.agCard{background:#fff;border:1px solid #efe6d8;border-radius:22px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 8px 24px #1f2a440a;transition:transform .15s,box-shadow .15s}
+.agCard:hover{transform:translateY(-3px);box-shadow:0 14px 30px #1f2a4416}
+.agCardPic{background:#f9e6c8;display:flex;justify-content:center}
+.agCardPic img{width:100%;max-width:240px;aspect-ratio:1;object-fit:cover;display:block}
+.agCardBody{padding:16px 18px 18px;display:flex;flex-direction:column;gap:8px;flex:1}
+.agCardBody h3{margin:0;font-size:22px}.agCardBody h3 small{display:block;font-size:13px;font-weight:600;color:#667085;margin-top:2px}
+.agCardBody p{margin:0;color:#475467;font-size:15px;line-height:1.45}
+.agCardBody ul{margin:0;padding-left:18px;font-size:14px;color:#344054;display:grid;gap:3px}
+.agCardBody .btn{margin-top:auto;align-self:stretch}
+.agCardFor{align-self:flex-start;font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#0f766e;background:#e3f5ef;padding:4px 10px;border-radius:99px}
+.agKeeps{grid-template-columns:repeat(4,1fr)}
+.agPrivacy{margin-top:16px}
+.agLanding+.footer .footerBottom{margin-top:0;border-top:0;padding-top:0}
+.agLanding+.footer .footerBottom a{color:#c3ccdb}
+@media(max-width:900px){.agKeeps{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.agKeeps{grid-template-columns:1fr}.agHeroRow img{width:64px;height:64px}.agHero{padding-top:42px}}
+.profilePic{width:100%;max-width:120px;aspect-ratio:1;object-fit:cover;border-radius:14px;align-self:center;margin-bottom:4px}
+.profileCard{align-items:stretch}.profileCard b{font-size:17px;text-align:center}
+.profileFor{text-align:center;font-weight:700;color:#0f766e!important}
+.agAvatar{width:34px;height:34px;border-radius:50%;object-fit:cover;flex:none;border:2px solid #fff;box-shadow:0 2px 8px #1f2a4414}
+.agAvatar.big{width:56px;height:56px}
+.agBotRow{display:flex;gap:8px;align-items:flex-end;align-self:flex-start;max-width:92%}.agBotRow .agMsg{max-width:100%}
+@media(max-width:560px){.agCards{grid-template-columns:1fr 1fr;gap:10px}.agCardBody{padding:10px 10px 12px;gap:6px}.agCardBody h3{font-size:18px}.agCardBody p{font-size:13px}.agCardBody ul{display:none}.agCardFor{font-size:10px;padding:3px 7px}.agCardBody .btn{padding:10px 8px;font-size:13px}}

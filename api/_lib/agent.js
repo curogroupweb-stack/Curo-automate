@@ -8,14 +8,14 @@ const brevo = require('./brevo');
 const { renderBranded } = require('./email_template');
 
 const PROFILES = {
-  docente: { label: 'Docente', focus: 'clases, planificación, evaluaciones, comunicación con familias y alumnos, materiales didácticos' },
-  community: { label: 'Community manager', focus: 'calendario de publicaciones, campañas, clientes, métricas y tendencias en redes' },
-  creador: { label: 'Creador de contenido', focus: 'ideas de contenido, guiones, calendario de publicación, colaboraciones con marcas y crecimiento de la audiencia' },
-  emprendedor: { label: 'Emprendedor', focus: 'clientes, ventas, propuestas, seguimiento comercial, finanzas básicas y lanzamiento de productos' },
-  autonomo: { label: 'Autónomo', focus: 'proyectos de clientes, entregas, presupuestos, facturas, impuestos y captación de clientes' },
-  estudiante: { label: 'Estudiante', focus: 'plan de estudio, entregas, exámenes, apuntes y organización del tiempo' },
-  pyme: { label: 'Pequeños equipos (pymes)', focus: 'tareas del equipo, reuniones, clientes, procesos internos e informes' },
-  descubridor: { label: 'Descubridor', focus: 'intereses personales, cosas que quiere aprender, compras que está pensando, viajes, ideas y descubrimientos' }
+  docente: { name: 'Bruno', label: 'Docente', focus: 'clases, planificación, evaluaciones, comunicación con familias y alumnos, materiales didácticos' },
+  community: { name: 'Kai', label: 'Community manager', focus: 'calendario de publicaciones, campañas, clientes, métricas y tendencias en redes' },
+  creador: { name: 'Luna', label: 'Creador de contenido', focus: 'ideas de contenido, guiones, calendario de publicación, colaboraciones con marcas y crecimiento de la audiencia' },
+  emprendedor: { name: 'Nico', label: 'Emprendedor', focus: 'clientes, ventas, propuestas, seguimiento comercial, finanzas básicas y lanzamiento de productos' },
+  autonomo: { name: 'Teo', label: 'Autónomo', focus: 'proyectos de clientes, entregas, presupuestos, facturas, impuestos y captación de clientes' },
+  estudiante: { name: 'Koa', label: 'Estudiante', focus: 'plan de estudio, entregas, exámenes, apuntes y organización del tiempo' },
+  pyme: { name: 'Félix', label: 'Pequeños equipos (pymes)', focus: 'tareas del equipo, reuniones, clientes, procesos internos e informes' },
+  descubridor: { name: 'Mochi', label: 'Descubridor', focus: 'intereses personales, cosas que quiere aprender, compras que está pensando, viajes, ideas y descubrimientos' }
 };
 const KINDS = ['memoria', 'pendiente', 'proyecto', 'agenda'];
 const DAILY_LIMIT = Number(process.env.AGENT_DAILY_MESSAGES || 40);
@@ -53,7 +53,7 @@ function itemsForPrompt(items) {
 
 function systemPrompt(st, name) {
   const p = PROFILES[st.settings.profile] || PROFILES.descubridor;
-  return `Eres el agente IA personal de ${name || 'esta persona'} en CURO Group. Su perfil es: ${p.label} (te centras en ${p.focus}).
+  return `Te llamas ${p.name}, un agente AIA de CURO Group, y eres el agente IA personal de ${name || 'esta persona'}. Su perfil es: ${p.label} (te centras en ${p.focus}).
 ${st.settings.about ? `Lo que te contó de sí: ${st.settings.about}\n` : ''}${st.settings.goals ? `Sus objetivos: ${st.settings.goals}\n` : ''}${st.settings.tone ? `Tono que prefiere: ${st.settings.tone}\n` : ''}Fecha y hora actual (Madrid): ${madridNow()}.
 
 TU MEMORIA DE ESTA PERSONA (úsala; no le hagas repetir lo que ya sabes):
@@ -195,7 +195,7 @@ async function buildBrief(userId, name) {
   if (facts) {
     try {
       const res = await chat({
-        system: `Eres el agente IA personal de ${name || 'esta persona'} (perfil ${p.label}). Escribe su resumen de la mañana en español, cercano y breve (máximo 180 palabras), sin Markdown: un saludo, lo más importante de hoy primero, luego lo que viene esta semana, los pendientes clave y el siguiente paso sugerido de cada proyecto. Usa solo estos datos, no inventes nada. Fecha actual: ${madridNow()}.`,
+        system: `Eres ${p.name}, el agente IA personal de ${name || 'esta persona'} (perfil ${p.label}). Escribe su resumen de la mañana en español, cercano y breve (máximo 180 palabras), sin Markdown: un saludo, lo más importante de hoy primero, luego lo que viene esta semana, los pendientes clave y el siguiente paso sugerido de cada proyecto. Usa solo estos datos, no inventes nada. Fecha actual: ${madridNow()}.`,
         messages: [{ role: 'user', content: facts }], maxTokens: 700, temperature: 0.4
       });
       body = String(res.text || '').replace(/\*\*(.+?)\*\*/g, '$1').trim();
@@ -204,7 +204,7 @@ async function buildBrief(userId, name) {
   } else {
     body = `Buenos días${name ? `, ${name}` : ''}.\n\nTodavía no tengo pendientes ni citas tuyas. Cuéntame en qué estás trabajando y lo iré organizando por ti.`;
   }
-  return body + '\n\nAbre tu agente: https://automate.curogroup.net/?ir=agente';
+  return body + `\n\n${p.name}, tu agente AIA de CURO` + '\n\nAbre tu agente: https://automate.curogroup.net/?ir=agente';
 }
 
 async function sendBrief(userId) {

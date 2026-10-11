@@ -601,30 +601,97 @@ async function delKnowledge(id, btn) {
   try { await api('knowledge?id=' + id, { method: 'DELETE' }); knowledgePage(); } catch (e) { done(); info('No se pudo eliminar', e.message); }
 }
 
+// ---------- Los 8 agentes AIA (presentación pública) ----------
+const AGENTS = [
+  { key: 'docente', name: 'Bruno', animal: 'el osito', label: 'Docente o formador/a', vibe: 'Paciente y ordenado', help: 'Te acompaña con las clases, la planificación, las evaluaciones y la comunicación con familias.', ex: ['Te recuerda entregas, reuniones y evaluaciones', 'Organiza tus clases de la semana'] },
+  { key: 'autonomo', name: 'Teo', animal: 'el castor', label: 'Autónomo/a', vibe: 'Trabajador y organizado', help: 'Lleva tus proyectos de clientes, entregas, presupuestos y facturas para que nada se te escape.', ex: ['Te avisa de facturas y entregas pendientes', 'Ordena los proyectos de cada cliente'] },
+  { key: 'estudiante', name: 'Koa', animal: 'el koala', label: 'Estudiante', vibe: 'Curioso y constante', help: 'Te ayuda a organizar tu estudio: exámenes, trabajos, apuntes y tiempo.', ex: ['Apunta tus exámenes y entregas', 'Te arma un plan de estudio por semanas'] },
+  { key: 'emprendedor', name: 'Nico', animal: 'el conejito', label: 'Emprendedor/a', vibe: 'Con energía y decidido', help: 'Sigue a tus clientes, tus ventas y tus lanzamientos, y te dice cuál es el siguiente paso.', ex: ['Te recuerda a qué cliente escribir hoy', 'Divide tu lanzamiento en etapas'] },
+  { key: 'community', name: 'Kai', animal: 'el panda', label: 'Community manager', vibe: 'Creativo y al día', help: 'Organiza tu calendario de publicaciones, tus campañas y tus clientes en redes.', ex: ['Lleva el calendario de publicaciones', 'Te recuerda las entregas a cada cliente'] },
+  { key: 'creador', name: 'Luna', animal: 'la gatita', label: 'Creador/a de contenido', vibe: 'Inquieta y llena de ideas', help: 'Guarda tus ideas, tus guiones y tus colaboraciones con marcas, y te ayuda a publicar con constancia.', ex: ['Banco de ideas que no se pierden', 'Te avisa de las fechas con marcas'] },
+  { key: 'pyme', name: 'Félix', animal: 'el zorro', label: 'Pequeños equipos (pymes)', vibe: 'Formal y profesional', help: 'Coordina las tareas del equipo, las reuniones, los clientes y los informes.', ex: ['Resume qué quedó pendiente de cada reunión', 'Te prepara la semana del equipo'] },
+  { key: 'descubridor', name: 'Mochi', animal: '', label: 'Descubridor/a', vibe: 'Tierno y curioso', help: 'Para quien busca de todo un poco: guarda lo que te interesa, lo que quieres aprender, comprar o visitar.', ex: ['Lista de cosas que quieres aprender', 'Guarda ideas, viajes y compras pensadas'] }
+];
+const agentImg = k => `img/agentes/${k}.jpg`;
+const agentByKey = k => AGENTS.find(a => a.key === k) || AGENTS[AGENTS.length - 1];
+
+function agentsLanding() {
+  window.scrollTo(0, 0);
+  A.innerHTML = `<header class="top"><a class="brand brandLink" href="https://curogroup.net/" title="Volver a CURO Group"><span class="grad">CURO</span> Automate</a><div class="topnav"><a class="backCuro" href="https://curogroup.net/">← CURO Group</a><button class="btn ghost" onclick="home()">Otras formas</button></div></header>
+  <main class="agLanding">
+    <section class="agHero">
+      <span class="pill">TU AGENTE IA PERSONAL · AGENTES AIA</span>
+      <h1>Un compañero que te conoce y <span class="grad">no empieza de cero</span> cada vez</h1>
+      <p>Elige el agente que más se parece a ti. Recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>
+      <div class="agHeroRow" aria-hidden="true">${AGENTS.map(a => `<img src="${agentImg(a.key)}" alt="">`).join('')}</div>
+      <a class="btn primary" href="#elige">Conocer a los agentes</a>
+    </section>
+    <section class="section" id="elige">
+      <div class="sectionIntro"><span class="eyebrow">LOS 8 AGENTES AIA</span><h2>¿Quién quieres que te acompañe?</h2><p class="muted">Todos hacen lo mismo por dentro. Cambia lo que saben de tu trabajo, cómo te hablan y qué te proponen.</p></div>
+      <div class="agCards">${AGENTS.map(a => `
+        <article class="agCard">
+          <div class="agCardPic"><img src="${agentImg(a.key)}" alt="${esc(a.name)}, ${esc(a.animal || 'agente AIA')}" loading="lazy"></div>
+          <div class="agCardBody">
+            <span class="agCardFor">${esc(a.label)}</span>
+            <h3>${esc(a.name)} <small>${esc(a.vibe)}</small></h3>
+            <p>${esc(a.help)}</p>
+            <ul>${a.ex.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+            <button class="btn primary" onclick="pickAgent('${a.key}')">Elegir a ${esc(a.name)}</button>
+          </div>
+        </article>`).join('')}</div>
+    </section>
+    <section class="section softSection">
+      <div class="sectionIntro"><span class="eyebrow">CÓMO FUNCIONA</span><h2>Así de sencillo</h2></div>
+      <div class="steps agSteps">${[['1', 'Elige tu agente', 'Según lo que haces: docente, autónomo, estudiante…'], ['2', 'Cuéntale de ti', 'Qué haces y en qué quieres que te ayude. Puedes cambiarlo cuando quieras.'], ['3', 'Habla con él cada día', 'Le cuentas tus cosas y él las ordena en listas.'], ['4', 'Recibe tu resumen', 'Cada mañana, un correo con tu agenda, tus pendientes y el siguiente paso.']].map(x => `<div class="card step"><span class="stepNum">${x[0]}</span><h3>${x[1]}</h3><p class="muted">${x[2]}</p></div>`).join('')}</div>
+    </section>
+    <section class="section">
+      <div class="sectionIntro"><span class="eyebrow">LO QUE LLEVA POR TI</span><h2>Todo en su sitio</h2></div>
+      <div class="grid agKeeps">${[['Pendientes', 'Lo que tienes que hacer, y lo marca como hecho cuando le dices que ya está.'], ['Proyectos', 'Tus proyectos por etapas, con el siguiente paso siempre claro.'], ['Agenda', 'Citas, entregas y fechas importantes, para que no se te pasen.'], ['Lo que recuerdo', 'Lo que le contaste de ti y de tu trabajo, para no tener que repetirlo.']].map(x => `<div class="card"><h3>${x[0]}</h3><p class="muted">${x[1]}</p></div>`).join('')}</div>
+      <p class="muted small agPrivacy">No le cuentes contraseñas, datos bancarios ni de salud. Puedes borrar cualquier cosa que recuerde cuando quieras.</p>
+    </section>
+    <section class="section"><div class="planCard"><div><span class="pill">GRATIS DURANTE LA FASE DE PRUEBA</span><h2>Crea tu agente hoy</h2><p>Solo necesitas tu cuenta de CURO Group. Si no la tienes, la creas gratis en un minuto.</p></div><a class="btn primary" href="#elige">Elegir mi agente</a></div></section>
+  </main>
+  <footer class="footer"><div class="footerBottom"><span>© 2026 CURO Group · Madrid, España</span><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></div></footer>`;
+}
+// Al elegir: con sesión va directo a crear el agente con ese perfil; sin sesión, pide entrar y vuelve aquí.
+function pickAgent(key) {
+  lstore('curo_agent_pick', { key, ts: Date.now() });
+  if (session) return go('Mi agente');
+  lstore('curo_ir', 'agente');
+  login('signup');
+}
+function takeAgentPick() {
+  const p = lrecall('curo_agent_pick');
+  lstore('curo_agent_pick', null);
+  return p && Date.now() - p.ts < 864e5 ? p.key : null;
+}
+
 // ---------- Mi agente: agente IA personal ----------
 let agentState = null, agentTab = 'pendiente';
 const AGENT_TABS = [['pendiente', 'Pendientes'], ['proyecto', 'Proyectos'], ['agenda', 'Agenda'], ['memoria', 'Lo que recuerdo']];
 const AGENT_ICONS = { docente: '🍎', community: '📣', creador: '🎬', emprendedor: '🚀', autonomo: '💼', estudiante: '📚', pyme: '👥', descubridor: '🧭' };
 function openAgent() {
   if (session) return go('Mi agente');
-  lstore('curo_ir', 'agente');
-  login('signup');
+  agentsLanding();
 }
 async function agentPage() {
   loading('Mi agente', 'Abriendo tu agente…');
   try { agentState = await api('agent'); }
   catch (e) { return shell('Mi agente', `<div class="card"><p>${esc(e.message)}</p><button class="btn primary" onclick="go('Mi agente')">Reintentar</button></div>`); }
-  agentState.settings ? renderAgent() : agentSetup();
+  // Si eligió un agente en la presentación, se abre la elección con ese agente marcado (también si ya tenía uno).
+  const pick = lrecall('curo_agent_pick');
+  agentState.settings && !pick ? renderAgent() : agentSetup(!!agentState.settings);
 }
 function agentSetup(edit = false) {
-  const s = agentState.settings || {};
+  const s = { ...(agentState.settings || {}) };
+  const pick = takeAgentPick(); if (pick) s.profile = pick;
   const time = String(s.brief_time || '08:00').slice(0, 5);
   shell('Mi agente', `<div class="card agentSetup">
     <span class="pill">${edit ? 'AJUSTES DE TU AGENTE' : 'CREA TU AGENTE IA PERSONAL'}</span>
     <h2>${edit ? 'Cambia cómo te ayuda tu agente' : 'Un asistente que te conoce y recuerda lo importante'}</h2>
-    <p class="muted">Elige el perfil que más se parece a ti. Tu agente recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>
-    <small class="muted">1. ¿QUÉ PERFIL SE PARECE MÁS A TI?</small>
-    <div class="profileGrid">${agentState.profiles.map(p => `<button type="button" class="profileCard ${s.profile === p.key ? 'sel' : ''}" data-p="${p.key}" onclick="document.querySelectorAll('.profileCard').forEach(b=>b.classList.toggle('sel',b===this))"><span class="profileIcon">${AGENT_ICONS[p.key] || '✦'}</span><b>${esc(p.label)}</b><small>${esc(p.focus)}</small></button>`).join('')}</div>
+    <p class="muted">Elige el agente que más se parece a ti. Recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>
+    <small class="muted">1. ELIGE A TU AGENTE</small>
+    <div class="profileGrid">${AGENTS.map(a => `<button type="button" class="profileCard ${s.profile === a.key ? 'sel' : ''}" data-p="${a.key}" aria-pressed="${s.profile === a.key}" onclick="document.querySelectorAll('.profileCard').forEach(b=>{b.classList.toggle('sel',b===this);b.setAttribute('aria-pressed',b===this)})"><img class="profilePic" src="${agentImg(a.key)}" alt=""><b>${esc(a.name)}</b><small class="profileFor">${esc(a.label)}</small><small>${esc(a.help)}</small></button>`).join('')}</div>
     <label class="field">2. Cuéntale un poco de ti <span class="muted">(opcional)</span><textarea id="agAbout" rows="3" maxlength="2000" placeholder="Por ejemplo: soy profesora de primaria en Madrid y doy clases de inglés por las tardes.">${esc(s.about || '')}</textarea></label>
     <label class="field">3. ¿En qué quieres que te ayude? <span class="muted">(opcional)</span><textarea id="agGoals" rows="3" maxlength="2000" placeholder="Por ejemplo: organizar mis clases de la semana, no olvidarme de las entregas y preparar materiales.">${esc(s.goals || '')}</textarea></label>
     <div class="plannerStep"><small>4. RESUMEN DE LA MAÑANA</small>
@@ -635,17 +702,20 @@ function agentSetup(edit = false) {
   </div>`);
   document.getElementById('agSave').addEventListener('click', async e => {
     const profile = document.querySelector('.profileCard.sel')?.dataset.p;
-    if (!profile) return toast('Elige primero un perfil.', 'warn');
+    if (!profile) return toast('Elige primero a tu agente.', 'warn');
     const done = busy(e.currentTarget, 'Guardando…');
     try {
       const { settings } = await api('agent', { method: 'POST', body: { action: 'setup', profile, about: agAbout.value.trim(), goals: agGoals.value.trim(), brief_enabled: agBrief.checked, brief_time: agTime.value || '08:00' } });
       agentState.settings = settings;
-      toast(edit ? 'Cambios guardados.' : '¡Tu agente está listo!');
+      toast(edit ? 'Cambios guardados.' : `¡${agentByKey(profile).name} ya está listo!`);
       renderAgent();
     } catch (err) { done(); info('No se pudo guardar', err.message); }
   });
 }
-function agentMsgHtml(m) { return `<div class="agMsg ${m.role === 'user' ? 'me' : 'bot'}">${esc(m.content).replace(/\n/g, '<br>')}</div>`; }
+function agentMsgHtml(m) {
+  const txt = `<div class="agMsg ${m.role === 'user' ? 'me' : 'bot'}">${esc(m.content).replace(/\n/g, '<br>')}</div>`;
+  return m.role === 'user' ? txt : `<div class="agBotRow"><img class="agAvatar" src="${agentImg(agentState?.settings?.profile || 'descubridor')}" alt="">${txt}</div>`;
+}
 function agentItemsHtml() {
   const items = (agentState.items || []).filter(i => agentTab === 'agenda' ? (i.kind === 'agenda' || (i.due_at && i.kind !== 'memoria')) : i.kind === agentTab);
   const active = items.filter(i => i.status === 'activo'), done = items.filter(i => i.status !== 'activo').slice(0, 10);
@@ -662,11 +732,11 @@ function renderAgent() {
   const msgs = agentState.messages || [];
   const first = (me?.user?.name || '').split(' ')[0];
   shell('Mi agente', `
-    <div class="agHead card"><div class="agWho"><span class="profileIcon">${AGENT_ICONS[s.profile] || '✦'}</span><div><b>Tu agente · ${esc(prof.label || '')}</b><small class="muted">${s.brief_enabled ? `Resumen cada día a las ${esc(String(s.brief_time || '08:00').slice(0, 5))}` : 'Resumen diario desactivado'}</small></div></div>
+    <div class="agHead card"><div class="agWho"><img class="agAvatar big" src="${agentImg(s.profile)}" alt=""><div><b>${esc(agentByKey(s.profile).name)} · tu agente AIA</b><small class="muted">${esc(prof.label || '')}</small><small class="muted">${s.brief_enabled ? `Resumen cada día a las ${esc(String(s.brief_time || '08:00').slice(0, 5))}` : 'Resumen diario desactivado'}</small></div></div>
       <div class="actions"><button class="btn ghost smallBtn" id="agBriefNow">Enviarme el resumen ahora</button><button class="btn ghost smallBtn" onclick="agentSetup(true)">Ajustes</button></div></div>
     <div class="agGrid">
       <div class="card agChat">
-        <div class="agMsgs" id="agMsgs">${msgs.length ? msgs.map(agentMsgHtml).join('') : `<div class="agMsg bot">Hola${first ? `, ${esc(first)}` : ''}. Soy tu agente personal. Cuéntame en qué estás trabajando, qué tienes que hacer esta semana o qué te gustaría organizar, y lo iré recordando por ti.</div>`}</div>
+        <div class="agMsgs" id="agMsgs">${msgs.length ? msgs.map(agentMsgHtml).join('') : `<div class="agMsg bot">Hola${first ? `, ${esc(first)}` : ''}. Soy ${esc(agentByKey(s.profile).name)}, tu agente personal. Cuéntame en qué estás trabajando, qué tienes que hacer esta semana o qué te gustaría organizar, y lo iré recordando por ti.</div>`}</div>
         <form class="agForm" onsubmit="event.preventDefault();agentSend()">
           <div class="dictationWrap"><textarea id="agInput" rows="2" maxlength="2000" placeholder="Escribe a tu agente… (por ejemplo: el jueves a las 17 tengo reunión con familias)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();agentSend()}"></textarea>
           <button class="dictateBtn" type="button" onclick="toggleDictation('agInput',this)" aria-label="Dictar">🎙 <span>Dictar</span></button></div>
@@ -762,9 +832,10 @@ async function boot() {
   if (!session) {
     // Si venía a una sección concreta (por ejemplo ?ir=agente), se recuerda para después de entrar.
     const ir = q.get('ir');
-    if (ir) { lstore('curo_ir', ir); history.replaceState({}, '', location.pathname); }
-    // El agente personal necesita cuenta: se va directo a iniciar sesión en CURO Group.
-    if (ir === 'agente') return login('signup');
+    if (ir) history.replaceState({}, '', location.pathname);
+    // El agente personal: sin sesión se presenta a los 8 agentes; al elegir uno se pide entrar.
+    if (ir === 'agente' || ir === 'agentes') return agentsLanding();
+    if (ir) lstore('curo_ir', ir);
     home();
     const pp = lrecall('curo_pending_preview');
     const box = document.getElementById('publicInstruction');

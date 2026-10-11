@@ -8,7 +8,7 @@ const { handler, json, readBody, requireUser, HttpError } = require('./_lib/http
 const { isAdmin } = require('./_lib/account');
 const agent = require('./_lib/agent');
 
-const publicProfiles = () => Object.entries(agent.PROFILES).map(([key, p]) => ({ key, label: p.label, focus: p.focus }));
+const publicProfiles = () => Object.entries(agent.PROFILES).map(([key, p]) => ({ key, name: p.name, label: p.label, focus: p.focus }));
 
 module.exports = handler(async (req, res) => {
   const user = await requireUser(req);
