@@ -733,7 +733,8 @@ function renderWelcome() {
     const q = isAbout ? '¿A qué te dedicas?' : '¿En qué quieres que te ayude?';
     const ph = isAbout ? 'Por ejemplo: soy profesora de primaria en Madrid y doy clases de inglés por las tardes.' : 'Por ejemplo: organizar mis clases de la semana, no olvidarme de las entregas y preparar materiales.';
     body = `<div class="wChat">${dots}<div class="agBotRow"><img class="agAvatar big" src="${agentImg(a.key)}" alt=""><div class="agMsg bot">${q}</div></div>
-      <textarea id="wInput" rows="3" maxlength="2000" placeholder="${ph}">${esc(isAbout ? w.about : w.goals)}</textarea>
+      <div class="dictationWrap"><textarea id="wInput" rows="3" maxlength="2000" placeholder="${ph}">${esc(isAbout ? w.about : w.goals)}</textarea>
+      <button class="dictateBtn" type="button" onclick="toggleDictation('wInput',this)" aria-label="Dictar la respuesta">🎙 <span>Dictar</span></button></div>
       <div class="actions"><button class="btn ghost" onclick="welcomeNext(true)">Saltar</button><button class="btn primary" onclick="welcomeNext(false)">Siguiente</button></div></div>`;
   } else if (w.step === 'brief') {
     body = `<div class="wChat">${dots}<div class="agBotRow"><img class="agAvatar big" src="${agentImg(a.key)}" alt=""><div class="agMsg bot">¿Te mando cada mañana un correo con tu agenda, tus pendientes y el siguiente paso?</div></div>
@@ -749,6 +750,7 @@ function renderWelcome() {
   document.getElementById('wInput')?.focus();
 }
 function welcomeNext(skip) {
+  if (activeRecognition) { try { activeRecognition.stop(); } catch {} activeRecognition = null; }
   const v = skip ? '' : (document.getElementById('wInput')?.value.trim() || '');
   if (welcome.step === 'about') { welcome.about = v; welcome.step = 'goals'; }
   else { welcome.goals = v; welcome.step = 'brief'; }
@@ -793,8 +795,8 @@ function agentSetup(edit = false) {
   shell('Mi agente', `<div class="card agentSetup">
     <div class="agWelcome" id="agWelcome">${setupWelcome(chosen, first, edit)}</div>
     ${chosen ? `<details class="agOther" ${edit ? '' : ''}><summary>¿No es tu perfil? Cámbialo aquí</summary>${grid}</details>` : `<small class="muted">1. ¿CUÁL ES TU PERFIL?</small>${grid}`}
-    <label class="field"><span class="agQ">¿A qué te dedicas?</span> <span class="muted">(opcional)</span><textarea id="agAbout" rows="3" maxlength="2000" placeholder="Por ejemplo: soy profesora de primaria en Madrid y doy clases de inglés por las tardes.">${esc(s.about || '')}</textarea></label>
-    <label class="field"><span class="agQ">¿En qué quieres que te ayude?</span> <span class="muted">(opcional)</span><textarea id="agGoals" rows="3" maxlength="2000" placeholder="Por ejemplo: organizar mis clases de la semana, no olvidarme de las entregas y preparar materiales.">${esc(s.goals || '')}</textarea></label>
+    <label class="field"><span class="agQ">¿A qué te dedicas?</span> <span class="muted">(opcional)</span><div class="dictationWrap"><textarea id="agAbout" rows="3" maxlength="2000" placeholder="Por ejemplo: soy profesora de primaria en Madrid y doy clases de inglés por las tardes.">${esc(s.about || '')}</textarea><button class="dictateBtn" type="button" onclick="toggleDictation('agAbout',this)" aria-label="Dictar">🎙 <span>Dictar</span></button></div></label>
+    <label class="field"><span class="agQ">¿En qué quieres que te ayude?</span> <span class="muted">(opcional)</span><div class="dictationWrap"><textarea id="agGoals" rows="3" maxlength="2000" placeholder="Por ejemplo: organizar mis clases de la semana, no olvidarme de las entregas y preparar materiales.">${esc(s.goals || '')}</textarea><button class="dictateBtn" type="button" onclick="toggleDictation('agGoals',this)" aria-label="Dictar">🎙 <span>Dictar</span></button></div></label>
     <div class="plannerStep"><small class="agQ">¿TE MANDO CADA MAÑANA UN RESUMEN?</small>
       <label class="toggle"><input type="checkbox" id="agBrief" ${s.brief_enabled === false ? '' : 'checked'}> Sí, un correo con mi agenda, mis pendientes y el siguiente paso</label>
       <label class="field inlineField">Hora (Madrid)<input id="agTime" type="time" value="${esc(time)}"></label></div>
