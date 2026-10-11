@@ -137,19 +137,50 @@ function newsletterDemo() {
 function legalDemo(name) { info(name, 'Los textos legales oficiales de CURO Group se publicarán antes del lanzamiento comercial. Para cualquier consulta: hola@curogroup.net.'); }
 function showPublicPlans() { login('signup'); }
 
-let activeRecognition = null;
-function toggleDictation(targetId, btn) {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return info('Dictado por voz', 'Tu navegador no permite dictar en esta página. Puedes escribir la tarea normalmente.');
-  if (activeRecognition) { try { activeRecognition.stop(); } catch {} activeRecognition = null; return; }
+// Dictado por voz: se graba el audio en el navegador y se pasa a texto en nuestro servidor (Groq Whisper).
+// No depende del reconocimiento de voz del navegador, que en algunos equipos no devuelve texto.
+let activeRecognition = null; // { rec, stream, discard }
+const DICTATION_MAX_MS = 60000;
+function blobToBase64(blob) { return new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = ko; r.readAsDataURL(blob); }); }
+function stopDictation(discard) { if (!activeRecognition) return; activeRecognition.discard = !!discard; try { activeRecognition.rec.stop(); } catch {} }
+async function toggleDictation(targetId, btn) {
+  if (activeRecognition) return stopDictation(false);
   const target = document.getElementById(targetId); if (!target) return;
-  const rec = new SR(); activeRecognition = rec; rec.lang = 'es-ES'; rec.continuous = true; rec.interimResults = true;
-  let base = target.value.trim();
   const label = btn.querySelector('span');
-  rec.onstart = () => { btn.classList.add('listening'); if (label) label.textContent = 'Escuchando…'; };
-  rec.onresult = ev => { let fin = '', tmp = ''; for (let i = ev.resultIndex; i < ev.results.length; i++) { const t = ev.results[i][0].transcript; ev.results[i].isFinal ? fin += t : tmp += t; } if (fin) base = (base ? base + ' ' : '') + fin.trim(); target.value = (base + (tmp ? ' ' + tmp : '')).trim(); };
-  rec.onend = () => { activeRecognition = null; btn.classList.remove('listening'); if (label) label.textContent = 'Dictar'; };
-  try { rec.start(); } catch { activeRecognition = null; }
+  const setLabel = t => { if (label) label.textContent = t; };
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return info('Dictado por voz', 'Tu navegador no permite grabar audio en esta página. Prueba con Chrome, Edge o Safari actualizados, o escribe la tarea normalmente.');
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) {
+    return info('No se pudo usar el micrófono', e?.name === 'NotFoundError' ? 'No encuentro ningún micrófono. Revisa que esté conectado.' : 'El navegador no tiene permiso para usar el micrófono. Toca el candado de la barra de direcciones y permite el micrófono. En Mac, revisa también Ajustes del Sistema → Privacidad y seguridad → Micrófono, y activa tu navegador.');
+  }
+  const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => window.MediaRecorder.isTypeSupported?.(m)) || '';
+  let rec;
+  try { rec = new MediaRecorder(stream, mime ? { mimeType: mime } : {}); } catch { stream.getTracks().forEach(t => t.stop()); return info('Dictado por voz', 'No se pudo empezar a grabar. Recarga la página e inténtalo de nuevo.'); }
+  const chunks = [], started = Date.now();
+  const st = activeRecognition = { rec, stream, discard: false };
+  rec.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
+  const auto = setTimeout(() => stopDictation(false), DICTATION_MAX_MS);
+  rec.onstop = async () => {
+    clearTimeout(auto); stream.getTracks().forEach(t => t.stop());
+    activeRecognition = null; btn.classList.remove('listening');
+    if (st.discard) return setLabel('Dictar');
+    const blob = new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' });
+    if (blob.size < 800) { setLabel('Dictar'); return toast('No te escuché. Toca Dictar y habla de nuevo.', 'warn'); }
+    setLabel('Escribiendo…'); btn.disabled = true;
+    try {
+      const r = await fetch('/api/preview?op=transcribe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ audio: await blobToBase64(blob), mime: blob.type, lang: 'es', seconds: (Date.now() - started) / 1000 }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'No se pudo pasar la voz a texto.');
+      const t = String(j.text || '').trim();
+      const el = document.getElementById(targetId);
+      if (!t) toast('No te escuché bien. Inténtalo de nuevo.', 'warn');
+      else if (el) { el.value = (el.value.trim() ? el.value.trim() + ' ' : '') + t; el.dispatchEvent(new Event('input', { bubbles: true })); el.focus(); }
+    } catch (e) { info('Dictado por voz', e.message); }
+    finally { btn.disabled = false; setLabel('Dictar'); }
+  };
+  rec.start(250);
+  btn.classList.add('listening'); setLabel('Parar');
 }
 
 // ---------- Acceso ----------
@@ -750,7 +781,7 @@ function renderWelcome() {
   document.getElementById('wInput')?.focus();
 }
 function welcomeNext(skip) {
-  if (activeRecognition) { try { activeRecognition.stop(); } catch {} activeRecognition = null; }
+  stopDictation(true);
   const v = skip ? '' : (document.getElementById('wInput')?.value.trim() || '');
   if (welcome.step === 'about') { welcome.about = v; welcome.step = 'goals'; }
   else { welcome.goals = v; welcome.step = 'brief'; }

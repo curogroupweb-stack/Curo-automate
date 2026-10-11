@@ -40,8 +40,52 @@ Reglas:
   return String(res.text || '').replace(/\*\*(.+?)\*\*/g, '$1').replace(/^#{1,6}\s+/gm, '').trim().slice(0, 2000);
 }
 
+// ---- Dictado por voz: audio grabado en el navegador -> texto (Groq Whisper). Sin cuenta, con límites.
+// Lo usan CURO Automate y curogroup.net (por eso permite ese origen).
+const ALLOWED_ORIGINS = ['https://curogroup.net', 'https://www.curogroup.net', 'https://automate.curogroup.net'];
+const TR_PER_IP_DAY = Number(process.env.TRANSCRIBE_PER_IP_DAY || 120);
+const TR_GLOBAL_DAY = Number(process.env.TRANSCRIBE_GLOBAL_DAY || 1500);
+async function transcribe(req, res) {
+  const b = await readBody(req);
+  const audio = String(b.audio || '');
+  if (!audio) throw new HttpError(400, 'No llegó el audio. Inténtalo de nuevo.');
+  const buf = Buffer.from(audio, 'base64');
+  if (buf.length < 800) throw new HttpError(400, 'No te escuché. Toca el micrófono y habla de nuevo.');
+  if (buf.length > 3.5 * 1024 * 1024) throw new HttpError(413, 'El audio es demasiado largo. Dicta en partes más cortas.');
+  const ipHash = hash('t:' + clientIp(req));
+  const [byIp, total] = await Promise.all([
+    count2(`ip_hash=eq.${enc(ipHash)}&created_at=gte.${enc(since(864e5))}`),
+    count2(`created_at=gte.${enc(since(864e5))}`)
+  ]);
+  if (byIp >= TR_PER_IP_DAY || total >= TR_GLOBAL_DAY) throw new HttpError(429, 'Hoy ya usaste mucho el dictado. Puedes seguir escribiendo.');
+  await db.insert('automate_transcriptions', { ip_hash: ipHash, seconds: Math.round(Number(b.seconds) || 0) });
+  const mime = /^audio\/[a-z0-9.+-]+/i.test(b.mime || '') ? String(b.mime).split(';')[0] : 'audio/webm';
+  const ext = mime.includes('mp4') || mime.includes('m4a') || mime.includes('aac') ? 'm4a' : mime.includes('ogg') ? 'ogg' : mime.includes('wav') ? 'wav' : 'webm';
+  const lang = /^[a-z]{2}$/i.test(String(b.lang || '').slice(0, 2)) ? String(b.lang).slice(0, 2).toLowerCase() : 'es';
+  const form = new FormData();
+  form.append('file', new Blob([buf], { type: mime }), 'dictado.' + ext);
+  form.append('model', process.env.GROQ_WHISPER_MODEL || 'whisper-large-v3-turbo');
+  form.append('language', lang);
+  form.append('response_format', 'json');
+  form.append('temperature', '0');
+  const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { authorization: 'Bearer ' + process.env.GROQ_API_KEY }, body: form });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { console.error('[transcribe]', r.status, j?.error?.message); throw new HttpError(502, 'No se pudo pasar la voz a texto ahora. Inténtalo de nuevo en un momento.'); }
+  json(res, 200, { text: String(j.text || '').trim() });
+}
+async function count2(filter) { return (await db.select('automate_transcriptions', `${filter}&select=id&limit=2000`)).length; }
+
 module.exports = handler(async (req, res) => {
+  const origin = req.headers.origin || '';
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('access-control-allow-origin', origin);
+    res.setHeader('vary', 'Origin');
+    res.setHeader('access-control-allow-methods', 'POST, OPTIONS');
+    res.setHeader('access-control-allow-headers', 'content-type');
+  }
+  if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end(); }
   if (req.method !== 'POST') throw new HttpError(405, 'Método no permitido');
+  if ((req.query?.op || new URL(req.url, 'https://x').searchParams.get('op')) === 'transcribe') return transcribe(req, res);
   const { instruction, device } = await readBody(req);
   const text = String(instruction || '').trim();
   if (text.length < 8) throw new HttpError(400, 'Describe con un poco más de detalle qué quieres automatizar.');
