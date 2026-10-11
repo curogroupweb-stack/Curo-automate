@@ -244,3 +244,13 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 .agSay.speaking{background:#f3edff}
 .wListen{margin-top:8px;padding:6px 0;font-weight:700;color:#3b4ff0}
 .agVoiceBtn{white-space:nowrap}
+/* El agente "habla": se mueve con cada palabra y muestra ondas de sonido */
+.agAvatar.talking,.wBig.talking{position:relative;box-shadow:0 0 0 3px #a78bfa,0 0 0 8px #a78bfa33;animation:talkBob 1.1s ease-in-out infinite}
+.agAvatar.pop,.wBig.pop{animation:talkPop .22s ease-out}
+@keyframes talkBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+@keyframes talkPop{0%{transform:scale(1)}45%{transform:scale(1.06) translateY(-2px)}100%{transform:scale(1)}}
+.agHead .agWho{position:relative}
+.agHead .agAvatar.talking+div b::after,.agBotRow .agAvatar.talking~.agMsg::before{content:"";display:inline-block;width:18px;height:12px;margin-left:8px;vertical-align:middle;background:linear-gradient(#7c3aed,#7c3aed) 0 50%/3px 40% no-repeat,linear-gradient(#7c3aed,#7c3aed) 5px 50%/3px 90% no-repeat,linear-gradient(#7c3aed,#7c3aed) 10px 50%/3px 60% no-repeat,linear-gradient(#7c3aed,#7c3aed) 15px 50%/3px 30% no-repeat;animation:talkWave .5s steps(2) infinite}
+.agBotRow .agAvatar.talking~.agMsg::before{float:right;margin:4px 0 0 8px}
+@keyframes talkWave{50%{background-size:3px 80%,3px 40%,3px 90%,3px 60%}}
+@media (prefers-reduced-motion:reduce){.agAvatar.talking,.wBig.talking,.agAvatar.pop,.wBig.pop{animation:none}}

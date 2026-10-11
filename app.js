@@ -834,7 +834,21 @@ function pickVoice() {
 function cleanForSpeech(t) {
   return String(t || '').replace(/https?:\/\/\S+/g, 'el enlace').replace(/[•·▪►*#_`>|]/g, ' ').replace(/\p{Extended_Pictographic}/gu, '').replace(/\s+/g, ' ').trim();
 }
+// Mientras habla: el personaje se mueve al ritmo de las palabras y aparecen ondas de sonido.
+function talkTargets(btn) {
+  const t = [...document.querySelectorAll('.agHead .agAvatar, .wBig')];
+  const row = btn?.closest('.agBotRow'); if (row) t.push(row.querySelector('.agAvatar'));
+  return t.filter(Boolean);
+}
+let talkingEls = [];
+function setTalking(on, btn) {
+  talkingEls.forEach(el => el.classList.remove('talking', 'pop'));
+  talkingEls = on ? talkTargets(btn) : [];
+  talkingEls.forEach(el => el.classList.add('talking'));
+}
+function talkPop() { talkingEls.forEach(el => { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }); }
 function stopSpeaking() {
+  setTalking(false);
   if (!voiceOk()) return;
   try { speechSynthesis.cancel(); } catch {}
   if (voiceBtn) { voiceBtn.classList.remove('speaking'); voiceBtn.textContent = voiceBtn.dataset.label || '🔊'; voiceBtn.setAttribute('aria-label', voiceBtn.dataset.aria || 'Escuchar este mensaje'); voiceBtn = null; }
@@ -850,12 +864,15 @@ function speak(text, btn, force, over) {
   const parts = clean.match(/[^.!?¿¡]+[.!?]*|[¿¡][^?!]+[?!]/g) || [clean];
   const voice = pickVoice();
   const pitch = AGENT_PITCH[agentState?.settings?.profile || welcome?.profile] || 1;
+  setTalking(true, btn);
   if (btn) { voiceBtn = btn; if (!btn.dataset.label) btn.dataset.label = btn.textContent; btn.dataset.aria = btn.getAttribute('aria-label') || ''; btn.classList.add('speaking'); btn.textContent = '⏹' + (btn.classList.contains('wListen') ? ' Parar' : ''); btn.setAttribute('aria-label', 'Dejar de escuchar'); }
   parts.map(s => s.trim()).filter(Boolean).forEach((s, i, arr) => {
     const u = new SpeechSynthesisUtterance(s);
     u.lang = voice?.lang || 'es-ES'; if (voice) u.voice = voice;
     u.volume = Math.max(0, Math.min(1, Number(p.volume) || 1)); u.rate = Number(p.rate) || 1; u.pitch = pitch;
-    if (i === arr.length - 1) u.onend = u.onerror = () => { if (voiceBtn === btn) stopSpeaking(); };
+    u.onboundary = e => { if (e.name === 'word' || e.name === undefined) talkPop(); };
+    u.onstart = () => talkPop();
+    if (i === arr.length - 1) u.onend = u.onerror = () => { setTalking(false); if (voiceBtn === btn) stopSpeaking(); };
     speechSynthesis.speak(u);
   });
   return true;
