@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Prueba piloto CURO</title>
+<link rel="icon" href="https://curogroup.net/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* Guía de recorrido: cabecera fija con progreso; secciones de la web como bloques; cada punto con 6 respuestas posibles. */
+:root{
+  --bg:#f5f7fb; --surface:#ffffff; --ink:#0d1426; --muted:#5b6478; --line:#e3e7f0;
+  --brand:#3b4ff0; --teal:#1fa99a; --violet:#7a3ff2;
+  --ok:#14866d; --ok-bg:#e3f5ef; --bad:#c2372f; --bad-bg:#fdeceb; --warn:#a45f00; --warn-bg:#fdf1de; --info:#3b4ff0; --info-bg:#e9ecff; --neutral-bg:#eef0f5;
+  --display:'Manrope',system-ui,-apple-system,'Segoe UI',sans-serif; --body:'Source Sans 3',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0b1020; --surface:#141a2e; --ink:#eef1fa; --muted:#9aa3ba; --line:#262e47;
+  --brand:#7d8bff; --teal:#3cc9b9; --violet:#a98bff;
+  --ok:#4fd1ae; --ok-bg:#12302a; --bad:#ff8a80; --bad-bg:#3a1c1c; --warn:#ffc266; --warn-bg:#3a2c12; --info:#9aa6ff; --info-bg:#1d2350; --neutral-bg:#1c2338; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b1020; --surface:#141a2e; --ink:#eef1fa; --muted:#9aa3ba; --line:#262e47;
+  --brand:#7d8bff; --teal:#3cc9b9; --violet:#a98bff;
+  --ok:#4fd1ae; --ok-bg:#12302a; --bad:#ff8a80; --bad-bg:#3a1c1c; --warn:#ffc266; --warn-bg:#3a2c12; --info:#9aa6ff; --info-bg:#1d2350; --neutral-bg:#1c2338; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 var(--body);padding-inline:16px;padding-bottom:calc(40px + env(safe-area-inset-bottom,0px))}
+h1,h2,h3{font-family:var(--display);line-height:1.2;text-wrap:balance;margin:0}
+a{color:var(--brand)}
+.wrap{max-width:820px;margin:0 auto}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);margin-inline:-16px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.topin{max-width:820px;margin:0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.logo{font:800 17px var(--display);letter-spacing:-.01em}
+.logo b{background:linear-gradient(90deg,var(--brand),var(--violet),var(--teal));-webkit-background-clip:text;background-clip:text;color:transparent}
+.bar{flex:1;min-width:140px;height:8px;background:var(--neutral-bg);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--brand),var(--teal));transition:width .3s}
+.pct{font:700 14px var(--display);font-variant-numeric:tabular-nums;min-width:3.5em;text-align:right}
+.saved{font-size:13px;color:var(--muted);min-width:7em}
+header.intro{padding-block:28px 8px;display:grid;gap:12px}
+.eyebrow{font:700 12px var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--teal)}
+header.intro h1{font-size:clamp(28px,5vw,40px);letter-spacing:-.02em}
+.lead{color:var(--muted);max-width:62ch;margin:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+.who{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+label.f{display:grid;gap:4px;font-weight:600;font-size:14px}
+input,textarea,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+input:focus,textarea:focus,button:focus-visible,summary:focus-visible{outline:3px solid color-mix(in srgb,var(--brand) 45%,transparent);outline-offset:2px}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none}
+.legend li{font-size:13px}
+.how{display:grid;gap:10px}
+.how ol{margin:0;padding-left:20px;display:grid;gap:4px}
+section.sec{margin-top:22px}
+details.sec-d{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+details.sec-d>summary{list-style:none;cursor:pointer;display:flex;gap:12px;align-items:center;padding:16px 18px}
+details.sec-d>summary::-webkit-details-marker{display:none}
+.sec-n{font:800 13px var(--display);color:var(--brand);background:var(--info-bg);border-radius:8px;padding:4px 8px;font-variant-numeric:tabular-nums}
+.sec-t{flex:1;min-width:0}
+.sec-t h2{font-size:19px}
+.sec-t p{margin:2px 0 0;color:var(--muted);font-size:14px}
+.sec-c{font:700 13px var(--display);color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sec-c.done{color:var(--ok)}
+.items{border-top:1px solid var(--line)}
+.it{padding:14px 18px;border-bottom:1px solid var(--line);display:grid;gap:8px}
+.it:last-child{border-bottom:0}
+.it h3{font:700 16px var(--display)}
+.it .do{margin:0;color:var(--muted);font-size:15px}
+.it .exp{margin:0;font-size:14px}
+.it .exp b{color:var(--teal)}
+.it .go{font-size:14px;font-weight:600}
+.st{display:flex;flex-wrap:wrap;gap:6px}
+.st button{font:600 13px var(--body);border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:99px;padding:6px 11px;cursor:pointer;min-height:34px}
+.st button[aria-pressed="true"][data-s="ok"]{background:var(--ok-bg);border-color:var(--ok);color:var(--ok)}
+.st button[aria-pressed="true"][data-s="error"]{background:var(--bad-bg);border-color:var(--bad);color:var(--bad)}
+.st button[aria-pressed="true"][data-s="noresponde"]{background:var(--bad-bg);border-color:var(--bad);color:var(--bad)}
+.st button[aria-pressed="true"][data-s="noentiendo"]{background:var(--warn-bg);border-color:var(--warn);color:var(--warn)}
+.st button[aria-pressed="true"][data-s="falta"]{background:var(--info-bg);border-color:var(--info);color:var(--info)}
+.st button[aria-pressed="true"][data-s="noprobe"]{background:var(--neutral-bg);border-color:var(--muted);color:var(--muted)}
+.note{display:none}
+.it.needs .note,.it.hasnote .note{display:block}
+.note textarea{min-height:64px;resize:vertical;font-size:15px}
+.tip{font-size:13px;color:var(--muted);margin:0}
+.final{display:grid;gap:14px}
+.send{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.btn{font:700 15px var(--display);border:0;border-radius:12px;padding:13px 20px;cursor:pointer;color:#fff;background:linear-gradient(90deg,var(--brand),var(--violet))}
+.btn[disabled]{opacity:.6;cursor:default}
+.msg{font-size:14px;color:var(--muted)}
+.msg.ok{color:var(--ok)} .msg.bad{color:var(--bad)}
+footer{color:var(--muted);font-size:13px;margin-top:28px;text-align:center}
+@media (max-width:520px){.it{padding:14px}.st button{flex:1 1 calc(50% - 6px)}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="top"><div class="topin">
+  <span class="logo"><b>CURO</b> · Prueba piloto</span>
+  <div class="bar" aria-hidden="true"><i id="barFill"></i></div>
+  <span class="pct" id="pct">0 %</span>
+  <span class="saved" id="saved" aria-live="polite"></span>
+</div></div>
+
+<main class="wrap">
+<header class="intro">
+  <span class="eyebrow">Guía para quien prueba la web</span>
+  <h1>Recorre CURO y cuéntanos qué encuentras</h1>
+  <p class="lead">Gracias por ayudarnos antes del lanzamiento. Ve punto por punto: abre lo que se indica, pruébalo y marca cómo te fue. Si algo falla o no se entiende, escribe un comentario corto. Tus respuestas se guardan solas mientras avanzas.</p>
+</header>
+
+<div class="card who" id="who">
+  <label class="f" for="tName">Tu nombre<input id="tName" autocomplete="name" placeholder="Por ejemplo: Laura"></label>
+  <label class="f" for="tEmail">Tu correo (el que usarás para registrarte)<input id="tEmail" type="email" autocomplete="email" placeholder="tu@correo.com"></label>
+  <label class="f" for="tDevice">¿Con qué lo pruebas?<input id="tDevice" placeholder="Por ejemplo: portátil Mac con Chrome, móvil Android"></label>
+</div>
+
+<div class="card how" style="margin-top:14px">
+  <h2 style="font-size:18px">Cómo marcar cada punto</h2>
+  <ul class="legend">
+    <li><b style="color:var(--ok)">Funciona bien</b>: hizo lo que esperabas.</li>
+    <li><b style="color:var(--bad)">Error</b>: salió un mensaje de error o algo se rompió.</li>
+    <li><b style="color:var(--bad)">El botón no responde</b>: pulsaste y no pasó nada.</li>
+    <li><b style="color:var(--warn)">No lo entiendo</b>: no sabías qué hacer o qué significaba.</li>
+    <li><b style="color:var(--info)">Falta algo</b>: esperabas encontrar algo que no está.</li>
+    <li><b style="color:var(--muted)">No lo probé</b>: no pudiste o no aplicaba.</li>
+  </ul>
+  <p class="tip">Si marcas cualquier cosa que no sea «Funciona bien», se abre un cuadro para que lo cuentes. Una captura de pantalla ayuda mucho: puedes mandarla a hola@curogroup.net indicando el número del punto.</p>
+</div>
+
+<div id="sections"></div>
+
+<section class="sec">
+  <div class="card final">
+    <h2 style="font-size:20px">Para terminar: tu impresión general</h2>
+    <label class="f" for="g_util">¿Qué te pareció lo más útil de CURO?<textarea id="g_util" data-g="util"></textarea></label>
+    <label class="f" for="g_confuso">¿Qué fue lo más confuso o lo que más te costó?<textarea id="g_confuso" data-g="confuso"></textarea></label>
+    <label class="f" for="g_falta">¿Qué echaste de menos?<textarea id="g_falta" data-g="falta"></textarea></label>
+    <label class="f" for="g_pagaria">¿Pagarías por algo de lo que viste? ¿Por qué y cuánto, más o menos?<textarea id="g_pagaria" data-g="pagaria"></textarea></label>
+    <label class="f" for="g_nota">Del 1 al 10, ¿recomendarías CURO a alguien?<input id="g_nota" data-g="nota" inputmode="numeric" maxlength="2" placeholder="1 a 10"></label>
+    <div class="send">
+      <button class="btn" id="sendBtn" type="button">Enviar mis respuestas</button>
+      <span class="msg" id="sendMsg" aria-live="polite"></span>
+    </div>
+    <p class="tip">Puedes enviar aunque no hayas terminado todo. Si vuelves más tarde desde este mismo navegador, seguirás donde lo dejaste.</p>
+  </div>
+</section>
+
+<footer>CURO Group · Madrid · Dudas: hola@curogroup.net</footer>
+</main>
+
+<script>
+const S = [
+  { id:'a', t:'Primer vistazo a curogroup.net', d:'Sin iniciar sesión. Como si llegaras por primera vez.', items:[
+    ['a1','Abrir la web','Entra en curogroup.net.','Carga en pocos segundos y se entiende de qué va CURO.','https://curogroup.net'],
+    ['a2','Buscador de la portada','Escribe algo que quieras aprender o comprar (por ejemplo «aprender inteligencia artificial») y pulsa Buscar.','Aparecen resultados útiles y relacionados con lo que buscaste.'],
+    ['a3','Las 5 tarjetas de inicio','Pulsa una a una: Servicios IA para empresas, E-learning, Comparar, Recursos y Automatizar tareas con IA.','Cada tarjeta lleva a la sección que promete.'],
+    ['a4','Idioma y Región','Arriba a la derecha, prueba el selector de idioma y el de Región.','Cambian sin errores y la página sigue viéndose bien.'],
+    ['a5','Ayuda','Pulsa «Ayuda» arriba.','Encuentras cómo pedir ayuda o contactar.'],
+    ['a6','Pregúntale a CURO','Abre el asistente «Pregúntale a CURO» (abajo a la derecha) y hazle una pregunta.','Responde algo útil. Si no sabe, te sugiere escribir a hola@curogroup.net.'],
+    ['a7','Mi ruta','Pulsa «Mi ruta» (abajo a la izquierda).','Entiendes para qué sirve.']
+  ]},
+  { id:'b', t:'Crear cuenta e iniciar sesión', d:'Usa tu correo real para poder recibir los correos de CURO.', items:[
+    ['b1','Crear cuenta','Pulsa «Crear cuenta», rellena tus datos y regístrate.','Te registras sin problemas y queda claro qué pasa después.'],
+    ['b2','Correo de bienvenida','Revisa tu correo (mira también Spam y Promociones).','Recibes un correo de CURO desde hola@curogroup.net con el logo.'],
+    ['b3','Cerrar sesión','Busca dónde cerrar sesión y ciérrala.','Lo encuentras fácil y se cierra.'],
+    ['b4','Iniciar sesión','Pulsa «Iniciar sesión» y entra con tu correo y contraseña.','Entras y ves que estás dentro de tu cuenta.'],
+    ['b5','He olvidado mi contraseña','Prueba «¿Olvidaste tu contraseña?» (si quieres, sin cambiarla).','Llega el correo para cambiarla y el proceso se entiende.']
+  ]},
+  { id:'c', t:'Recorrer el menú de la izquierda', d:'Abre cada apartado y sus submenús.', items:[
+    ['c1','Inicio','Pulsa «Inicio».','Vuelves a la portada.'],
+    ['c2','Comparar','Abre «Comparar» y prueba a comparar dos opciones.','Entiendes cómo funciona y el resultado ayuda a decidir.'],
+    ['c3','Recursos','Abre «Recursos» y entra en Creadores, Blogs/Webs, Redes sociales y Más recursos.','Cada apartado tiene contenido y se entiende qué es.'],
+    ['c4','Productos CURO','En «Productos», abre «Ver Productos CURO».','Ves los productos con su precio y su descripción.'],
+    ['c5','CURO IA','Abre CURO IA: 50 IA Herramientas, Crear con IA, CURO IA PACKS y CURO PATH.','Cada uno abre y se entiende para qué sirve.'],
+    ['c6','Productos recomendados','Abre «Productos recomendados».','Ves recomendaciones con sentido.'],
+    ['c7','Servicios','Abre «Servicios» y luego «Soluciones IA».','Entiendes qué ofrece CURO a empresas y cómo contactar.'],
+    ['c8','Blog','Abre el «BLOG» y lee un artículo.','Los artículos abren y se leen bien.'],
+    ['c9','Elearning','Abre «Elearning» y «Cursos».','Ves los cursos o un aviso claro de que llegan pronto.'],
+    ['c10','Descargas','Abre «Descargas» y descarga algún material.','La descarga funciona.']
+  ]},
+  { id:'d', t:'Tienda', d:'No hace falta pagar nada: solo comprobar el camino.', items:[
+    ['d1','Tienda CURO','En la portada, pulsa «Ver tienda CURO».','Ves los productos con precio.'],
+    ['d2','Ver un producto','Pulsa «Ver producto» en alguno.','Se abre la ficha con la información necesaria para decidir.'],
+    ['d3','Botón de compra','Pulsa el botón de comprar y para antes de pagar.','Llegas a una pantalla de pago clara y segura. No completes el pago.']
+  ]},
+  { id:'e', t:'CURO Automate (automatizar tareas con IA)', d:'Empieza con la sesión cerrada, como alguien que aún no tiene cuenta.', items:[
+    ['e1','Entrar sin cuenta','Con la sesión cerrada, pulsa «⚡ Automatizar con IA» en el menú.','Se abre CURO Automate sin pedirte cuenta.'],
+    ['e2','Probar una automatización','Escribe con tus palabras algo que harías cada semana (por ejemplo «cada lunes, mándame las noticias de educación») y pulsa «Crear mi automatización».','Ves una vista previa clara: cuándo se ejecuta, qué hará y un ejemplo del resultado.'],
+    ['e3','Activarla','Pulsa «Activar mi automatización» e inicia sesión (o crea tu cuenta).','Vuelves a Automate y tu automatización aparece lista para «Guardar y activar».'],
+    ['e4','Conectar Gmail','Si te lo pide, pulsa «Conectar Gmail» y acepta los permisos.','Vuelves con el mensaje «Gmail conectado». (Si Google muestra un aviso de app en pruebas, es normal en esta fase: marca «No lo entiendo» si te confundió.)'],
+    ['e5','Guardar y activar','Pulsa «Guardar y activar».','Aparece «Automatización activada» y dice cuándo se ejecutará.'],
+    ['e6','Probar ahora','Pulsa «Probar ahora» y espera.','En uno o dos minutos ves el resultado y te llega el correo.'],
+    ['e7','Mis automatizaciones','Abre «Automatizaciones» en el menú de Automate. Prueba a pausarla y reactivarla.','La ves en la lista y los botones funcionan.'],
+    ['e8','Historial y Aprobaciones','Abre «Historial» y «Aprobaciones».','Entiendes qué muestra cada pantalla.'],
+    ['e9','Conocimiento','Abre «Conocimiento» y añade una nota sobre ti o tu trabajo.','Entiendes para qué sirve y la nota se guarda.'],
+    ['e10','Una segunda automatización','Crea otra automatización distinta.','Se crea sin problemas (tienes 2 gratis).'],
+    ['e11','La tercera','Intenta crear una tercera.','Aparece un aviso claro de que a partir de aquí es de pago.'],
+    ['e12','Volver a CURO','Pulsa «Volver a CURO Group».','Vuelves a la web principal.']
+  ]},
+  { id:'f', t:'Contacto, newsletter y textos legales', d:'', items:[
+    ['f1','Escribir a CURO','Envía un correo a hola@curogroup.net con una pregunta cualquiera.','Recibes una respuesta amable de CURO (puede tardar porque la revisamos antes de enviarla).'],
+    ['f2','Newsletter','Suscríbete a la newsletter desde la web.','Te confirma la suscripción.'],
+    ['f3','Textos legales','Abajo del todo, abre Aviso legal, Privacidad, Términos y Cookies.','Todos abren y se leen.'],
+    ['f4','Redes sociales','Prueba los enlaces a Instagram, TikTok, YouTube y LinkedIn.','Llevan a las cuentas de CURO.']
+  ]},
+  { id:'g', t:'En el móvil', d:'Repite lo básico desde tu teléfono.', items:[
+    ['g1','Portada en el móvil','Abre curogroup.net en el móvil.','Se ve bien, sin textos cortados ni cosas fuera de la pantalla.'],
+    ['g2','Menú en el móvil','Abre el menú y navega por varias secciones.','El menú se abre, se cierra y es fácil de usar con el dedo.'],
+    ['g3','Automate en el móvil','Abre CURO Automate en el móvil y mira tus automatizaciones.','Se ve bien y los botones se pulsan con facilidad.']
+  ]}
+];
+const STATUS = [['ok','Funciona bien'],['error','Error'],['noresponde','El botón no responde'],['noentiendo','No lo entiendo'],['falta','Falta algo'],['noprobe','No lo probé']];
+const TOTAL = S.reduce((n,s)=>n+s.items.length,0);
+const KEY='curo_piloto_v1';
+let st = load();
+function load(){ try { const v = JSON.parse(localStorage.getItem(KEY)||'null'); if (v && v.id) return v; } catch {} return { id:newId(), tester:{}, device:'', answers:{}, general:{}, open:{a:true} }; }
+function newId(){ try { return crypto.randomUUID(); } catch { return Date.now().toString(36)+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2); } }
+function persist(){ try { localStorage.setItem(KEY, JSON.stringify(st)); } catch {} }
+const esc = v => String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function render(){
+  const box = document.getElementById('sections');
+  box.innerHTML = S.map((s,si)=>`
+  <section class="sec"><details class="sec-d" data-sec="${s.id}" ${st.open[s.id]?'open':''}>
+    <summary><span class="sec-n">${String.fromCharCode(65+si)}</span><span class="sec-t"><h2>${esc(s.t)}</h2>${s.d?`<p>${esc(s.d)}</p>`:''}</span><span class="sec-c" id="c_${s.id}"></span></summary>
+    <div class="items">${s.items.map(([id,t,doo,exp,link],ii)=>`
+      <div class="it" id="it_${id}" data-id="${id}">
+        <h3>${String.fromCharCode(65+si)}${ii+1}. ${esc(t)}</h3>
+        <p class="do">${esc(doo)}${link?` <a class="go" href="${link}" target="_blank" rel="noopener">Abrir ↗</a>`:''}</p>
+        <p class="exp"><b>Debería pasar:</b> ${esc(exp)}</p>
+        <div class="st" role="group" aria-label="Resultado de ${esc(t)}">${STATUS.map(([k,l])=>`<button type="button" data-s="${k}" aria-pressed="false">${l}</button>`).join('')}</div>
+        <div class="note"><label class="f" for="n_${id}">Cuéntanos qué pasó<textarea id="n_${id}" placeholder="Qué hiciste, qué esperabas y qué ocurrió"></textarea></label></div>
+      </div>`).join('')}
+    </div></details></section>`).join('');
+  for (const [id,a] of Object.entries(st.answers)) paintItem(id,a);
+  updateProgress();
+}
+function paintItem(id,a){
+  const el = document.getElementById('it_'+id); if (!el) return;
+  el.querySelectorAll('.st button').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.s===a.status)));
+  el.classList.toggle('needs', !!a.status && a.status!=='ok');
+  el.classList.toggle('hasnote', !!a.note);
+  const ta = el.querySelector('textarea'); if (ta && document.activeElement!==ta) ta.value = a.note||'';
+}
+function updateProgress(){
+  let done=0;
+  for (const s of S){ const n = s.items.filter(([id])=>st.answers[id]?.status).length; done+=n;
+    const c=document.getElementById('c_'+s.id); if(c){ c.textContent=`${n} / ${s.items.length}`; c.classList.toggle('done', n===s.items.length); } }
+  const p = Math.round(done*100/TOTAL);
+  document.getElementById('barFill').style.width = p+'%';
+  document.getElementById('pct').textContent = p+' %';
+  return p;
+}
+
+// Guardado automático en el servidor (con pausa para no enviar en cada tecla)
+let tmr=null, sending=false;
+function scheduleSave(){ persist(); clearTimeout(tmr); tmr=setTimeout(()=>save(false), 2500); }
+async function save(finished){
+  if (sending) return; sending=true;
+  const saved=document.getElementById('saved'); saved.textContent='Guardando…';
+  try {
+    const r = await fetch('/api/feedback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({ id:st.id, tester:st.tester, device:st.device, answers:st.answers, general:st.general, progress:updateProgress(), finished:!!finished })});
+    if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.error||'Error '+r.status); }
+    saved.textContent='Guardado ✓'; return true;
+  } catch(e){ saved.textContent='Sin guardar en línea'; if(finished) throw e; return false; }
+  finally { sending=false; }
+}
+
+document.addEventListener('click', e=>{
+  const b = e.target.closest('.st button'); if(!b) return;
+  const id = b.closest('.it').dataset.id;
+  const a = st.answers[id] || {};
+  a.status = a.status===b.dataset.s ? '' : b.dataset.s;
+  st.answers[id]=a; paintItem(id,a); updateProgress(); scheduleSave();
+  if (a.status && a.status!=='ok') setTimeout(()=>document.getElementById('n_'+id)?.focus(),50);
+});
+document.addEventListener('input', e=>{
+  const t=e.target;
+  if (t.id && t.id.startsWith('n_')){ const id=t.id.slice(2); const a=st.answers[id]||{}; a.note=t.value; st.answers[id]=a; t.closest('.it').classList.toggle('hasnote',!!t.value); scheduleSave(); }
+  else if (t.dataset.g){ st.general[t.dataset.g]=t.value; scheduleSave(); }
+  else if (t.id==='tName'){ st.tester.name=t.value; scheduleSave(); }
+  else if (t.id==='tEmail'){ st.tester.email=t.value; scheduleSave(); }
+  else if (t.id==='tDevice'){ st.device=t.value; scheduleSave(); }
+});
+document.addEventListener('toggle', e=>{ const d=e.target; if(d.matches && d.matches('details.sec-d')){ st.open[d.dataset.sec]=d.open; persist(); } }, true);
+document.getElementById('sendBtn').addEventListener('click', async ()=>{
+  const btn=document.getElementById('sendBtn'), msg=document.getElementById('sendMsg');
+  if(!st.tester.name){ msg.className='msg bad'; msg.textContent='Escribe tu nombre arriba para que sepamos de quién son las respuestas.'; document.getElementById('tName').focus(); return; }
+  btn.disabled=true; msg.className='msg'; msg.textContent='Enviando…';
+  clearTimeout(tmr);
+  try { await save(true); msg.className='msg ok'; msg.textContent='¡Recibido! Muchas gracias por tu ayuda.'; }
+  catch(e){ msg.className='msg bad'; msg.textContent='No se pudo enviar ('+e.message+'). Inténtalo de nuevo en un momento.'; }
+  finally { btn.disabled=false; }
+});
+
+document.getElementById('tName').value = st.tester.name||'';
+document.getElementById('tEmail').value = st.tester.email||'';
+document.getElementById('tDevice').value = st.device||'';
+document.querySelectorAll('[data-g]').forEach(el=>el.value=st.general[el.dataset.g]||'');
+render();
+</script>
+</body>
+</html>
