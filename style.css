@@ -195,3 +195,6 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 .agAvatar.big{width:56px;height:56px}
 .agBotRow{display:flex;gap:8px;align-items:flex-end;align-self:flex-start;max-width:92%}.agBotRow .agMsg{max-width:100%}
 @media(max-width:560px){.agCards{grid-template-columns:1fr 1fr;gap:10px}.agCardBody{padding:10px 10px 12px;gap:6px}.agCardBody h3{font-size:18px}.agCardBody p{font-size:13px}.agCardBody ul{display:none}.agCardFor{font-size:10px;padding:3px 7px}.agCardBody .btn{padding:10px 8px;font-size:13px}}
+/* 8 agentes siempre en filas completas: 4 por fila en pantalla grande, 2 en tablet y móvil */
+.agCards{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:1000px){.agCards{grid-template-columns:repeat(2,minmax(0,1fr))}}
