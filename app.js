@@ -630,7 +630,7 @@ const AGENT_STARTERS = {
 
 function agentsLanding() {
   window.scrollTo(0, 0);
-  A.innerHTML = `<header class="top"><a class="brand brandLink" href="https://curogroup.net/" title="Volver a CURO Group"><span class="grad">CURO</span> Automate</a><div class="topnav"><a class="backCuro" href="https://curogroup.net/">← CURO Group</a><button class="btn ghost" onclick="home()">Otras formas</button></div></header>
+  A.innerHTML = `<header class="top"><a class="brand brandLink" href="https://curogroup.net/" title="Volver a CURO Group"><span class="grad">CURO</span> Automate</a><div class="topnav"><a class="backCuro" href="https://curogroup.net/">← CURO Group</a>${session ? `<button class="btn ghost" onclick="go('Inicio')">Volver a Automate</button>` : `<button class="btn ghost" onclick="home()">Otras formas</button>`}</div></header>
   <main class="agLanding">
     <section class="agHero">
       <span class="pill">TU AGENTE IA PERSONAL · AGENTES AIA</span>
@@ -771,7 +771,11 @@ async function agentPage() {
   catch (e) { return shell('Mi agente', `<div class="card"><p>${esc(e.message)}</p><button class="btn primary" onclick="go('Mi agente')">Reintentar</button></div>`); }
   // Si eligió un agente en la presentación, se abre la elección con ese agente marcado (también si ya tenía uno).
   // Primera vez: bienvenida en el centro con el agente elegido (o la elección de perfil).
-  if (!agentState.settings) return agentWelcome(takeAgentPick());
+  if (!agentState.settings) {
+    const pk = takeAgentPick();
+    // Sin perfil elegido todavía: se muestra la presentación de los 9 agentes; al elegir, el agente saluda.
+    return pk ? agentWelcome(pk) : agentsLanding();
+  }
   const pick = lrecall('curo_agent_pick');
   pick ? agentSetup(true) : renderAgent();
 }
