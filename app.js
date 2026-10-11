@@ -958,6 +958,13 @@ function startPage() {
   return p;
 }
 async function boot() {
+  // Sesión que manda curogroup.net en el enlace (#access_token=…&refresh_token=…): se toma explícitamente,
+  // porque si al enlace le falta algún dato la librería la descarta sin avisar.
+  const hp = new URLSearchParams(location.hash.slice(1));
+  if (hp.get('access_token') && hp.get('refresh_token')) {
+    try { await sb.auth.setSession({ access_token: hp.get('access_token'), refresh_token: hp.get('refresh_token') }); } catch {}
+    history.replaceState({}, '', location.pathname + location.search);
+  }
   const q = new URLSearchParams(location.search);
   const googleResult = q.get('google'), reason = q.get('reason');
   if (googleResult) history.replaceState({}, '', location.pathname);
