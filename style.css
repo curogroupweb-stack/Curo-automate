@@ -254,3 +254,11 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 .agBotRow .agAvatar.talking~.agMsg::before{float:right;margin:4px 0 0 8px}
 @keyframes talkWave{50%{background-size:3px 80%,3px 40%,3px 90%,3px 60%}}
 @media (prefers-reduced-motion:reduce){.agAvatar.talking,.wBig.talking,.agAvatar.pop,.wBig.pop{animation:none}}
+/* Agentes sin fondo: la figura queda suelta sobre la página (lista para animarla después) */
+.agCardPic{background:linear-gradient(180deg,#fbf3e6,#fff)}
+.agCardPic img{object-fit:contain;padding:10px 0 0}
+.agHeroRow img{border-radius:0;border:0;box-shadow:none;object-fit:contain;background:none;filter:drop-shadow(0 6px 8px #1f2a4422)}
+.profilePic,.agWelcomePic,.agPickModal img,.wBig{background:none!important;border-radius:0!important;object-fit:contain}
+.wBig{filter:drop-shadow(0 12px 16px #1f2a4422)}
+.agAvatar{border-radius:0;border:0;box-shadow:none;object-fit:contain;background:none}
+.agAvatar.talking,.wBig.talking{box-shadow:none;filter:drop-shadow(0 0 6px #a78bfa)}

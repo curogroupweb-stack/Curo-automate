@@ -662,7 +662,7 @@ const AGENTS = [
   { key: 'profesional', name: 'Hachi', animal: 'el perrito', label: 'Profesionales', vibe: 'Amable y organizado', help: 'Para médicos, abogados, psicólogos, secretarios y administrativos: citas, consultas, casos y documentos en orden.', ex: ['Te recuerda citas, consultas y trámites', 'Ordena el seguimiento de cada caso'] },
   { key: 'descubridor', name: 'Sandy', animal: 'la ratita', label: 'Descubridor/a', vibe: 'Tierna y curiosa', help: 'Para quien busca de todo un poco: guarda lo que te interesa, lo que quieres aprender, comprar o visitar.', ex: ['Lista de cosas que quieres aprender', 'Guarda ideas, viajes y compras pensadas'] }
 ];
-const agentImg = k => `img/agentes/${k}.jpg?v=2`;
+const agentImg = k => `img/agentes/${k}.png?v=3`;
 const agentByKey = k => AGENTS.find(a => a.key === k) || AGENTS[AGENTS.length - 1];
 // Frases para empezar a hablar con el agente (chat vacío), según el perfil.
 const AGENT_STARTERS = {
@@ -749,7 +749,7 @@ function openAgent() {
 // ---------- Bienvenida del agente (primera vez): en el centro, con las preguntas de a una ----------
 // Poses disponibles por agente; si falta alguna se usa la imagen fija.
 const AGENT_POSES = { profesional: ['saluda', 'celebra', 'ups', 'duerme'], descubridor: ['saluda'] };
-const agentPose = (k, pose) => (AGENT_POSES[k] || []).includes(pose) ? `img/agentes/${k}-${pose}.jpg?v=1` : agentImg(k);
+const agentPose = (k, pose) => (AGENT_POSES[k] || []).includes(pose) ? `img/agentes/${k}-${pose}.png?v=3` : agentImg(k);
 let welcome = null;
 function agentWelcome(pickKey) {
   if (pickKey && lrecall('curo_pick_login')) { lstore('curo_pick_login', null); setTimeout(() => toast('Ya tenías tu sesión de CURO abierta, así que entraste directo.'), 400); }
