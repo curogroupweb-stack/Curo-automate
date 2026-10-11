@@ -772,6 +772,8 @@ async function agentPage() {
   // Si eligió un agente en la presentación, se abre la elección con ese agente marcado (también si ya tenía uno).
   // Primera vez: bienvenida en el centro con el agente elegido (o la elección de perfil).
   if (!agentState.settings) {
+    // Si la bienvenida ya está en marcha (la página se carga dos veces al entrar), se sigue donde estaba.
+    if (welcome?.profile) return renderWelcome();
     const pk = takeAgentPick();
     // Sin perfil elegido todavía: se muestra la presentación de los 9 agentes; al elegir, el agente saluda.
     return pk ? agentWelcome(pk) : agentsLanding();
