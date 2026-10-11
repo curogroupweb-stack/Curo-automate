@@ -3,7 +3,23 @@
 const SB_URL = 'https://llugctysxrkqpydyhnvw.supabase.co';
 const SB_KEY = 'sb_publishable_RPo3-Vb7rZ9A7R1dXsH11Q_h5iKXT64';
 const A = document.getElementById('app');
-const sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+// Sesión compartida con curogroup.net: cookies del dominio .curogroup.net (en trozos), con la misma clave
+// que usa la plataforma. Así las dos páginas usan la MISMA sesión y no se anulan entre sí al renovarla.
+function curoSharedStorage() {
+  const DOM = /(^|\.)curogroup\.net$/.test(location.hostname) ? '; domain=.curogroup.net' : '';
+  if (!DOM) return undefined; // en local se usa el almacenamiento normal
+  const MAX = 3000;
+  const read = k => { const all = document.cookie ? document.cookie.split('; ') : []; const parts = []; for (let i = 0; i < 20; i++) { const pre = k + '.' + i + '='; const c = all.find(x => x.startsWith(pre)); if (c === undefined) break; parts.push(c.slice(pre.length)); } if (!parts.length) return null; try { return decodeURIComponent(parts.join('')); } catch { return null; } };
+  const del = k => { for (let i = 0; i < 20; i++) document.cookie = k + '.' + i + '=; max-age=0; path=/' + DOM; };
+  return {
+    getItem: k => read(k),
+    setItem: (k, v) => { const enc = encodeURIComponent(v); del(k); for (let i = 0; i * MAX < enc.length; i++) document.cookie = k + '.' + i + '=' + enc.slice(i * MAX, (i + 1) * MAX) + '; max-age=31536000; path=/; secure; samesite=lax' + DOM; },
+    removeItem: k => del(k)
+  };
+}
+// La copia vieja de la sesión que Automate guardaba por su cuenta ya no se usa.
+try { localStorage.removeItem('sb-llugctysxrkqpydyhnvw-auth-token'); } catch {}
+const sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, ...(curoSharedStorage() ? { storage: curoSharedStorage() } : {}) } });
 let session = null, me = null, currentPage = 'Inicio';
 const CONTACT_EMAIL = 'hola@curogroup.net';
 const contactLink = (label = CONTACT_EMAIL) => `<a href="mailto:${CONTACT_EMAIL}">${label}</a>`;
@@ -997,7 +1013,8 @@ async function boot() {
   // porque si al enlace le falta algún dato la librería la descarta sin avisar.
   const hp = new URLSearchParams(location.hash.slice(1));
   if (hp.get('access_token') && hp.get('refresh_token')) {
-    try { await sb.auth.setSession({ access_token: hp.get('access_token'), refresh_token: hp.get('refresh_token') }); } catch {}
+    const had = (await sb.auth.getSession()).data.session;
+    if (!had) { try { await sb.auth.setSession({ access_token: hp.get('access_token'), refresh_token: hp.get('refresh_token') }); } catch {} }
     history.replaceState({}, '', location.pathname + location.search);
   }
   const q = new URLSearchParams(location.search);
