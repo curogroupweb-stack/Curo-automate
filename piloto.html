@@ -82,6 +82,8 @@ details.sec-d>summary::-webkit-details-marker{display:none}
 .it.needs .note,.it.hasnote .note{display:block}
 .note textarea{min-height:64px;resize:vertical;font-size:15px}
 .tip{font-size:13px;color:var(--muted);margin:0}
+.it.extra{background:color-mix(in srgb,var(--info-bg) 45%,transparent)}
+.it.extra textarea{min-height:70px}
 .final{display:grid;gap:14px}
 .send{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .btn{font:700 15px var(--display);border:0;border-radius:12px;padding:13px 20px;cursor:pointer;color:#fff;background:linear-gradient(90deg,var(--brand),var(--violet))}
@@ -124,7 +126,7 @@ footer{color:var(--muted);font-size:13px;margin-top:28px;text-align:center}
     <li><b style="color:var(--info)">Falta algo</b>: esperabas encontrar algo que no está.</li>
     <li><b style="color:var(--muted)">No lo probé</b>: no pudiste o no aplicaba.</li>
   </ul>
-  <p class="tip">Si marcas cualquier cosa que no sea «Funciona bien», se abre un cuadro para que lo cuentes. Una captura de pantalla ayuda mucho: puedes mandarla a hola@curogroup.net indicando el número del punto.</p>
+  <p class="tip">Si marcas cualquier cosa que no sea «Funciona bien», se abre un cuadro para que escribas qué pasó. Y al final de cada parte hay otro cuadro para contar cualquier problema que no esté en la lista. Una captura de pantalla ayuda mucho: puedes mandarla a hola@curogroup.net indicando el número del punto.</p>
 </div>
 
 <div id="sections"></div>
@@ -231,7 +233,9 @@ function render(){
         <div class="st" role="group" aria-label="Resultado de ${esc(t)}">${STATUS.map(([k,l])=>`<button type="button" data-s="${k}" aria-pressed="false">${l}</button>`).join('')}</div>
         <div class="note"><label class="f" for="n_${id}">Cuéntanos qué pasó<textarea id="n_${id}" placeholder="Qué hiciste, qué esperabas y qué ocurrió"></textarea></label></div>
       </div>`).join('')}
+      <div class="it extra"><label class="f" for="x_${s.id}">¿Encontraste algo más en esta parte que no está en la lista? Escríbelo aquí<textarea id="x_${s.id}" data-g="sec_${s.id}" placeholder="Por ejemplo: en la pantalla X, el botón Y no hace nada; o este texto no se entiende…"></textarea></label></div>
     </div></details></section>`).join('');
+  document.querySelectorAll('[data-g]').forEach(el=>el.value=st.general[el.dataset.g]||'');
   for (const [id,a] of Object.entries(st.answers)) paintItem(id,a);
   updateProgress();
 }
