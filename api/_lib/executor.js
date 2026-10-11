@@ -111,9 +111,23 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
       const selfReport = planSends && !sentAlready && ['schedule', 'manual'].includes(automation.trigger_type) && connections.email;
       if (selfReport && (turn >= MAX_TURNS - 3 || searchesDone)) {
         messages.push({ role: 'user', content: 'Ya tienes información suficiente. No uses más herramientas. Escribe ahora el correo completo, listo para enviar, como respuesta normal. La primera línea debe ser "Asunto: ..." y a continuación el cuerpo del correo en texto limpio (sin Markdown). Si son noticias o artículos: un bloque por cada una (título, 2-3 líneas de resumen y, como última línea del bloque, solo el enlace completo https://… tomado de los resultados).' });
-        const res = await chat({ system, messages: compact(messages), tools: defs, toolChoice: 'none', maxTokens: 2000, deadline });
-        usage.input += res.usage.input; usage.output += res.usage.output; usage.turns++;
-        let text = String(res.text || '').trim();
+        let text = '';
+        try {
+          const res = await chat({ system, messages: compact(messages), tools: defs, toolChoice: 'none', maxTokens: 2500, deadline });
+          usage.input += res.usage.input; usage.output += res.usage.output; usage.turns++;
+          text = String(res.text || '').trim();
+        } catch (e) { console.error('[curo-automate] redacción con historial falló:', e.message); }
+        // Segundo intento: conversación nueva y corta, sin herramientas, solo con los datos reunidos.
+        if (!text) {
+          const datos = messages.filter(m => m.role === 'tool').map(m => m.content).join('\n\n').slice(0, 7000);
+          try {
+            const res2 = await chat({ system, messages: [{ role: 'user', content: `Datos reunidos (resultados de búsquedas y lecturas):\n${datos}\n\n${messages[messages.length - 1].content}` }], maxTokens: 3000, deadline });
+            usage.input += res2.usage.input; usage.output += res2.usage.output; usage.turns++;
+            text = String(res2.text || '').trim();
+          } catch (e) { console.error('[curo-automate] segundo intento de redacción falló:', e.message); }
+        }
+        // Último recurso: un correo sencillo con los resultados encontrados, para que el usuario reciba algo útil.
+        if (!text) text = fallbackReport(automation.name, messages);
         // A veces el modelo envuelve el correo en JSON ({"title","body"}): nos quedamos con el texto.
         if (/^\s*[{`]/.test(text)) {
           const j = extractJson(text);
@@ -185,6 +199,21 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
     }
     return finishRun({ status: 'failed', error: e.message || String(e) });
   }
+}
+
+// Correo mínimo con los títulos y enlaces encontrados, si la IA no consigue redactar.
+function fallbackReport(name, messages) {
+  const items = [];
+  for (const m of messages) {
+    if (m.role !== 'tool') continue;
+    let v; try { v = JSON.parse(m.content); } catch { continue; }
+    if (Array.isArray(v)) for (const x of v) if (x && x.title && x.url && !items.some(i => i.url === x.url)) items.push(x);
+  }
+  if (!items.length) return '';
+  const fecha = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', dateStyle: 'long' }).format(new Date());
+  return `Asunto: ${name} – ${fecha}\n\nHola,\n\nEstos son los resultados más relevantes que CURO ha encontrado hoy:\n\n` +
+    items.slice(0, 6).map(x => `${x.title}${x.source ? ` (${x.source})` : ''}\n${x.url}`).join('\n\n') +
+    `\n\n(La IA no pudo redactar el resumen esta vez; te enviamos los enlaces directamente.)`;
 }
 
 // Quita restos de Markdown (negritas, títulos, separadores) para que el correo se lea limpio.
