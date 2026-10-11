@@ -198,3 +198,8 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 /* 8 agentes siempre en filas completas: 4 por fila en pantalla grande, 2 en tablet y móvil */
 .agCards{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media(max-width:1000px){.agCards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* 9 agentes: 3 filas de 3 en pantalla grande; en tablet y móvil de a 2, con el último centrado */
+.agCards{grid-template-columns:repeat(3,minmax(0,1fr))}.agCardPic img{max-width:280px}
+@media(max-width:1000px){.agCards{grid-template-columns:repeat(2,minmax(0,1fr))}.agCards .agCard:last-child:nth-child(odd){grid-column:1/-1;justify-self:center;width:calc(50% - 9px)}}
+@media(max-width:560px){.agCards .agCard:last-child:nth-child(odd){width:calc(50% - 5px)}}
+.agHeroRow{max-width:980px}

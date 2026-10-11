@@ -601,7 +601,7 @@ async function delKnowledge(id, btn) {
   try { await api('knowledge?id=' + id, { method: 'DELETE' }); knowledgePage(); } catch (e) { done(); info('No se pudo eliminar', e.message); }
 }
 
-// ---------- Los 8 agentes AIA (presentación pública) ----------
+// ---------- Los 9 agentes AIA (presentación pública) ----------
 const AGENTS = [
   { key: 'docente', name: 'Bruno', animal: 'el osito', label: 'Docente o formador/a', vibe: 'Paciente y ordenado', help: 'Te acompaña con las clases, la planificación, las evaluaciones y la comunicación con familias.', ex: ['Te recuerda entregas, reuniones y evaluaciones', 'Organiza tus clases de la semana'] },
   { key: 'autonomo', name: 'Teo', animal: 'el castor', label: 'Autónomo/a', vibe: 'Trabajador y organizado', help: 'Lleva tus proyectos de clientes, entregas, presupuestos y facturas para que nada se te escape.', ex: ['Te avisa de facturas y entregas pendientes', 'Ordena los proyectos de cada cliente'] },
@@ -609,7 +609,8 @@ const AGENTS = [
   { key: 'emprendedor', name: 'Nico', animal: 'el conejito', label: 'Emprendedor/a', vibe: 'Con energía y decidido', help: 'Sigue a tus clientes, tus ventas y tus lanzamientos, y te dice cuál es el siguiente paso.', ex: ['Te recuerda a qué cliente escribir hoy', 'Divide tu lanzamiento en etapas'] },
   { key: 'community', name: 'Kai', animal: 'el panda', label: 'Community manager', vibe: 'Creativo y al día', help: 'Organiza tu calendario de publicaciones, tus campañas y tus clientes en redes.', ex: ['Lleva el calendario de publicaciones', 'Te recuerda las entregas a cada cliente'] },
   { key: 'creador', name: 'Luna', animal: 'la gatita', label: 'Creador/a de contenido', vibe: 'Inquieta y llena de ideas', help: 'Guarda tus ideas, tus guiones y tus colaboraciones con marcas, y te ayuda a publicar con constancia.', ex: ['Banco de ideas que no se pierden', 'Te avisa de las fechas con marcas'] },
-  { key: 'pyme', name: 'Félix', animal: 'el zorro', label: 'Pequeños equipos (pymes)', vibe: 'Formal y profesional', help: 'Coordina las tareas del equipo, las reuniones, los clientes y los informes.', ex: ['Resume qué quedó pendiente de cada reunión', 'Te prepara la semana del equipo'] },
+  { key: 'pyme', name: 'Félix', animal: 'el zorro', label: 'Dirección y pymes', vibe: 'Formal y decidido', help: 'Para quien dirige una empresa o un equipo: tareas, reuniones, clientes, decisiones e informes.', ex: ['Resume qué quedó pendiente de cada reunión', 'Te prepara la semana del equipo'] },
+  { key: 'profesional', name: 'Hachi', animal: 'el perrito', label: 'Profesionales', vibe: 'Amable y organizado', help: 'Para médicos, abogados, psicólogos, secretarios y administrativos: citas, consultas, casos y documentos en orden.', ex: ['Te recuerda citas, consultas y trámites', 'Ordena el seguimiento de cada caso'] },
   { key: 'descubridor', name: 'Mochi', animal: '', label: 'Descubridor/a', vibe: 'Tierno y curioso', help: 'Para quien busca de todo un poco: guarda lo que te interesa, lo que quieres aprender, comprar o visitar.', ex: ['Lista de cosas que quieres aprender', 'Guarda ideas, viajes y compras pensadas'] }
 ];
 const agentImg = k => `img/agentes/${k}.jpg`;
@@ -627,7 +628,7 @@ function agentsLanding() {
       <a class="btn primary" href="#elige">Conocer a los agentes</a>
     </section>
     <section class="section" id="elige">
-      <div class="sectionIntro"><span class="eyebrow">LOS 8 AGENTES AIA</span><h2>¿Quién quieres que te acompañe?</h2><p class="muted">Todos hacen lo mismo por dentro. Cambia lo que saben de tu trabajo, cómo te hablan y qué te proponen.</p></div>
+      <div class="sectionIntro"><span class="eyebrow">LOS 9 AGENTES AIA</span><h2>¿Quién quieres que te acompañe?</h2><p class="muted">Todos hacen lo mismo por dentro. Cambia lo que saben de tu trabajo, cómo te hablan y qué te proponen.</p></div>
       <div class="agCards">${AGENTS.map(a => `
         <article class="agCard">
           <div class="agCardPic"><img src="${agentImg(a.key)}" alt="${esc(a.name)}, ${esc(a.animal || 'agente AIA')}" loading="lazy"></div>
@@ -833,7 +834,7 @@ async function boot() {
     // Si venía a una sección concreta (por ejemplo ?ir=agente), se recuerda para después de entrar.
     const ir = q.get('ir');
     if (ir) history.replaceState({}, '', location.pathname);
-    // El agente personal: sin sesión se presenta a los 8 agentes; al elegir uno se pide entrar.
+    // El agente personal: sin sesión se presenta a los 9 agentes; al elegir uno se pide entrar.
     if (ir === 'agente' || ir === 'agentes') return agentsLanding();
     if (ir) lstore('curo_ir', ir);
     home();
