@@ -680,7 +680,7 @@ function pickAgent(key) {
   const a = agentByKey(key);
   closeModals();
   modal(`${esc(a.label)}: tu agente es ${esc(a.name)}`, `<div class="agPickModal"><img src="${agentImg(a.key)}" alt="${esc(a.name)}"><div class="agBubble"><b>¡Hola! Soy ${esc(a.name)}.</b><p>Para poder recordar lo que me cuentes, necesito que entres con tu cuenta de CURO. Si todavía no tienes, la creas gratis en un minuto y vuelves aquí conmigo.</p></div></div>`, {
-    actions: `<button class="btn ghost" onclick="closeModals()">Seguir mirando</button><button class="btn primary" onclick="lstore('curo_ir','agente');closeModals();login('signup')">Entrar o crear mi cuenta</button>`
+    actions: `<button class="btn ghost" onclick="closeModals()">Seguir mirando</button><button class="btn primary" onclick="lstore('curo_ir','agente');lstore('curo_pick_login',1);closeModals();login('signup')">Entrar o crear mi cuenta</button>`
   });
 }
 function takeAgentPick() {
@@ -708,6 +708,8 @@ async function agentPage() {
 function agentSetup(edit = false) {
   const s = { ...(agentState.settings || {}) };
   const pick = takeAgentPick(); if (pick) s.profile = pick;
+  // Si venía de "Entrar o crear mi cuenta" y ya tenía la sesión de CURO abierta, no se le pidió entrar: se le avisa.
+  if (pick && lrecall('curo_pick_login')) { lstore('curo_pick_login', null); setTimeout(() => toast('Ya tenías tu sesión de CURO abierta, así que entraste directo.'), 400); }
   const chosen = s.profile ? agentByKey(s.profile) : null;
   const time = String(s.brief_time || '08:00').slice(0, 5);
   const first = (me?.user?.name || '').split(' ')[0];
