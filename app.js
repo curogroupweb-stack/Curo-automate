@@ -611,9 +611,9 @@ const AGENTS = [
   { key: 'creador', name: 'Luna', animal: 'la gatita', label: 'Creador/a de contenido', vibe: 'Inquieta y llena de ideas', help: 'Guarda tus ideas, tus guiones y tus colaboraciones con marcas, y te ayuda a publicar con constancia.', ex: ['Banco de ideas que no se pierden', 'Te avisa de las fechas con marcas'] },
   { key: 'pyme', name: 'Félix', animal: 'el zorro', label: 'Dirección y pymes', vibe: 'Formal y decidido', help: 'Para quien dirige una empresa o un equipo: tareas, reuniones, clientes, decisiones e informes.', ex: ['Resume qué quedó pendiente de cada reunión', 'Te prepara la semana del equipo'] },
   { key: 'profesional', name: 'Hachi', animal: 'el perrito', label: 'Profesionales', vibe: 'Amable y organizado', help: 'Para médicos, abogados, psicólogos, secretarios y administrativos: citas, consultas, casos y documentos en orden.', ex: ['Te recuerda citas, consultas y trámites', 'Ordena el seguimiento de cada caso'] },
-  { key: 'descubridor', name: 'Mochi', animal: '', label: 'Descubridor/a', vibe: 'Tierno y curioso', help: 'Para quien busca de todo un poco: guarda lo que te interesa, lo que quieres aprender, comprar o visitar.', ex: ['Lista de cosas que quieres aprender', 'Guarda ideas, viajes y compras pensadas'] }
+  { key: 'descubridor', name: 'Sandy', animal: 'la ratita', label: 'Descubridor/a', vibe: 'Tierna y curiosa', help: 'Para quien busca de todo un poco: guarda lo que te interesa, lo que quieres aprender, comprar o visitar.', ex: ['Lista de cosas que quieres aprender', 'Guarda ideas, viajes y compras pensadas'] }
 ];
-const agentImg = k => `img/agentes/${k}.jpg`;
+const agentImg = k => `img/agentes/${k}.jpg?v=2`;
 const agentByKey = k => AGENTS.find(a => a.key === k) || AGENTS[AGENTS.length - 1];
 // Frases para empezar a hablar con el agente (chat vacío), según el perfil.
 const AGENT_STARTERS = {

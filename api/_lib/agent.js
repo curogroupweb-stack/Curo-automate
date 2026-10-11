@@ -16,7 +16,7 @@ const PROFILES = {
   estudiante: { name: 'Koa', label: 'Estudiante', focus: 'plan de estudio, entregas, exámenes, apuntes y organización del tiempo' },
   pyme: { name: 'Félix', label: 'Dirección y pymes', focus: 'dirección de la empresa o del equipo: tareas del equipo, reuniones, clientes, decisiones, procesos internos e informes' },
   profesional: { name: 'Hachi', label: 'Profesionales', focus: 'citas y agenda, consultas de clientes o pacientes, seguimiento de casos, documentos, trámites y organización del día (médicos, abogados, psicólogos, secretarios, administrativos y otros profesionales)', rule: 'Ayudas con la agenda, los recordatorios y la organización, pero NUNCA guardes datos de salud, historias clínicas ni datos personales de pacientes o clientes: si te los cuenta, recuérdale amablemente que no los guardas y anota solo lo organizativo (por ejemplo "Consulta a las 10" sin nombre ni diagnóstico).' },
-  descubridor: { name: 'Mochi', label: 'Descubridor', focus: 'intereses personales, cosas que quiere aprender, compras que está pensando, viajes, ideas y descubrimientos' }
+  descubridor: { name: 'Sandy', label: 'Descubridor', focus: 'intereses personales, cosas que quiere aprender, compras que está pensando, viajes, ideas y descubrimientos' }
 };
 const KINDS = ['memoria', 'pendiente', 'proyecto', 'agenda'];
 const DAILY_LIMIT = Number(process.env.AGENT_DAILY_MESSAGES || 40);
