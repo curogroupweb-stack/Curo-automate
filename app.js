@@ -21,6 +21,10 @@ function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;
 function fmtDate(v) { return v ? new Date(v).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' }) : '—'; }
 function store(k, v) { try { v === null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, JSON.stringify(v)); } catch {} }
 function recall(k) { try { return JSON.parse(sessionStorage.getItem(k) || 'null'); } catch { return null; } }
+// Persisten entre pestañas (el visitante puede volver de CURO Group en otra pestaña).
+function lstore(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+function lrecall(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } }
+const CURO_LOGIN_URL = 'https://curogroup.net/';
 
 async function api(path, { method = 'GET', body } = {}) {
   const { data } = await sb.auth.getSession();
@@ -60,11 +64,66 @@ function busy(btn, text) { if (!btn) return () => {}; const old = btn.innerHTML;
 // ---------- Portada pública: acciones ----------
 function pickPublicIdea(i) { const e = document.getElementById('publicInstruction'); if (e) { e.value = ideas[i][1]; e.focus(); e.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }
 function showIdeas() { document.getElementById('ideas-inicio')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-function startFromPublic() {
+function startFromPublic(btn) {
   const t = document.getElementById('publicInstruction')?.value.trim();
-  if (!t) return;
-  store('curo_pending_instruction', t);
-  if (session) { go('Inicio'); } else login('signup', 'Crea tu cuenta gratis y CURO preparará el plan de tu automatización.');
+  if (!t) return toast('Escribe primero qué quieres automatizar.', 'warn');
+  if (session) { store('curo_pending_instruction', t); return go('Inicio'); }
+  runPreview(t, btn);
+}
+
+// ---------- Vista previa sin cuenta ----------
+// El visitante prueba antes de registrarse: no se envía nada, no se guarda nada y no se tocan cuentas externas.
+function deviceId() {
+  let id = lrecall('curo_device');
+  if (!id) { id = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)); lstore('curo_device', id); }
+  return id;
+}
+function askToSignUp(text) {
+  closeModals();
+  modal('Crea tu cuenta gratis', `<p>${esc(text || 'Para seguir probando, crea tu cuenta gratis.')}</p><p class="muted">Con tu cuenta puedes crear 2 automatizaciones gratis.</p>`, {
+    actions: `<button class="btn ghost" onclick="closeModals()">Ahora no</button><button class="btn primary" onclick="goActivate()">Crear cuenta o iniciar sesión</button>`
+  });
+}
+async function runPreview(instruction, btn) {
+  if (instruction.length > 600) return info('Descripción demasiado larga', 'Para la prueba sin cuenta, describe la tarea en menos de 600 caracteres.');
+  const done = busy(btn, 'CURO está preparando la vista previa…');
+  try {
+    const r = await fetch('/api/preview', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ instruction, device: deviceId() }) });
+    let j = {}; try { j = await r.json(); } catch {}
+    if (r.status === 429 || j.limit) { lstore('curo_pending_preview', { instruction, ts: Date.now() }); return askToSignUp(j.error); }
+    if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
+    showPreview(instruction, j.plan, j.example);
+  } catch (e) { info('No se pudo preparar la vista previa', e.message); }
+  finally { done(); }
+}
+function showPreview(instruction, plan, example) {
+  closeModals();
+  const ok = plan.feasible;
+  lstore('curo_pending_preview', { instruction, plan: ok ? plan : null, ts: Date.now() });
+  modal('Así funcionaría tu automatización', `
+    <p class="planSummary">${esc(plan.summary)}</p>
+    ${!ok ? `<div class="notice danger"><b>Esto no se puede automatizar todavía con CURO.</b> ${esc((plan.limitations || []).join(' '))}</div>` : ''}
+    <div class="plannerPlan">
+      <div class="plannerStep"><small>CUÁNDO SE EJECUTA</small><b>${esc(plan.trigger.label)}</b></div>
+      <div class="plannerStep"><small>QUÉ HARÁ CURO</small><ol>${plan.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>
+      ${example ? `<div class="plannerStep"><small>EJEMPLO DEL RESULTADO</small><div class="previewExample">${esc(example).replace(/\n/g, '<br>')}</div><span class="muted">Ejemplo ilustrativo. Cuando la actives, CURO usará datos reales.</span></div>` : ''}
+    </div>
+    ${plan.requirements?.google ? `<div class="notice"><b>Necesitará tu Gmail.</b> Lo conectarás después de crear tu cuenta, con tu permiso y pudiendo retirarlo cuando quieras.</div>` : ''}
+    <p class="muted">Esto es solo una vista previa: no se ha enviado nada ni se ha guardado nada.</p>`, {
+    wide: true,
+    actions: `<button class="btn ghost" onclick="closeModals();document.getElementById('publicInstruction')?.focus()">Cambiar la descripción</button>${ok ? `<button class="btn primary" onclick="goActivate()">Activar mi automatización</button>` : ''}`
+  });
+}
+function goActivate() {
+  closeModals();
+  login('signup', 'Crea tu cuenta gratis o inicia sesión en CURO Group. Al volver, tu automatización estará lista para activar.');
+}
+// Al volver con sesión: recupera lo que escribió el visitante (máximo 1 día).
+function takePendingPreview() {
+  const p = lrecall('curo_pending_preview');
+  if (!p) return null;
+  lstore('curo_pending_preview', null);
+  return p.ts && Date.now() - p.ts < 864e5 ? p : null;
 }
 function newsletterDemo() {
   const e = document.getElementById('newsletterEmail'), m = document.getElementById('newsletterMsg');
@@ -100,7 +159,7 @@ function login(mode = 'login', note = '') {
     <div class="brand"><span class="grad">CURO</span> Automate</div>
     <h2>Entra desde CURO Group</h2>
     <p class="muted">${esc(note || 'CURO Automate forma parte de la plataforma CURO Group. Inicia sesión allí y entrarás aquí directamente con tu misma cuenta.')}</p>
-    <a class="btn primary wideBtn" href="https://curogroup.net/">Ir a CURO Group</a>
+    <a class="btn primary wideBtn" href="${CURO_LOGIN_URL}">Ir a CURO Group</a>
     <button class="btn ghost wideBtn" type="button" onclick="home()">Volver</button>
     <p class="muted helpLine">¿Problemas para entrar? Escríbenos a ${contactLink()}</p>
   </div></div>`;
@@ -202,7 +261,7 @@ const featureIcons=[
 `<svg viewBox="0 0 72 72" aria-hidden="true"><path d="M36 10l7 7 10-1 3 10 8 6-5 9 2 10-10 3-6 8-9-5-9 5-6-8-10-3 2-10-5-9 8-6 3-10 10 1z" fill="#dbeafe" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/><circle cx="36" cy="36" r="11" fill="white"/><path d="M31 36l4 4 7-9" fill="none" stroke="#00a98f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 ];
 const ideas=[['Docentes','Cuando reciba consultas de familias, clasifícalas, prepara una respuesta clara y déjamela lista para aprobar.'],['Emprendedores','Cuando llegue un nuevo cliente potencial, guarda sus datos, identifica qué necesita, prepara una respuesta y programa seguimiento.'],['Community managers','Organiza las solicitudes de contenido, prepara borradores por red social y envíamelos a aprobación antes de publicar.'],['Creadores de contenido','Cuando reciba una propuesta de colaboración, registra la marca, resume la propuesta y prepara una respuesta.'],['Freelance y consultores','Cuando llegue una consulta profesional, crea el contacto, resume la necesidad, prepara respuesta y seguimiento.'],['Pequeños equipos','Recoge solicitudes entrantes, asígnales prioridad, prepara las acciones siguientes y avisa de las que necesiten aprobación.']];
-function home(){A.innerHTML=`<header class="top"><a class="brand brandLink" href="https://curogroup.net/" title="Volver a CURO Group"><span class="grad">CURO</span> Automate</a><div class="topnav"><a class="backCuro" href="https://curogroup.net/">← CURO Group</a><a href="#que-hace">Qué hace</a><a href="#como-funciona">Cómo funciona</a><a href="#contacto">Contacto</a><button class="btn ghost" onclick="login('login')">Iniciar sesión</button></div></header><main><section class="hero"><span class="pill">AUTOMATIZACIÓN CON IA · MODO SUPERVISADO</span><h1>Dile qué trabajo quieres delegar. <span class="grad">CURO se ocupa del resto.</span></h1><p>Describe una tarea con tus palabras. CURO organiza el proceso, prepara el trabajo y te pide aprobación cuando hace falta.</p><div class="publicPrompt"><label for="publicInstruction">¿Qué quieres que CURO haga por ti?</label><div class="dictationWrap"><textarea id="publicInstruction" placeholder="Describe una tarea que haces repetidamente…">Cuando llegue una consulta sobre mis servicios, identifica al cliente, guarda sus datos, prepara una respuesta y avísame antes de enviarla.</textarea><button class="dictateBtn" type="button" onclick="toggleDictation('publicInstruction',this)" title="Dictar automatización" aria-label="Dictar automatización">🎙 <span>Dictar</span></button></div><div class="heroActions"><button class="btn primary" onclick="startFromPublic()">Crear mi automatización</button><button class="btn ghost linkbtn" onclick="showIdeas()">Ver ideas</button></div></div><div class="starterWrap" id="ideas-inicio"><small>O EMPIEZA CON UNA IDEA</small><div class="starterGrid">${ideas.slice(0,4).map((x,i)=>`<button type="button" class="starterCard starterExample" onclick="pickPublicIdea(${i})"><span>${x[0]}</span><b>${['Responder consultas','Captar y seguir clientes','Organizar solicitudes','Gestionar colaboraciones'][i]}</b><small>Usar este ejemplo</small></button>`).join('')}</div></div></section><section class="section" id="que-hace"><div class="sectionIntro"><span class="eyebrow">CURO AUTOMATE</span><h2>¿Qué puede hacer CURO por ti?</h2><p class="muted">Un espacio para delegar trabajo repetitivo sin construir flujos técnicos.</p></div><div class="grid">${['Correo inteligente','Respuestas y aprobaciones','Contactos y seguimiento','Documentos','Conocimiento de tu negocio','Organización de tareas'].map((x,i)=>`<div class="card feature"><b class="featureIcon">${featureIcons[i]}</b><h3>${x}</h3><p class="muted">${['Clasifica consultas y detecta qué necesita cada mensaje.','Prepara borradores y deja las acciones sensibles bajo tu control.','Registra personas, organizaciones, intereses y próximos pasos.','Prepara propuestas, informes, presupuestos y otros documentos.','Utiliza tus servicios, reglas y datos sin inventar información.','Convierte instrucciones en procesos repetibles y trazables.'][i]}</p></div>`).join('')}</div></section><section class="section softSection"><div class="sectionIntro"><span class="eyebrow">PARA TU PROFESIÓN</span><h2>Automatizaciones pensadas para tu trabajo</h2><p class="muted">Empieza con una necesidad concreta y adapta cada automatización a tu forma de trabajar.</p></div><div class="grid">${ideas.map(x=>`<div class="card"><span class="badge">${x[0]}</span><p>${x[1]}</p></div>`).join('')}</div></section><section class="section" id="como-funciona"><div class="sectionIntro"><span class="eyebrow">SIN FLUJOS TÉCNICOS</span><h2>Cómo funciona</h2></div><div class="steps">${[['1','Describe qué quieres delegar','Escríbelo con tus propias palabras.'],['2','CURO prepara el proceso','Organiza las acciones y utiliza tu conocimiento.'],['3','Revisas cuando sea necesario','Las acciones sensibles quedan bajo aprobación.'],['4','CURO ejecuta y registra','Mantiene trazabilidad de lo realizado.']].map(x=>`<div class="card step"><span class="stepNum">${x[0]}</span><h3>${x[1]}</h3><p class="muted">${x[2]}</p></div>`).join('')}</div></section><section class="section agentPublic"><div><span class="pill">CURO AGENT</span><h2>Automatización con control humano</h2><p class="muted">CURO puede preparar, organizar y ejecutar tareas. En modo supervisado, las decisiones importantes esperan tu aprobación.</p></div><div class="agentVisual"><div class="agentIcon big">✦</div><div><b>CURO Agent</b><small>Modo supervisado</small></div></div></section><section class="section"><div class="planCard"><div><span class="pill">EMPIEZA GRATIS</span><h2>Crea tu primera automatización hoy</h2><p>Describe la tarea, revisa el plan que prepara CURO y actívala. Tú apruebas cada envío importante.</p></div><button class="btn primary" onclick="login('signup')">Crear cuenta gratis</button></div></section><section class="contactBand" id="contacto"><div class="contactInner"><div><span class="eyebrow light">CONTACTO</span><h2>¿Tienes una pregunta?</h2><p>Estamos construyendo una forma más sencilla de delegar trabajo con inteligencia artificial.</p><a class="contactLink" href="mailto:hola@curogroup.net">hola@curogroup.net</a></div><div class="newsletter"><span class="eyebrow light">NEWSLETTER</span><h3>Novedades de CURO Group</h3><p>Recibe recursos, ideas y novedades sobre IA, automatización y productos CURO.</p><div class="newsletterForm"><input id="newsletterEmail" type="email" placeholder="Tu correo electrónico"><button class="btn primary" onclick="newsletterDemo()">Suscribirme</button></div><small id="newsletterMsg"></small></div></div></section></main><footer class="footer"><div class="footerGrid"><div><a class="brand brandLink" href="https://curogroup.net/"><span class="grad">CURO</span> Group</a><p>Herramientas, recursos y soluciones para trabajar y aprender con inteligencia artificial.</p><p><b>Madrid, España</b></p></div><div><h4>Navegación</h4><a href="https://curogroup.net/">← Volver a CURO Group</a><a href="#que-hace">Qué hace</a><a href="#como-funciona">Cómo funciona</a><a href="#contacto">Contacto</a><a href="#" onclick="login('login');return false">CURO Automate</a></div><div><h4>Legal</h4><a href="#" onclick="legalDemo('Aviso legal');return false">Aviso legal</a><a href="#" onclick="legalDemo('Política de privacidad');return false">Política de privacidad</a><a href="#" onclick="legalDemo('Términos y condiciones');return false">Términos y condiciones</a><a href="#" onclick="legalDemo('Cookies');return false">Cookies</a></div><div><h4>Síguenos</h4><a target="_blank" rel="noopener" href="https://www.instagram.com/curo.group/">Instagram</a><a target="_blank" rel="noopener" href="https://www.tiktok.com/@curo.group">TikTok</a><a target="_blank" rel="noopener" href="https://www.youtube.com/@Curo.Group1">YouTube</a><a target="_blank" rel="noopener" href="https://www.linkedin.com/company/curo-group-94258942a/">LinkedIn</a></div></div><div class="footerBottom"><span>© 2026 CURO Group · Madrid, España</span><span>Privacidad · Cookies · Términos · Aviso legal</span></div></footer>`}
+function home(){A.innerHTML=`<header class="top"><a class="brand brandLink" href="https://curogroup.net/" title="Volver a CURO Group"><span class="grad">CURO</span> Automate</a><div class="topnav"><a class="backCuro" href="https://curogroup.net/">← CURO Group</a><a href="#que-hace">Qué hace</a><a href="#como-funciona">Cómo funciona</a><a href="#contacto">Contacto</a><button class="btn ghost" onclick="login('login')">Iniciar sesión</button></div></header><main><section class="hero"><span class="pill">AUTOMATIZACIÓN CON IA · MODO SUPERVISADO</span><h1>Dile qué trabajo quieres delegar. <span class="grad">CURO se ocupa del resto.</span></h1><p>Describe una tarea con tus palabras. CURO organiza el proceso, prepara el trabajo y te pide aprobación cuando hace falta.</p><div class="publicPrompt"><label for="publicInstruction">¿Qué quieres que CURO haga por ti?</label><div class="dictationWrap"><textarea id="publicInstruction" placeholder="Describe una tarea que haces repetidamente…">Cuando llegue una consulta sobre mis servicios, identifica al cliente, guarda sus datos, prepara una respuesta y avísame antes de enviarla.</textarea><button class="dictateBtn" type="button" onclick="toggleDictation('publicInstruction',this)" title="Dictar automatización" aria-label="Dictar automatización">🎙 <span>Dictar</span></button></div><div class="heroActions"><button class="btn primary" onclick="startFromPublic(this)">Crear mi automatización</button><button class="btn ghost linkbtn" onclick="showIdeas()">Ver ideas</button></div></div><div class="starterWrap" id="ideas-inicio"><small>O EMPIEZA CON UNA IDEA</small><div class="starterGrid">${ideas.slice(0,4).map((x,i)=>`<button type="button" class="starterCard starterExample" onclick="pickPublicIdea(${i})"><span>${x[0]}</span><b>${['Responder consultas','Captar y seguir clientes','Organizar solicitudes','Gestionar colaboraciones'][i]}</b><small>Usar este ejemplo</small></button>`).join('')}</div></div></section><section class="section" id="que-hace"><div class="sectionIntro"><span class="eyebrow">CURO AUTOMATE</span><h2>¿Qué puede hacer CURO por ti?</h2><p class="muted">Un espacio para delegar trabajo repetitivo sin construir flujos técnicos.</p></div><div class="grid">${['Correo inteligente','Respuestas y aprobaciones','Contactos y seguimiento','Documentos','Conocimiento de tu negocio','Organización de tareas'].map((x,i)=>`<div class="card feature"><b class="featureIcon">${featureIcons[i]}</b><h3>${x}</h3><p class="muted">${['Clasifica consultas y detecta qué necesita cada mensaje.','Prepara borradores y deja las acciones sensibles bajo tu control.','Registra personas, organizaciones, intereses y próximos pasos.','Prepara propuestas, informes, presupuestos y otros documentos.','Utiliza tus servicios, reglas y datos sin inventar información.','Convierte instrucciones en procesos repetibles y trazables.'][i]}</p></div>`).join('')}</div></section><section class="section softSection"><div class="sectionIntro"><span class="eyebrow">PARA TU PROFESIÓN</span><h2>Automatizaciones pensadas para tu trabajo</h2><p class="muted">Empieza con una necesidad concreta y adapta cada automatización a tu forma de trabajar.</p></div><div class="grid">${ideas.map(x=>`<div class="card"><span class="badge">${x[0]}</span><p>${x[1]}</p></div>`).join('')}</div></section><section class="section" id="como-funciona"><div class="sectionIntro"><span class="eyebrow">SIN FLUJOS TÉCNICOS</span><h2>Cómo funciona</h2></div><div class="steps">${[['1','Describe qué quieres delegar','Escríbelo con tus propias palabras.'],['2','CURO prepara el proceso','Organiza las acciones y utiliza tu conocimiento.'],['3','Revisas cuando sea necesario','Las acciones sensibles quedan bajo aprobación.'],['4','CURO ejecuta y registra','Mantiene trazabilidad de lo realizado.']].map(x=>`<div class="card step"><span class="stepNum">${x[0]}</span><h3>${x[1]}</h3><p class="muted">${x[2]}</p></div>`).join('')}</div></section><section class="section agentPublic"><div><span class="pill">CURO AGENT</span><h2>Automatización con control humano</h2><p class="muted">CURO puede preparar, organizar y ejecutar tareas. En modo supervisado, las decisiones importantes esperan tu aprobación.</p></div><div class="agentVisual"><div class="agentIcon big">✦</div><div><b>CURO Agent</b><small>Modo supervisado</small></div></div></section><section class="section"><div class="planCard"><div><span class="pill">EMPIEZA GRATIS</span><h2>Crea tu primera automatización hoy</h2><p>Describe la tarea, revisa el plan que prepara CURO y actívala. Tú apruebas cada envío importante.</p></div><button class="btn primary" onclick="login('signup')">Crear cuenta gratis</button></div></section><section class="contactBand" id="contacto"><div class="contactInner"><div><span class="eyebrow light">CONTACTO</span><h2>¿Tienes una pregunta?</h2><p>Estamos construyendo una forma más sencilla de delegar trabajo con inteligencia artificial.</p><a class="contactLink" href="mailto:hola@curogroup.net">hola@curogroup.net</a></div><div class="newsletter"><span class="eyebrow light">NEWSLETTER</span><h3>Novedades de CURO Group</h3><p>Recibe recursos, ideas y novedades sobre IA, automatización y productos CURO.</p><div class="newsletterForm"><input id="newsletterEmail" type="email" placeholder="Tu correo electrónico"><button class="btn primary" onclick="newsletterDemo()">Suscribirme</button></div><small id="newsletterMsg"></small></div></div></section></main><footer class="footer"><div class="footerGrid"><div><a class="brand brandLink" href="https://curogroup.net/"><span class="grad">CURO</span> Group</a><p>Herramientas, recursos y soluciones para trabajar y aprender con inteligencia artificial.</p><p><b>Madrid, España</b></p></div><div><h4>Navegación</h4><a href="https://curogroup.net/">← Volver a CURO Group</a><a href="#que-hace">Qué hace</a><a href="#como-funciona">Cómo funciona</a><a href="#contacto">Contacto</a><a href="#" onclick="login('login');return false">CURO Automate</a></div><div><h4>Legal</h4><a href="#" onclick="legalDemo('Aviso legal');return false">Aviso legal</a><a href="#" onclick="legalDemo('Política de privacidad');return false">Política de privacidad</a><a href="#" onclick="legalDemo('Términos y condiciones');return false">Términos y condiciones</a><a href="#" onclick="legalDemo('Cookies');return false">Cookies</a></div><div><h4>Síguenos</h4><a target="_blank" rel="noopener" href="https://www.instagram.com/curo.group/">Instagram</a><a target="_blank" rel="noopener" href="https://www.tiktok.com/@curo.group">TikTok</a><a target="_blank" rel="noopener" href="https://www.youtube.com/@Curo.Group1">YouTube</a><a target="_blank" rel="noopener" href="https://www.linkedin.com/company/curo-group-94258942a/">LinkedIn</a></div></div><div class="footerBottom"><span>© 2026 CURO Group · Madrid, España</span><span>Privacidad · Cookies · Términos · Aviso legal</span></div></footer>`}
 
 // ---------- Inicio: describir y crear con IA ----------
 const EXAMPLES = [
@@ -212,7 +271,9 @@ const EXAMPLES = [
   'Cuando la ejecute, redacta una propuesta comercial para el cliente que le indique, usando mis servicios y precios.'
 ];
 function inicio() {
-  const pending = recall('curo_pending_instruction');
+  const preview = takePendingPreview();
+  if (preview && !preview.plan) store('curo_pending_instruction', preview.instruction);
+  const pending = preview?.plan ? preview.instruction : recall('curo_pending_instruction');
   const c = me.counts;
   shell('Inicio', `
     ${!me.connections.google.connected ? `<div class="notice"><b>Conecta tu Gmail</b> para que CURO pueda leer y enviar correos por ti. <button class="btn smallBtn" onclick="connectGoogle()">Conectar Gmail</button></div>` : ''}
@@ -231,7 +292,11 @@ function inicio() {
       <div class="actions"><button class="btn primary" id="planBtn" onclick="createPlan(this)">Preparar plan con IA</button></div>
       <div class="examples"><small class="muted">IDEAS PARA EMPEZAR</small>${EXAMPLES.map((e, i) => `<button type="button" class="exampleChip" onclick="document.getElementById('instruction').value=EXAMPLES[${i}]">${esc(e)}</button>`).join('')}</div>
     </div>`);
-  if (pending) { store('curo_pending_instruction', null); setTimeout(() => createPlan(document.getElementById('planBtn')), 50); }
+  if (preview?.plan) {
+    // Ya tenemos el plan de la vista previa: se muestra listo para activar, sin volver a gastar IA.
+    const g = !!me.connections.google.connected;
+    setTimeout(() => showPlan(preview.instruction, { ...preview.plan, requirements: { ...(preview.plan.requirements || {}), google_connected: g } }), 50);
+  } else if (pending) { store('curo_pending_instruction', null); setTimeout(() => createPlan(document.getElementById('planBtn')), 50); }
 }
 
 async function createPlan(btn) {
@@ -524,8 +589,11 @@ async function boot() {
   const { data } = await sb.auth.getSession();
   session = data.session;
   if (!session) {
-    if (recall('curo_pending_instruction')) return login('login', 'Inicia sesión y CURO preparará el plan de tu automatización.');
-    return home();
+    home();
+    const pp = lrecall('curo_pending_preview');
+    const box = document.getElementById('publicInstruction');
+    if (box && pp?.instruction) box.value = pp.instruction;
+    return;
   }
   await go(startPage());
   if (googleResult === 'connected') {

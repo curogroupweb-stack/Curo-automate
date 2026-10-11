@@ -111,3 +111,5 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 /* 11-oct-2026 · Volver a CURO Group siempre visible (también en móvil) */
 a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline-flex!important;align-items:center;font-weight:750;color:#2563eb;white-space:nowrap}a.backCuroSide{display:block;text-decoration:none}
 @media(max-width:420px){.topnav{gap:10px}.topnav a.backCuro{font-size:13px}}
+
+.previewExample{background:#f6f8fc;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin:6px 0;line-height:1.55;font-size:14px;white-space:normal;max-height:280px;overflow:auto}
