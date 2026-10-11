@@ -748,7 +748,7 @@ function openAgent() {
 }
 // ---------- Bienvenida del agente (primera vez): en el centro, con las preguntas de a una ----------
 // Poses disponibles por agente; si falta alguna se usa la imagen fija.
-const AGENT_POSES = { profesional: ['saluda', 'celebra', 'ups', 'duerme'], descubridor: ['saluda'] };
+const AGENT_POSES = { profesional: ['saluda', 'celebra', 'ups', 'duerme'], descubridor: ['saluda', 'celebra'] };
 const agentPose = (k, pose) => (AGENT_POSES[k] || []).includes(pose) ? `img/agentes/${k}-${pose}.png?v=3` : agentImg(k);
 let welcome = null;
 function agentWelcome(pickKey) {
