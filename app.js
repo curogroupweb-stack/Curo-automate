@@ -586,6 +586,12 @@ async function boot() {
   const q = new URLSearchParams(location.search);
   const googleResult = q.get('google'), reason = q.get('reason');
   if (googleResult) history.replaceState({}, '', location.pathname);
+  // Llega desde curogroup.net sin sesión (?invitado=1): si aquí quedó una sesión vieja, se cierra
+  // para que Automate vaya siempre a la par con la plataforma.
+  if (q.get('invitado') === '1') {
+    history.replaceState({}, '', location.pathname);
+    try { await sb.auth.signOut({ scope: 'local' }); } catch {}
+  }
   const { data } = await sb.auth.getSession();
   session = data.session;
   if (!session) {
