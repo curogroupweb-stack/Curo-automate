@@ -220,3 +220,21 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 .agStarters{display:flex;flex-direction:column;gap:6px;margin-top:6px;align-self:stretch}
 .agStarters .exampleChip{text-align:left}
 @media(max-width:560px){.agWelcomePic{width:110px;height:110px}.agWelcome .agBubble::before{display:none}}
+/* Bienvenida del agente en el centro */
+.wCard{min-height:520px;display:flex;flex-direction:column;justify-content:center}
+.wCenter{display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;max-width:760px;margin:0 auto;width:100%}
+.wCenter h2{margin:0}
+.wBig{width:min(260px,60vw);aspect-ratio:1;object-fit:cover;border-radius:32px;background:#f9e6c8;animation:wIn .6s ease-out both}
+.wBubble{max-width:520px;text-align:left;animation:wIn .6s .15s ease-out both}
+.wGo{font-size:17px;padding:14px 28px;animation:wIn .6s .3s ease-out both}
+.wJump{animation:wJump .7s ease-out both}
+@keyframes wIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes wJump{0%{opacity:0;transform:scale(.85)}60%{opacity:1;transform:translateY(-12px) scale(1.03)}100%{transform:none}}
+@media (prefers-reduced-motion:reduce){.wBig,.wBubble,.wGo,.wJump{animation:none}}
+.wChat{display:flex;flex-direction:column;gap:14px;max-width:620px;margin:0 auto;width:100%}
+.wChat textarea{width:100%;box-sizing:border-box;font:inherit;padding:12px 14px;border:1px solid #d9deea;border-radius:14px;resize:vertical}
+.wChat .agMsg{font-size:17px}
+.wChoices{display:flex;flex-direction:column;gap:8px}
+.wDots{display:flex;gap:6px;justify-content:center}.wDots span{width:36px;height:6px;border-radius:3px;background:#e5e7eb}.wDots span.on{background:#3b4ff0}.wDots span.done{background:#9aa6f7}
+.wPriv{text-align:center;margin-top:18px}
+.wCenter .profileGrid{width:100%}

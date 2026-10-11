@@ -697,13 +697,83 @@ function openAgent() {
   if (session) return go('Mi agente');
   agentsLanding();
 }
+// ---------- Bienvenida del agente (primera vez): en el centro, con las preguntas de a una ----------
+// Poses disponibles por agente; si falta alguna se usa la imagen fija.
+const AGENT_POSES = { profesional: ['saluda', 'celebra'] };
+const agentPose = (k, pose) => (AGENT_POSES[k] || []).includes(pose) ? `img/agentes/${k}-${pose}.jpg?v=1` : agentImg(k);
+let welcome = null;
+function agentWelcome(pickKey) {
+  if (pickKey && lrecall('curo_pick_login')) { lstore('curo_pick_login', null); setTimeout(() => toast('Ya tenías tu sesión de CURO abierta, así que entraste directo.'), 400); }
+  welcome = { step: pickKey ? 'hola' : 'perfil', profile: pickKey || null, about: '', goals: '', brief: true, time: '08:00' };
+  // Intereses marcados al registrarse en CURO: punto de partida para "¿En qué quieres que te ayude?".
+  try { if (sb.auth.getUser) Promise.resolve().then(() => sb.auth.getUser()).then(({ data }) => {
+    const ints = data?.user?.user_metadata?.interests;
+    const list = Array.isArray(ints) ? ints : typeof ints === 'string' ? ints.split(',') : [];
+    if (welcome && !welcome.goals && list.length) welcome.goals = 'Me interesa: ' + list.map(x => String(x).trim()).filter(Boolean).join(', ') + '.';
+  }).catch(() => {}); } catch {}
+  renderWelcome();
+}
+function renderWelcome() {
+  const w = welcome, a = w.profile ? agentByKey(w.profile) : null;
+  const first = (me?.user?.name || '').split(' ')[0];
+  const hi = first ? `, ${esc(first)}` : '';
+  const steps = ['about', 'goals', 'brief'];
+  const dots = steps.includes(w.step) ? `<div class="wDots" aria-hidden="true">${steps.map(s => `<span class="${s === w.step ? 'on' : steps.indexOf(s) < steps.indexOf(w.step) ? 'done' : ''}"></span>`).join('')}</div>` : '';
+  let body = '';
+  if (w.step === 'perfil') {
+    body = `<div class="wCenter"><h2>¿A qué te dedicas?</h2><p class="muted">Elige tu perfil y conoce al agente que te va a acompañar.</p>
+      <div class="profileGrid">${AGENTS.map(x => `<button type="button" class="profileCard" onclick="welcome.profile='${x.key}';welcome.step='hola';renderWelcome()"><img class="profilePic" src="${agentImg(x.key)}" alt=""><b>${esc(x.name)}</b><small class="profileFor">${esc(x.label)}</small></button>`).join('')}</div></div>`;
+  } else if (w.step === 'hola') {
+    body = `<div class="wCenter wHello"><img class="wBig" src="${agentPose(a.key, 'saluda')}" alt="${esc(a.name)} saluda">
+      <div class="agBubble wBubble"><b>¡Hola${hi}! Soy ${esc(a.name)}.</b><p>Voy a ser tu agente personal. Te ayudo a recordar lo importante, ordenar tus pendientes y proyectos, y cada mañana te digo qué tienes por delante.</p></div>
+      <button class="btn primary wGo" onclick="welcome.step='about';renderWelcome()">¡Empecemos!</button>
+      <button class="btn linkbtn" onclick="welcome.step='perfil';renderWelcome()">No es mi perfil</button></div>`;
+  } else if (w.step === 'about' || w.step === 'goals') {
+    const isAbout = w.step === 'about';
+    const q = isAbout ? '¿A qué te dedicas?' : '¿En qué quieres que te ayude?';
+    const ph = isAbout ? 'Por ejemplo: soy profesora de primaria en Madrid y doy clases de inglés por las tardes.' : 'Por ejemplo: organizar mis clases de la semana, no olvidarme de las entregas y preparar materiales.';
+    body = `<div class="wChat">${dots}<div class="agBotRow"><img class="agAvatar big" src="${agentImg(a.key)}" alt=""><div class="agMsg bot">${q}</div></div>
+      <textarea id="wInput" rows="3" maxlength="2000" placeholder="${ph}">${esc(isAbout ? w.about : w.goals)}</textarea>
+      <div class="actions"><button class="btn ghost" onclick="welcomeNext(true)">Saltar</button><button class="btn primary" onclick="welcomeNext(false)">Siguiente</button></div></div>`;
+  } else if (w.step === 'brief') {
+    body = `<div class="wChat">${dots}<div class="agBotRow"><img class="agAvatar big" src="${agentImg(a.key)}" alt=""><div class="agMsg bot">¿Te mando cada mañana un correo con tu agenda, tus pendientes y el siguiente paso?</div></div>
+      <div class="wChoices"><label class="toggle"><input type="radio" name="wBrief" value="1" ${w.brief ? 'checked' : ''}> Sí, por favor</label><label class="toggle"><input type="radio" name="wBrief" value="0" ${w.brief ? '' : 'checked'}> Ahora no</label>
+      <label class="field inlineField">Hora (Madrid)<input id="wTime" type="time" value="${esc(w.time)}"></label></div>
+      <div class="actions"><button class="btn ghost" onclick="welcome.step='goals';renderWelcome()">Atrás</button><button class="btn primary" id="wSave" onclick="welcomeSave(this)">Listo</button></div></div>`;
+  } else if (w.step === 'listo') {
+    body = `<div class="wCenter wHello"><img class="wBig wJump" src="${agentPose(a.key, 'celebra')}" alt="${esc(a.name)} celebra">
+      <div class="agBubble wBubble"><b>¡Perfecto${hi}!</b><p>Ya te conozco un poco. Cuéntame qué tienes que hacer esta semana y lo voy ordenando por ti.</p></div>
+      <button class="btn primary wGo" onclick="welcome=null;renderAgent()">Hablar con ${esc(a.name)}</button></div>`;
+  }
+  shell('Mi agente', `<div class="card wCard">${body}<p class="muted small wPriv">No le cuentes contraseñas, datos bancarios ni de salud. Puedes borrar cualquier cosa que recuerde cuando quieras.</p></div>`);
+  document.getElementById('wInput')?.focus();
+}
+function welcomeNext(skip) {
+  const v = skip ? '' : (document.getElementById('wInput')?.value.trim() || '');
+  if (welcome.step === 'about') { welcome.about = v; welcome.step = 'goals'; }
+  else { welcome.goals = v; welcome.step = 'brief'; }
+  renderWelcome();
+}
+async function welcomeSave(btn) {
+  welcome.brief = document.querySelector('input[name=wBrief]:checked')?.value !== '0';
+  welcome.time = document.getElementById('wTime')?.value || '08:00';
+  const done = busy(btn, 'Guardando…');
+  try {
+    const { settings } = await api('agent', { method: 'POST', body: { action: 'setup', profile: welcome.profile, about: welcome.about, goals: welcome.goals, brief_enabled: welcome.brief, brief_time: welcome.time } });
+    agentState.settings = settings;
+    welcome.step = 'listo'; renderWelcome();
+  } catch (e) { done(); info('No se pudo guardar', e.message); }
+}
+
 async function agentPage() {
   loading('Mi agente', 'Abriendo tu agente…');
   try { agentState = await api('agent'); }
   catch (e) { return shell('Mi agente', `<div class="card"><p>${esc(e.message)}</p><button class="btn primary" onclick="go('Mi agente')">Reintentar</button></div>`); }
   // Si eligió un agente en la presentación, se abre la elección con ese agente marcado (también si ya tenía uno).
+  // Primera vez: bienvenida en el centro con el agente elegido (o la elección de perfil).
+  if (!agentState.settings) return agentWelcome(takeAgentPick());
   const pick = lrecall('curo_agent_pick');
-  agentState.settings && !pick ? renderAgent() : agentSetup(!!agentState.settings);
+  pick ? agentSetup(true) : renderAgent();
 }
 function agentSetup(edit = false) {
   const s = { ...(agentState.settings || {}) };
@@ -778,7 +848,7 @@ function renderAgent() {
       <div class="actions"><button class="btn ghost smallBtn" id="agBriefNow">Enviarme el resumen ahora</button><button class="btn ghost smallBtn" onclick="agentSetup(true)">Ajustes</button></div></div>
     <div class="agGrid">
       <div class="card agChat">
-        <div class="agMsgs" id="agMsgs">${msgs.length ? msgs.map(agentMsgHtml).join('') : agentMsgHtml({ role: 'assistant', content: `Hola${first ? `, ${first}` : ''}. Soy ${agentByKey(s.profile).name}, tu agente personal. Cuéntame en qué estás trabajando, qué tienes que hacer esta semana o qué te gustaría organizar, y lo iré recordando por ti.` }) + `<div class="agStarters"><small class="muted">PUEDES EMPEZAR POR AQUÍ</small>${(AGENT_STARTERS[s.profile] || AGENT_STARTERS.descubridor).map((t, i) => `<button type="button" class="exampleChip" onclick="agentStarter(${i})">${esc(t)}</button>`).join('')}</div>`}</div>
+        <div class="agMsgs" id="agMsgs">${msgs.length ? msgs.map(agentMsgHtml).join('') + agentReturnGreeting(msgs) : agentMsgHtml({ role: 'assistant', content: `Hola${first ? `, ${first}` : ''}. Soy ${agentByKey(s.profile).name}, tu agente personal. Cuéntame en qué estás trabajando, qué tienes que hacer esta semana o qué te gustaría organizar, y lo iré recordando por ti.` }) + `<div class="agStarters"><small class="muted">PUEDES EMPEZAR POR AQUÍ</small>${(AGENT_STARTERS[s.profile] || AGENT_STARTERS.descubridor).map((t, i) => `<button type="button" class="exampleChip" onclick="agentStarter(${i})">${esc(t)}</button>`).join('')}</div>`}</div>
         <form class="agForm" onsubmit="event.preventDefault();agentSend()">
           <div class="dictationWrap"><textarea id="agInput" rows="2" maxlength="2000" placeholder="Escribe a ${esc(agentByKey(s.profile).name)}…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();agentSend()}"></textarea>
           <button class="dictateBtn" type="button" onclick="toggleDictation('agInput',this)" aria-label="Dictar">🎙 <span>Dictar</span></button></div>
@@ -798,6 +868,24 @@ function renderAgent() {
     catch (err) { info('No se pudo enviar el resumen', err.message); }
     finally { done(); }
   });
+}
+// Al volver después de unas horas: saludo según la hora y lo que tiene para hoy (no se guarda en el historial).
+function agentReturnGreeting(msgs) {
+  const last = msgs[msgs.length - 1];
+  if (!last?.created_at || Date.now() - new Date(last.created_at).getTime() < 6 * 3600e3) return '';
+  const first = (me?.user?.name || '').split(' ')[0];
+  const h = Number(new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', hour: 'numeric', hour12: false }).format(new Date()));
+  const hola = h < 13 ? '¡Buenos días' : h < 20 ? '¡Buenas tardes' : '¡Buenas noches';
+  const day = d => new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(d));
+  const today = day(Date.now());
+  const act = (agentState.items || []).filter(i => i.status === 'activo');
+  const hoy = act.filter(i => i.due_at && day(i.due_at) === today);
+  const pend = act.filter(i => i.kind === 'pendiente').length;
+  let txt = `${hola}${first ? `, ${first}` : ''}!`;
+  if (hoy.length) txt += ` Hoy tienes: ${hoy.slice(0, 3).map(i => i.title).join(', ')}${hoy.length > 3 ? ' y más' : ''}.`;
+  else if (pend) txt += ` Tienes ${pend} ${pend === 1 ? 'pendiente' : 'pendientes'}. ¿Empezamos por alguno?`;
+  else txt += ' ¿Qué tienes para hoy?';
+  return agentMsgHtml({ role: 'assistant', content: txt });
 }
 function renderAgentPanel() { const keep = document.getElementById('agInput')?.value || ''; renderAgent(); const i = document.getElementById('agInput'); if (i) i.value = keep; }
 function agentStarter(i) {
