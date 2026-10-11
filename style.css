@@ -113,3 +113,15 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 @media(max-width:420px){.topnav{gap:10px}.topnav a.backCuro{font-size:13px}}
 
 .previewExample{background:#f6f8fc;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin:6px 0;line-height:1.55;font-size:14px;white-space:normal;max-height:280px;overflow:auto}
+
+.modesGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-top:18px}
+.modeCard{display:flex;flex-direction:column;gap:10px;min-width:0}
+.modeCard h3{margin:0}
+.modeCard ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:15px}
+.modeCard .btn{margin-top:auto;align-self:flex-start}
+.modeTag{align-self:flex-start;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:99px;background:#e9ecff;color:#3b4ff0}
+.modeCard.auto .modeTag{background:#e3f5ef;color:#14866d}
+.modeCard.auto{border:2px solid #3b4ff0}
+.modePrice{font-weight:700;margin:0}
+.modal .field select,.modal .field textarea{width:100%;font:inherit;padding:10px 12px;border:1px solid #d9deea;border-radius:10px;background:#fff}
+.small{font-size:13px}
