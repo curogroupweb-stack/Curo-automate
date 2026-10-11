@@ -635,12 +635,12 @@ function agentsLanding() {
     <section class="agHero">
       <span class="pill">TU AGENTE IA PERSONAL · AGENTES AIA</span>
       <h1>Un compañero que te conoce y <span class="grad">no empieza de cero</span> cada vez</h1>
-      <p>Elige el agente que más se parece a ti. Recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>
+      <p>Busca tu perfil: cada uno tiene su agente. Recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>
       <div class="agHeroRow">${AGENTS.map(a => `<button type="button" class="agHeroPick" onclick="showAgentCard('${a.key}')" aria-label="Ver a ${esc(a.name)}"><img src="${agentImg(a.key)}" alt=""><span>${esc(a.name)}</span></button>`).join('')}</div>
-      <a class="btn primary" href="#elige">Conocer a los agentes</a>
+      <a class="btn primary" href="#elige">Buscar mi perfil</a>
     </section>
     <section class="section" id="elige">
-      <div class="sectionIntro"><span class="eyebrow">LOS 9 AGENTES AIA</span><h2>¿Quién quieres que te acompañe?</h2><p class="muted">Todos hacen lo mismo por dentro. Cambia lo que saben de tu trabajo, cómo te hablan y qué te proponen.</p></div>
+      <div class="sectionIntro"><span class="eyebrow">LOS 9 AGENTES AIA</span><h2>¿A qué te dedicas?</h2><p class="muted">Busca tu perfil y conoce al agente que te va a acompañar. Cada uno conoce el trabajo de su perfil y te habla y te propone cosas pensadas para ti.</p></div>
       <div class="agCards">${AGENTS.map(a => `
         <article class="agCard" id="agente-${a.key}">
           <div class="agCardPic"><img src="${agentImg(a.key)}" alt="${esc(a.name)}, ${esc(a.animal || 'agente AIA')}" loading="lazy"></div>
@@ -649,20 +649,20 @@ function agentsLanding() {
             <h3>${esc(a.name)} <small>${esc(a.vibe)}</small></h3>
             <p>${esc(a.help)}</p>
             <ul>${a.ex.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
-            <button class="btn primary" onclick="pickAgent('${a.key}')">Elegir a ${esc(a.name)}</button>
+            <button class="btn primary" onclick="pickAgent('${a.key}')" aria-label="${esc(a.label)}: este es mi perfil, empezar con ${esc(a.name)}">Este es mi perfil</button>
           </div>
         </article>`).join('')}</div>
     </section>
     <section class="section softSection">
       <div class="sectionIntro"><span class="eyebrow">CÓMO FUNCIONA</span><h2>Así de sencillo</h2></div>
-      <div class="steps agSteps">${[['1', 'Elige tu agente', 'Según lo que haces: docente, autónomo, estudiante…'], ['2', 'Cuéntale de ti', 'Qué haces y en qué quieres que te ayude. Puedes cambiarlo cuando quieras.'], ['3', 'Habla con él cada día', 'Le cuentas tus cosas y él las ordena en listas.'], ['4', 'Recibe tu resumen', 'Cada mañana, un correo con tu agenda, tus pendientes y el siguiente paso.']].map(x => `<div class="card step"><span class="stepNum">${x[0]}</span><h3>${x[1]}</h3><p class="muted">${x[2]}</p></div>`).join('')}</div>
+      <div class="steps agSteps">${[['1', 'Busca tu perfil', 'Docente, autónomo, estudiante… y conoce a tu agente.'], ['2', 'Cuéntale de ti', 'Qué haces y en qué quieres que te ayude. Puedes cambiarlo cuando quieras.'], ['3', 'Habla con él cada día', 'Le cuentas tus cosas y él las ordena en listas.'], ['4', 'Recibe tu resumen', 'Cada mañana, un correo con tu agenda, tus pendientes y el siguiente paso.']].map(x => `<div class="card step"><span class="stepNum">${x[0]}</span><h3>${x[1]}</h3><p class="muted">${x[2]}</p></div>`).join('')}</div>
     </section>
     <section class="section">
       <div class="sectionIntro"><span class="eyebrow">LO QUE LLEVA POR TI</span><h2>Todo en su sitio</h2></div>
       <div class="grid agKeeps">${[['Pendientes', 'Lo que tienes que hacer, y lo marca como hecho cuando le dices que ya está.'], ['Proyectos', 'Tus proyectos por etapas, con el siguiente paso siempre claro.'], ['Agenda', 'Citas, entregas y fechas importantes, para que no se te pasen.'], ['Lo que recuerdo', 'Lo que le contaste de ti y de tu trabajo, para no tener que repetirlo.']].map(x => `<div class="card"><h3>${x[0]}</h3><p class="muted">${x[1]}</p></div>`).join('')}</div>
       <p class="muted small agPrivacy">No le cuentes contraseñas, datos bancarios ni de salud. Puedes borrar cualquier cosa que recuerde cuando quieras.</p>
     </section>
-    <section class="section"><div class="planCard"><div><span class="pill">GRATIS DURANTE LA FASE DE PRUEBA</span><h2>Crea tu agente hoy</h2><p>Solo necesitas tu cuenta de CURO Group. Si no la tienes, la creas gratis en un minuto.</p></div><a class="btn primary" href="#elige">Elegir mi agente</a></div></section>
+    <section class="section"><div class="planCard"><div><span class="pill">GRATIS DURANTE LA FASE DE PRUEBA</span><h2>Crea tu agente hoy</h2><p>Solo necesitas tu cuenta de CURO Group. Si no la tienes, la creas gratis en un minuto.</p></div><a class="btn primary" href="#elige">Buscar mi perfil</a></div></section>
   </main>
   <footer class="footer"><div class="footerBottom"><span>© 2026 CURO Group · Madrid, España</span><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></div></footer>`;
 }
@@ -679,7 +679,7 @@ function pickAgent(key) {
   if (session) return go('Mi agente');
   const a = agentByKey(key);
   closeModals();
-  modal(`¡Genial! Elegiste a ${esc(a.name)}`, `<div class="agPickModal"><img src="${agentImg(a.key)}" alt="${esc(a.name)}"><div class="agBubble"><b>¡Hola! Soy ${esc(a.name)}.</b><p>Para poder recordar lo que me cuentes, necesito que entres con tu cuenta de CURO. Si todavía no tienes, la creas gratis en un minuto y vuelves aquí conmigo.</p></div></div>`, {
+  modal(`${esc(a.label)}: tu agente es ${esc(a.name)}`, `<div class="agPickModal"><img src="${agentImg(a.key)}" alt="${esc(a.name)}"><div class="agBubble"><b>¡Hola! Soy ${esc(a.name)}.</b><p>Para poder recordar lo que me cuentes, necesito que entres con tu cuenta de CURO. Si todavía no tienes, la creas gratis en un minuto y vuelves aquí conmigo.</p></div></div>`, {
     actions: `<button class="btn ghost" onclick="closeModals()">Seguir mirando</button><button class="btn primary" onclick="lstore('curo_ir','agente');closeModals();login('signup')">Entrar o crear mi cuenta</button>`
   });
 }
@@ -714,7 +714,7 @@ function agentSetup(edit = false) {
   const grid = `<div class="profileGrid">${AGENTS.map(a => `<button type="button" class="profileCard ${s.profile === a.key ? 'sel' : ''}" data-p="${a.key}" aria-pressed="${s.profile === a.key}" onclick="selectSetupAgent('${a.key}')"><img class="profilePic" src="${agentImg(a.key)}" alt=""><b>${esc(a.name)}</b><small class="profileFor">${esc(a.label)}</small><small>${esc(a.help)}</small></button>`).join('')}</div>`;
   shell('Mi agente', `<div class="card agentSetup">
     <div class="agWelcome" id="agWelcome">${setupWelcome(chosen, first, edit)}</div>
-    ${chosen ? `<details class="agOther" ${edit ? '' : ''}><summary>¿Prefieres otro agente? Elige aquí</summary>${grid}</details>` : `<small class="muted">1. ELIGE A TU AGENTE</small>${grid}`}
+    ${chosen ? `<details class="agOther" ${edit ? '' : ''}><summary>¿No es tu perfil? Cámbialo aquí</summary>${grid}</details>` : `<small class="muted">1. ¿CUÁL ES TU PERFIL?</small>${grid}`}
     <label class="field"><span class="agQ">¿A qué te dedicas?</span> <span class="muted">(opcional)</span><textarea id="agAbout" rows="3" maxlength="2000" placeholder="Por ejemplo: soy profesora de primaria en Madrid y doy clases de inglés por las tardes.">${esc(s.about || '')}</textarea></label>
     <label class="field"><span class="agQ">¿En qué quieres que te ayude?</span> <span class="muted">(opcional)</span><textarea id="agGoals" rows="3" maxlength="2000" placeholder="Por ejemplo: organizar mis clases de la semana, no olvidarme de las entregas y preparar materiales.">${esc(s.goals || '')}</textarea></label>
     <div class="plannerStep"><small class="agQ">¿TE MANDO CADA MAÑANA UN RESUMEN?</small>
@@ -732,7 +732,7 @@ function agentSetup(edit = false) {
   }).catch(() => {});
   document.getElementById('agSave').addEventListener('click', async e => {
     const profile = document.querySelector('.profileCard.sel')?.dataset.p;
-    if (!profile) return toast('Elige primero a tu agente.', 'warn');
+    if (!profile) return toast('Elige primero tu perfil.', 'warn');
     const done = busy(e.currentTarget, 'Guardando…');
     try {
       const { settings } = await api('agent', { method: 'POST', body: { action: 'setup', profile, about: agAbout.value.trim(), goals: agGoals.value.trim(), brief_enabled: agBrief.checked, brief_time: agTime.value || '08:00' } });
