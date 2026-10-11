@@ -24,7 +24,7 @@ function recall(k) { try { return JSON.parse(sessionStorage.getItem(k) || 'null'
 // Persisten entre pestañas (el visitante puede volver de CURO Group en otra pestaña).
 function lstore(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 function lrecall(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } }
-const CURO_LOGIN_URL = 'https://curogroup.net/';
+const CURO_LOGIN_URL = 'https://curogroup.net/?automate=entrar'; // la plataforma pide entrar y devuelve aquí con la sesión
 
 async function api(path, { method = 'GET', body } = {}) {
   const { data } = await sb.auth.getSession();
@@ -159,7 +159,7 @@ function login(mode = 'login', note = '') {
     <div class="brand"><span class="grad">CURO</span> Automate</div>
     <h2>Entra desde CURO Group</h2>
     <p class="muted">${esc(note || 'CURO Automate forma parte de la plataforma CURO Group. Inicia sesión allí y entrarás aquí directamente con tu misma cuenta.')}</p>
-    <a class="btn primary wideBtn" href="${CURO_LOGIN_URL}">Ir a CURO Group</a>
+    <a class="btn primary wideBtn" href="${CURO_LOGIN_URL}">Entrar o crear cuenta en CURO Group</a>
     <button class="btn ghost wideBtn" type="button" onclick="home()">Volver</button>
     <p class="muted helpLine">¿Problemas para entrar? Escríbenos a ${contactLink()}</p>
   </div></div>`;
