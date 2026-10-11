@@ -232,7 +232,7 @@ function showHelp() {
 }
 
 // ---------- Estructura del espacio privado ----------
-const NAV = ['Inicio', 'Automatizaciones', 'Aprobaciones', 'Historial', 'Conexiones', 'Conocimiento', 'Cuenta'];
+const NAV = ['Inicio', 'Mi agente', 'Automatizaciones', 'Aprobaciones', 'Historial', 'Conexiones', 'Conocimiento', 'Cuenta'];
 function shell(page, body) {
   currentPage = page;
   const pending = me?.counts?.pending_approvals || 0;
@@ -251,7 +251,7 @@ async function refreshMe() { me = await api('me'); return me; }
 async function go(page) {
   if (!session) return login('login');
   try { await refreshMe(); } catch (e) { return shell(page, `<div class="card"><p>${esc(e.message)}</p><button class="btn primary" onclick="go('${page}')">Reintentar</button></div>`); }
-  const pages = { Inicio: inicio, Automatizaciones: automationsPage, Aprobaciones: approvalsPage, Historial: historyPage, Conexiones: connectionsPage, Conocimiento: knowledgePage, Cuenta: accountPage };
+  const pages = { Inicio: inicio, 'Mi agente': agentPage, Automatizaciones: automationsPage, Aprobaciones: approvalsPage, Historial: historyPage, Conexiones: connectionsPage, Conocimiento: knowledgePage, Cuenta: accountPage };
   (pages[page] || inicio)();
 }
 function loading(page, text = 'Cargando…') { shell(page, `<div class="card"><p class="muted"><span class="spin"></span> ${esc(text)}</p></div>`); }
@@ -261,13 +261,13 @@ function loading(page, text = 'Cargando…') { shell(page, `<div class="card"><p
 const AGENT_PROFILES = ['Docente', 'Community manager', 'Creador de contenido', 'Emprendedor', 'Autónomo', 'Estudiante', 'Pequeños equipos (pymes)', 'Descubridor'];
 const MODES = [
   { k: 'auto', tag: 'Disponible', t: 'Hazlo tú con IA', d: 'Escribe lo que necesitas con tus palabras, mira cómo funcionaría y actívalo.', li: ['Para tareas sencillas que se repiten', 'Ves una vista previa antes de crear tu cuenta', 'Tú apruebas antes de que se envíe nada'], price: 'Gratis hasta 2 automatizaciones', cta: 'Probar ahora' },
-  { k: 'consultoria', tag: 'Próximamente', t: 'Te asesoramos', d: 'Cuéntanos tu trabajo. Hacemos un diagnóstico de qué te conviene automatizar, lo construimos y te lo dejamos funcionando.', li: ['Diagnóstico de tus tareas', 'Automatizaciones hechas a tu medida', 'Te las dejamos instaladas y probadas'], price: 'Precio según el proyecto', cta: 'Apuntarme a la lista de espera' },
-  { k: 'agente', tag: 'Próximamente', t: 'Tu agente IA personal', d: 'Un asistente que te conoce y no empieza de cero cada vez que entras.', li: ['Recuerda tus temas y lo que quedó pendiente', 'Lleva tu agenda y organiza tus proyectos', 'Cada mañana te dice qué tienes y qué sigue', 'Elige su perfil: docente, emprendedor, estudiante…'], price: 'Plan mensual', cta: 'Apuntarme a la lista de espera' }
+  { k: 'agente', tag: 'Nuevo · en prueba', t: 'Tu agente IA personal', d: 'Un asistente que te conoce y no empieza de cero cada vez que entras.', li: ['Recuerda tus temas y lo que quedó pendiente', 'Lleva tu agenda y organiza tus proyectos', 'Cada mañana te dice qué tienes y qué sigue', 'Elige su perfil: docente, emprendedor, estudiante…'], price: 'Gratis durante la fase de prueba', cta: 'Crear mi agente' },
+  { k: 'consultoria', tag: 'Próximamente', t: 'Soluciones IA', d: 'Para empresas y centros educativos. Nuestro equipo hace un diagnóstico, te dice qué se puede automatizar y qué no, y lo convertimos en un plan de trabajo.', li: ['Diagnóstico de tus tareas y procesos', 'Qué se puede automatizar y qué no', 'Plan de trabajo y automatizaciones a tu medida'], price: 'Precio según el proyecto', cta: 'Apuntarme a la lista de espera' }
 ];
 function openWaitlist(mode) {
   const agent = mode === 'agente';
   closeModals();
-  const m = modal(agent ? 'Tu agente IA personal' : 'Te asesoramos', `
+  const m = modal(agent ? 'Tu agente IA personal' : 'Soluciones IA', `
     <p>${agent ? 'Estamos preparando los agentes personales de CURO. Déjanos tu correo y el perfil que más se parece a ti, y te avisaremos en cuanto esté listo.' : 'Estamos preparando el servicio de diagnóstico y automatización a medida. Déjanos tu correo y cuéntanos qué te gustaría automatizar; te escribiremos en cuanto esté disponible.'}</p>
     <label class="field">Tu correo<input id="wlEmail" type="email" autocomplete="email" placeholder="tu@correo.com"></label>
     <label class="field">${agent ? '¿Qué perfil se parece más a ti?' : 'A qué te dedicas'}<select id="wlProfile"><option value="">Elige una opción</option>${AGENT_PROFILES.map(p => `<option>${esc(p)}</option>`).join('')}</select></label>
@@ -284,7 +284,7 @@ function openWaitlist(mode) {
     done();
     if (error) return info('No se pudo guardar', 'Inténtalo de nuevo en un momento.');
     closeModals();
-    info('¡Apuntado!', agent ? 'Te avisaremos en cuanto tu agente IA personal esté disponible.' : 'Te escribiremos en cuanto el servicio de asesoría esté disponible.');
+    info('¡Apuntado!', agent ? 'Te avisaremos en cuanto tu agente IA personal esté disponible.' : 'Te escribiremos en cuanto Soluciones IA esté disponible.');
   });
 }
 const featureIcons=[
@@ -296,7 +296,7 @@ const featureIcons=[
 `<svg viewBox="0 0 72 72" aria-hidden="true"><path d="M36 10l7 7 10-1 3 10 8 6-5 9 2 10-10 3-6 8-9-5-9 5-6-8-10-3 2-10-5-9 8-6 3-10 10 1z" fill="#dbeafe" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/><circle cx="36" cy="36" r="11" fill="white"/><path d="M31 36l4 4 7-9" fill="none" stroke="#00a98f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 ];
 const ideas=[['Docentes','Cuando reciba consultas de familias, clasifícalas, prepara una respuesta clara y déjamela lista para aprobar.'],['Emprendedores','Cuando llegue un nuevo cliente potencial, guarda sus datos, identifica qué necesita, prepara una respuesta y programa seguimiento.'],['Community managers','Organiza las solicitudes de contenido, prepara borradores por red social y envíamelos a aprobación antes de publicar.'],['Creadores de contenido','Cuando reciba una propuesta de colaboración, registra la marca, resume la propuesta y prepara una respuesta.'],['Freelance y consultores','Cuando llegue una consulta profesional, crea el contacto, resume la necesidad, prepara respuesta y seguimiento.'],['Pequeños equipos','Recoge solicitudes entrantes, asígnales prioridad, prepara las acciones siguientes y avisa de las que necesiten aprobación.']];
-function home(){A.innerHTML=`<header class="top"><a class="brand brandLink" href="https://curogroup.net/" title="Volver a CURO Group"><span class="grad">CURO</span> Automate</a><div class="topnav"><a class="backCuro" href="https://curogroup.net/">← CURO Group</a><a href="#que-hace">Qué hace</a><a href="#como-funciona">Cómo funciona</a><a href="#contacto">Contacto</a><button class="btn ghost" onclick="login('login')">Iniciar sesión</button></div></header><main><section class="hero"><span class="pill">AUTOMATIZACIÓN CON IA · MODO SUPERVISADO</span><h1>Dile qué trabajo quieres delegar. <span class="grad">CURO se ocupa del resto.</span></h1><p>Describe una tarea con tus palabras. CURO organiza el proceso, prepara el trabajo y te pide aprobación cuando hace falta.</p><div class="publicPrompt"><label for="publicInstruction">¿Qué quieres que CURO haga por ti?</label><div class="dictationWrap"><textarea id="publicInstruction" placeholder="Describe una tarea que haces repetidamente…">Cuando llegue una consulta sobre mis servicios, identifica al cliente, guarda sus datos, prepara una respuesta y avísame antes de enviarla.</textarea><button class="dictateBtn" type="button" onclick="toggleDictation('publicInstruction',this)" title="Dictar automatización" aria-label="Dictar automatización">🎙 <span>Dictar</span></button></div><div class="heroActions"><button class="btn primary" onclick="startFromPublic(this)">Crear mi automatización</button><button class="btn ghost linkbtn" onclick="showIdeas()">Ver ideas</button></div></div><div class="starterWrap" id="ideas-inicio"><small>O EMPIEZA CON UNA IDEA</small><div class="starterGrid">${ideas.slice(0,4).map((x,i)=>`<button type="button" class="starterCard starterExample" onclick="pickPublicIdea(${i})"><span>${x[0]}</span><b>${['Responder consultas','Captar y seguir clientes','Organizar solicitudes','Gestionar colaboraciones'][i]}</b><small>Usar este ejemplo</small></button>`).join('')}</div></div></section><section class="section modesSec" id="modos"><div class="sectionIntro"><span class="eyebrow">TRES FORMAS DE AUTOMATIZAR</span><h2>Elige cómo quieres que CURO te ayude</h2><p class="muted">Empieza tú solo con la IA, pide que lo hagamos por ti o ten un agente que te conoce.</p></div><div class="modesGrid">${MODES.map(m=>`<div class="card modeCard ${m.k}"><span class="modeTag">${m.tag}</span><h3>${m.t}</h3><p class="muted">${m.d}</p><ul>${m.li.map(x=>`<li>${x}</li>`).join('')}</ul><p class="modePrice">${m.price}</p><button class="btn ${m.k==='auto'?'primary':'ghost'}" onclick="${m.k==='auto'?"document.getElementById('publicInstruction')?.scrollIntoView({behavior:'smooth',block:'center'});document.getElementById('publicInstruction')?.focus()":`openWaitlist('${m.k}')`}">${m.cta}</button></div>`).join('')}</div></section><section class="section" id="que-hace"><div class="sectionIntro"><span class="eyebrow">CURO AUTOMATE</span><h2>¿Qué puede hacer CURO por ti?</h2><p class="muted">Un espacio para delegar trabajo repetitivo sin construir flujos técnicos.</p></div><div class="grid">${['Correo inteligente','Respuestas y aprobaciones','Contactos y seguimiento','Documentos','Conocimiento de tu negocio','Organización de tareas'].map((x,i)=>`<div class="card feature"><b class="featureIcon">${featureIcons[i]}</b><h3>${x}</h3><p class="muted">${['Clasifica consultas y detecta qué necesita cada mensaje.','Prepara borradores y deja las acciones sensibles bajo tu control.','Registra personas, organizaciones, intereses y próximos pasos.','Prepara propuestas, informes, presupuestos y otros documentos.','Utiliza tus servicios, reglas y datos sin inventar información.','Convierte instrucciones en procesos repetibles y trazables.'][i]}</p></div>`).join('')}</div></section><section class="section softSection"><div class="sectionIntro"><span class="eyebrow">PARA TU PROFESIÓN</span><h2>Automatizaciones pensadas para tu trabajo</h2><p class="muted">Empieza con una necesidad concreta y adapta cada automatización a tu forma de trabajar.</p></div><div class="grid">${ideas.map(x=>`<div class="card"><span class="badge">${x[0]}</span><p>${x[1]}</p></div>`).join('')}</div></section><section class="section" id="como-funciona"><div class="sectionIntro"><span class="eyebrow">SIN FLUJOS TÉCNICOS</span><h2>Cómo funciona</h2></div><div class="steps">${[['1','Describe qué quieres delegar','Escríbelo con tus propias palabras.'],['2','CURO prepara el proceso','Organiza las acciones y utiliza tu conocimiento.'],['3','Revisas cuando sea necesario','Las acciones sensibles quedan bajo aprobación.'],['4','CURO ejecuta y registra','Mantiene trazabilidad de lo realizado.']].map(x=>`<div class="card step"><span class="stepNum">${x[0]}</span><h3>${x[1]}</h3><p class="muted">${x[2]}</p></div>`).join('')}</div></section><section class="section agentPublic"><div><span class="pill">CURO AGENT</span><h2>Automatización con control humano</h2><p class="muted">CURO puede preparar, organizar y ejecutar tareas. En modo supervisado, las decisiones importantes esperan tu aprobación.</p></div><div class="agentVisual"><div class="agentIcon big">✦</div><div><b>CURO Agent</b><small>Modo supervisado</small></div></div></section><section class="section"><div class="planCard"><div><span class="pill">EMPIEZA GRATIS</span><h2>Crea tu primera automatización hoy</h2><p>Describe la tarea, revisa el plan que prepara CURO y actívala. Tú apruebas cada envío importante.</p></div><button class="btn primary" onclick="login('signup')">Crear cuenta gratis</button></div></section><section class="contactBand" id="contacto"><div class="contactInner"><div><span class="eyebrow light">CONTACTO</span><h2>¿Tienes una pregunta?</h2><p>Estamos construyendo una forma más sencilla de delegar trabajo con inteligencia artificial.</p><a class="contactLink" href="mailto:hola@curogroup.net">hola@curogroup.net</a></div><div class="newsletter"><span class="eyebrow light">NEWSLETTER</span><h3>Novedades de CURO Group</h3><p>Recibe recursos, ideas y novedades sobre IA, automatización y productos CURO.</p><div class="newsletterForm"><input id="newsletterEmail" type="email" placeholder="Tu correo electrónico"><button class="btn primary" onclick="newsletterDemo()">Suscribirme</button></div><small id="newsletterMsg"></small></div></div></section></main><footer class="footer"><div class="footerGrid"><div><a class="brand brandLink" href="https://curogroup.net/"><span class="grad">CURO</span> Group</a><p>Herramientas, recursos y soluciones para trabajar y aprender con inteligencia artificial.</p><p><b>Madrid, España</b></p></div><div><h4>Navegación</h4><a href="https://curogroup.net/">← Volver a CURO Group</a><a href="#que-hace">Qué hace</a><a href="#como-funciona">Cómo funciona</a><a href="#contacto">Contacto</a><a href="#" onclick="login('login');return false">CURO Automate</a></div><div><h4>Legal</h4><a href="#" onclick="legalDemo('Aviso legal');return false">Aviso legal</a><a href="#" onclick="legalDemo('Política de privacidad');return false">Política de privacidad</a><a href="#" onclick="legalDemo('Términos y condiciones');return false">Términos y condiciones</a><a href="#" onclick="legalDemo('Cookies');return false">Cookies</a></div><div><h4>Síguenos</h4><a target="_blank" rel="noopener" href="https://www.instagram.com/curo.group/">Instagram</a><a target="_blank" rel="noopener" href="https://www.tiktok.com/@curo.group">TikTok</a><a target="_blank" rel="noopener" href="https://www.youtube.com/@Curo.Group1">YouTube</a><a target="_blank" rel="noopener" href="https://www.linkedin.com/company/curo-group-94258942a/">LinkedIn</a></div></div><div class="footerBottom"><span>© 2026 CURO Group · Madrid, España</span><span>Privacidad · Cookies · Términos · Aviso legal</span></div></footer>`}
+function home(){A.innerHTML=`<header class="top"><a class="brand brandLink" href="https://curogroup.net/" title="Volver a CURO Group"><span class="grad">CURO</span> Automate</a><div class="topnav"><a class="backCuro" href="https://curogroup.net/">← CURO Group</a><a href="#que-hace">Qué hace</a><a href="#como-funciona">Cómo funciona</a><a href="#contacto">Contacto</a><button class="btn ghost" onclick="login('login')">Iniciar sesión</button></div></header><main><section class="hero"><span class="pill">AUTOMATIZACIÓN CON IA · MODO SUPERVISADO</span><h1>Dile qué trabajo quieres delegar. <span class="grad">CURO se ocupa del resto.</span></h1><p>Describe una tarea con tus palabras. CURO organiza el proceso, prepara el trabajo y te pide aprobación cuando hace falta.</p><div class="publicPrompt"><label for="publicInstruction">¿Qué quieres que CURO haga por ti?</label><div class="dictationWrap"><textarea id="publicInstruction" placeholder="Describe una tarea que haces repetidamente…">Cuando llegue una consulta sobre mis servicios, identifica al cliente, guarda sus datos, prepara una respuesta y avísame antes de enviarla.</textarea><button class="dictateBtn" type="button" onclick="toggleDictation('publicInstruction',this)" title="Dictar automatización" aria-label="Dictar automatización">🎙 <span>Dictar</span></button></div><div class="heroActions"><button class="btn primary" onclick="startFromPublic(this)">Crear mi automatización</button><button class="btn ghost linkbtn" onclick="showIdeas()">Ver ideas</button></div></div><div class="starterWrap" id="ideas-inicio"><small>O EMPIEZA CON UNA IDEA</small><div class="starterGrid">${ideas.slice(0,4).map((x,i)=>`<button type="button" class="starterCard starterExample" onclick="pickPublicIdea(${i})"><span>${x[0]}</span><b>${['Responder consultas','Captar y seguir clientes','Organizar solicitudes','Gestionar colaboraciones'][i]}</b><small>Usar este ejemplo</small></button>`).join('')}</div></div></section><section class="section modesSec" id="modos"><div class="sectionIntro"><span class="eyebrow">TRES FORMAS DE AUTOMATIZAR</span><h2>Elige cómo quieres que CURO te ayude</h2><p class="muted">Empieza tú solo con la IA, ten un agente que te conoce o pide que nuestro equipo lo haga por ti.</p></div><div class="modesGrid">${MODES.map(m=>`<div class="card modeCard ${m.k}"><span class="modeTag">${m.tag}</span><h3>${m.t}</h3><p class="muted">${m.d}</p><ul>${m.li.map(x=>`<li>${x}</li>`).join('')}</ul><p class="modePrice">${m.price}</p><button class="btn ${m.k==='auto'?'primary':'ghost'}" onclick="${m.k==='auto'?"document.getElementById('publicInstruction')?.scrollIntoView({behavior:'smooth',block:'center'});document.getElementById('publicInstruction')?.focus()":m.k==='agente'?'openAgent()':`openWaitlist('${m.k}')`}">${m.cta}</button></div>`).join('')}</div></section><section class="section" id="que-hace"><div class="sectionIntro"><span class="eyebrow">CURO AUTOMATE</span><h2>¿Qué puede hacer CURO por ti?</h2><p class="muted">Un espacio para delegar trabajo repetitivo sin construir flujos técnicos.</p></div><div class="grid">${['Correo inteligente','Respuestas y aprobaciones','Contactos y seguimiento','Documentos','Conocimiento de tu negocio','Organización de tareas'].map((x,i)=>`<div class="card feature"><b class="featureIcon">${featureIcons[i]}</b><h3>${x}</h3><p class="muted">${['Clasifica consultas y detecta qué necesita cada mensaje.','Prepara borradores y deja las acciones sensibles bajo tu control.','Registra personas, organizaciones, intereses y próximos pasos.','Prepara propuestas, informes, presupuestos y otros documentos.','Utiliza tus servicios, reglas y datos sin inventar información.','Convierte instrucciones en procesos repetibles y trazables.'][i]}</p></div>`).join('')}</div></section><section class="section softSection"><div class="sectionIntro"><span class="eyebrow">PARA TU PROFESIÓN</span><h2>Automatizaciones pensadas para tu trabajo</h2><p class="muted">Empieza con una necesidad concreta y adapta cada automatización a tu forma de trabajar.</p></div><div class="grid">${ideas.map(x=>`<div class="card"><span class="badge">${x[0]}</span><p>${x[1]}</p></div>`).join('')}</div></section><section class="section" id="como-funciona"><div class="sectionIntro"><span class="eyebrow">SIN FLUJOS TÉCNICOS</span><h2>Cómo funciona</h2></div><div class="steps">${[['1','Describe qué quieres delegar','Escríbelo con tus propias palabras.'],['2','CURO prepara el proceso','Organiza las acciones y utiliza tu conocimiento.'],['3','Revisas cuando sea necesario','Las acciones sensibles quedan bajo aprobación.'],['4','CURO ejecuta y registra','Mantiene trazabilidad de lo realizado.']].map(x=>`<div class="card step"><span class="stepNum">${x[0]}</span><h3>${x[1]}</h3><p class="muted">${x[2]}</p></div>`).join('')}</div></section><section class="section agentPublic"><div><span class="pill">CURO AGENT</span><h2>Automatización con control humano</h2><p class="muted">CURO puede preparar, organizar y ejecutar tareas. En modo supervisado, las decisiones importantes esperan tu aprobación.</p></div><div class="agentVisual"><div class="agentIcon big">✦</div><div><b>CURO Agent</b><small>Modo supervisado</small></div></div></section><section class="section"><div class="planCard"><div><span class="pill">EMPIEZA GRATIS</span><h2>Crea tu primera automatización hoy</h2><p>Describe la tarea, revisa el plan que prepara CURO y actívala. Tú apruebas cada envío importante.</p></div><button class="btn primary" onclick="login('signup')">Crear cuenta gratis</button></div></section><section class="contactBand" id="contacto"><div class="contactInner"><div><span class="eyebrow light">CONTACTO</span><h2>¿Tienes una pregunta?</h2><p>Estamos construyendo una forma más sencilla de delegar trabajo con inteligencia artificial.</p><a class="contactLink" href="mailto:hola@curogroup.net">hola@curogroup.net</a></div><div class="newsletter"><span class="eyebrow light">NEWSLETTER</span><h3>Novedades de CURO Group</h3><p>Recibe recursos, ideas y novedades sobre IA, automatización y productos CURO.</p><div class="newsletterForm"><input id="newsletterEmail" type="email" placeholder="Tu correo electrónico"><button class="btn primary" onclick="newsletterDemo()">Suscribirme</button></div><small id="newsletterMsg"></small></div></div></section></main><footer class="footer"><div class="footerGrid"><div><a class="brand brandLink" href="https://curogroup.net/"><span class="grad">CURO</span> Group</a><p>Herramientas, recursos y soluciones para trabajar y aprender con inteligencia artificial.</p><p><b>Madrid, España</b></p></div><div><h4>Navegación</h4><a href="https://curogroup.net/">← Volver a CURO Group</a><a href="#que-hace">Qué hace</a><a href="#como-funciona">Cómo funciona</a><a href="#contacto">Contacto</a><a href="#" onclick="login('login');return false">CURO Automate</a></div><div><h4>Legal</h4><a href="#" onclick="legalDemo('Aviso legal');return false">Aviso legal</a><a href="#" onclick="legalDemo('Política de privacidad');return false">Política de privacidad</a><a href="#" onclick="legalDemo('Términos y condiciones');return false">Términos y condiciones</a><a href="#" onclick="legalDemo('Cookies');return false">Cookies</a></div><div><h4>Síguenos</h4><a target="_blank" rel="noopener" href="https://www.instagram.com/curo.group/">Instagram</a><a target="_blank" rel="noopener" href="https://www.tiktok.com/@curo.group">TikTok</a><a target="_blank" rel="noopener" href="https://www.youtube.com/@Curo.Group1">YouTube</a><a target="_blank" rel="noopener" href="https://www.linkedin.com/company/curo-group-94258942a/">LinkedIn</a></div></div><div class="footerBottom"><span>© 2026 CURO Group · Madrid, España</span><span>Privacidad · Cookies · Términos · Aviso legal</span></div></footer>`}
 
 // ---------- Inicio: describir y crear con IA ----------
 const EXAMPLES = [
@@ -543,7 +543,7 @@ let runsCache = [];
 async function historyPage(automationId) {
   loading('Historial');
   try {
-    const { runs } = await api('runs' + (typeof automationId === 'string' ? '?automation_id=' + automationId : ''));
+    const { runs } = await api('automations?runs=1' + (typeof automationId === 'string' ? '&automation_id=' + automationId : ''));
     runsCache = runs;
     const filtered = typeof automationId === 'string';
     shell('Historial', `<div class="row"><p class="muted">${filtered ? `Ejecuciones de <b>${esc(runs[0]?.automate_automations?.name || 'esta automatización')}</b>` : 'Todo lo que ha hecho CURO, lo más reciente primero.'}</p>${filtered ? `<button class="btn ghost" onclick="historyPage()">Ver todo</button>` : ''}</div>
@@ -601,6 +601,129 @@ async function delKnowledge(id, btn) {
   try { await api('knowledge?id=' + id, { method: 'DELETE' }); knowledgePage(); } catch (e) { done(); info('No se pudo eliminar', e.message); }
 }
 
+// ---------- Mi agente: agente IA personal ----------
+let agentState = null, agentTab = 'pendiente';
+const AGENT_TABS = [['pendiente', 'Pendientes'], ['proyecto', 'Proyectos'], ['agenda', 'Agenda'], ['memoria', 'Lo que recuerdo']];
+const AGENT_ICONS = { docente: '🍎', community: '📣', creador: '🎬', emprendedor: '🚀', autonomo: '💼', estudiante: '📚', pyme: '👥', descubridor: '🧭' };
+function openAgent() {
+  if (session) return go('Mi agente');
+  lstore('curo_ir', 'agente');
+  login('signup');
+}
+async function agentPage() {
+  loading('Mi agente', 'Abriendo tu agente…');
+  try { agentState = await api('agent'); }
+  catch (e) { return shell('Mi agente', `<div class="card"><p>${esc(e.message)}</p><button class="btn primary" onclick="go('Mi agente')">Reintentar</button></div>`); }
+  agentState.settings ? renderAgent() : agentSetup();
+}
+function agentSetup(edit = false) {
+  const s = agentState.settings || {};
+  const time = String(s.brief_time || '08:00').slice(0, 5);
+  shell('Mi agente', `<div class="card agentSetup">
+    <span class="pill">${edit ? 'AJUSTES DE TU AGENTE' : 'CREA TU AGENTE IA PERSONAL'}</span>
+    <h2>${edit ? 'Cambia cómo te ayuda tu agente' : 'Un asistente que te conoce y recuerda lo importante'}</h2>
+    <p class="muted">Elige el perfil que más se parece a ti. Tu agente recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>
+    <small class="muted">1. ¿QUÉ PERFIL SE PARECE MÁS A TI?</small>
+    <div class="profileGrid">${agentState.profiles.map(p => `<button type="button" class="profileCard ${s.profile === p.key ? 'sel' : ''}" data-p="${p.key}" onclick="document.querySelectorAll('.profileCard').forEach(b=>b.classList.toggle('sel',b===this))"><span class="profileIcon">${AGENT_ICONS[p.key] || '✦'}</span><b>${esc(p.label)}</b><small>${esc(p.focus)}</small></button>`).join('')}</div>
+    <label class="field">2. Cuéntale un poco de ti <span class="muted">(opcional)</span><textarea id="agAbout" rows="3" maxlength="2000" placeholder="Por ejemplo: soy profesora de primaria en Madrid y doy clases de inglés por las tardes.">${esc(s.about || '')}</textarea></label>
+    <label class="field">3. ¿En qué quieres que te ayude? <span class="muted">(opcional)</span><textarea id="agGoals" rows="3" maxlength="2000" placeholder="Por ejemplo: organizar mis clases de la semana, no olvidarme de las entregas y preparar materiales.">${esc(s.goals || '')}</textarea></label>
+    <div class="plannerStep"><small>4. RESUMEN DE LA MAÑANA</small>
+      <label class="toggle"><input type="checkbox" id="agBrief" ${s.brief_enabled === false ? '' : 'checked'}> Enviarme cada día un correo con mi agenda, pendientes y siguientes pasos</label>
+      <label class="field inlineField">Hora (Madrid)<input id="agTime" type="time" value="${esc(time)}"></label></div>
+    <p class="muted small">No le cuentes contraseñas, datos bancarios ni de salud. Puedes borrar cualquier cosa que recuerde cuando quieras.</p>
+    <div class="actions">${edit ? `<button class="btn ghost" onclick="renderAgent()">Cancelar</button>` : ''}<button class="btn primary" id="agSave">${edit ? 'Guardar cambios' : 'Crear mi agente'}</button></div>
+  </div>`);
+  document.getElementById('agSave').addEventListener('click', async e => {
+    const profile = document.querySelector('.profileCard.sel')?.dataset.p;
+    if (!profile) return toast('Elige primero un perfil.', 'warn');
+    const done = busy(e.currentTarget, 'Guardando…');
+    try {
+      const { settings } = await api('agent', { method: 'POST', body: { action: 'setup', profile, about: agAbout.value.trim(), goals: agGoals.value.trim(), brief_enabled: agBrief.checked, brief_time: agTime.value || '08:00' } });
+      agentState.settings = settings;
+      toast(edit ? 'Cambios guardados.' : '¡Tu agente está listo!');
+      renderAgent();
+    } catch (err) { done(); info('No se pudo guardar', err.message); }
+  });
+}
+function agentMsgHtml(m) { return `<div class="agMsg ${m.role === 'user' ? 'me' : 'bot'}">${esc(m.content).replace(/\n/g, '<br>')}</div>`; }
+function agentItemsHtml() {
+  const items = (agentState.items || []).filter(i => agentTab === 'agenda' ? (i.kind === 'agenda' || (i.due_at && i.kind !== 'memoria')) : i.kind === agentTab);
+  const active = items.filter(i => i.status === 'activo'), done = items.filter(i => i.status !== 'activo').slice(0, 10);
+  if (agentTab === 'agenda') active.sort((a, b) => new Date(a.due_at || 8.64e15) - new Date(b.due_at || 8.64e15));
+  const row = i => `<li class="agItem ${i.status !== 'activo' ? 'done' : ''}">
+    ${agentTab !== 'memoria' ? `<button class="agCheck" title="${i.status === 'activo' ? 'Marcar como hecho' : 'Volver a pendiente'}" onclick="agentItem('${i.status === 'activo' ? 'done' : 'undo'}','${i.id}')">${i.status === 'activo' ? '' : '✓'}</button>` : ''}
+    <div><b>${esc(i.title)}</b>${i.detail ? `<small>${esc(i.detail)}</small>` : ''}${i.due_at ? `<small class="agDue">📅 ${fmtDate(i.due_at)}</small>` : ''}</div>
+    <button class="iconBtn" title="Borrar" aria-label="Borrar" onclick="agentItem('delete','${i.id}')">×</button></li>`;
+  const empty = { pendiente: 'Sin pendientes. Cuéntale a tu agente lo que tienes que hacer.', proyecto: 'Aún no hay proyectos. Háblale de lo que estás preparando.', agenda: 'Nada en la agenda. Dile tus citas y entregas con fecha.', memoria: 'Todavía no recuerda nada. Cuéntale sobre ti y tu trabajo.' }[agentTab];
+  return `<ul class="agList">${active.map(row).join('') || `<li class="muted agEmpty">${empty}</li>`}</ul>${done.length ? `<details class="agDone"><summary>Hechos (${done.length})</summary><ul class="agList">${done.map(row).join('')}</ul></details>` : ''}`;
+}
+function renderAgent() {
+  const s = agentState.settings, prof = agentState.profiles.find(p => p.key === s.profile) || {};
+  const msgs = agentState.messages || [];
+  const first = (me?.user?.name || '').split(' ')[0];
+  shell('Mi agente', `
+    <div class="agHead card"><div class="agWho"><span class="profileIcon">${AGENT_ICONS[s.profile] || '✦'}</span><div><b>Tu agente · ${esc(prof.label || '')}</b><small class="muted">${s.brief_enabled ? `Resumen cada día a las ${esc(String(s.brief_time || '08:00').slice(0, 5))}` : 'Resumen diario desactivado'}</small></div></div>
+      <div class="actions"><button class="btn ghost smallBtn" id="agBriefNow">Enviarme el resumen ahora</button><button class="btn ghost smallBtn" onclick="agentSetup(true)">Ajustes</button></div></div>
+    <div class="agGrid">
+      <div class="card agChat">
+        <div class="agMsgs" id="agMsgs">${msgs.length ? msgs.map(agentMsgHtml).join('') : `<div class="agMsg bot">Hola${first ? `, ${esc(first)}` : ''}. Soy tu agente personal. Cuéntame en qué estás trabajando, qué tienes que hacer esta semana o qué te gustaría organizar, y lo iré recordando por ti.</div>`}</div>
+        <form class="agForm" onsubmit="event.preventDefault();agentSend()">
+          <div class="dictationWrap"><textarea id="agInput" rows="2" maxlength="2000" placeholder="Escribe a tu agente… (por ejemplo: el jueves a las 17 tengo reunión con familias)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();agentSend()}"></textarea>
+          <button class="dictateBtn" type="button" onclick="toggleDictation('agInput',this)" aria-label="Dictar">🎙 <span>Dictar</span></button></div>
+          <button class="btn primary" id="agSend" type="submit">Enviar</button>
+        </form>
+      </div>
+      <div class="card agPanel">
+        <div class="agTabs">${AGENT_TABS.map(([k, l]) => `<button class="agTab ${k === agentTab ? 'active' : ''}" onclick="agentTab='${k}';renderAgentPanel()">${l}<span class="agCount">${(agentState.items || []).filter(i => i.status === 'activo' && (k === 'agenda' ? (i.kind === 'agenda' || (i.due_at && i.kind !== 'memoria')) : i.kind === k)).length || ''}</span></button>`).join('')}</div>
+        <div id="agItems">${agentItemsHtml()}</div>
+        <form class="agAdd" onsubmit="event.preventDefault();agentAdd(this)"><input id="agNew" maxlength="300" placeholder="Añadir a mano…">${agentTab === 'agenda' ? '<input id="agNewDue" type="datetime-local">' : ''}<button class="btn ghost smallBtn" type="submit">Añadir</button></form>
+      </div>
+    </div>`);
+  const box = document.getElementById('agMsgs'); if (box) box.scrollTop = box.scrollHeight;
+  document.getElementById('agBriefNow').addEventListener('click', async e => {
+    const done = busy(e.currentTarget, 'Enviando…');
+    try { const r = await api('agent', { method: 'POST', body: { action: 'brief' } }); toast('Resumen enviado a ' + r.to); }
+    catch (err) { info('No se pudo enviar el resumen', err.message); }
+    finally { done(); }
+  });
+}
+function renderAgentPanel() { const keep = document.getElementById('agInput')?.value || ''; renderAgent(); const i = document.getElementById('agInput'); if (i) i.value = keep; }
+async function agentSend() {
+  const input = document.getElementById('agInput'), text = input?.value.trim();
+  if (!text) return;
+  const box = document.getElementById('agMsgs');
+  box.insertAdjacentHTML('beforeend', agentMsgHtml({ role: 'user', content: text }) + '<div class="agMsg bot typing" id="agTyping"><span class="spin"></span> Pensando…</div>');
+  box.scrollTop = box.scrollHeight; input.value = '';
+  const done = busy(document.getElementById('agSend'), '…');
+  try {
+    const r = await api('agent', { method: 'POST', body: { action: 'chat', message: text } });
+    agentState.messages = [...(agentState.messages || []), { role: 'user', content: text }, { role: 'assistant', content: r.reply }];
+    agentState.items = r.items;
+    const c = r.changes || {};
+    renderAgent();
+    const n = (c.added || 0) + (c.done || 0) + (c.updated || 0);
+    if (n) toast(`Tu agente actualizó ${n} ${n === 1 ? 'cosa' : 'cosas'} en tus listas.`);
+  } catch (e) {
+    document.getElementById('agTyping')?.remove(); done();
+    const i = document.getElementById('agInput'); if (i && !i.value) i.value = text;
+    info('Tu agente no pudo responder', e.message);
+  }
+}
+async function agentItem(op, id) {
+  try { const r = await api('agent', { method: 'POST', body: { action: 'item', op, id } }); agentState.items = r.items; renderAgentPanel(); }
+  catch (e) { info('No se pudo cambiar', e.message); }
+}
+async function agentAdd(form) {
+  const title = form.querySelector('#agNew').value.trim();
+  if (!title) return;
+  const dueRaw = form.querySelector('#agNewDue')?.value || '';
+  const kind = agentTab;
+  try {
+    const r = await api('agent', { method: 'POST', body: { action: 'item', op: 'add', kind, title, due: dueRaw ? dueRaw.replace('T', ' ') : '' } });
+    agentState.items = r.items; renderAgentPanel();
+  } catch (e) { info('No se pudo añadir', e.message); }
+}
+
 // ---------- Cuenta ----------
 function accountPage() {
   shell('Cuenta', `<div class="card"><h3>${esc(me.user.name)}</h3><p class="muted">${esc(me.user.email)}${me.user.is_admin ? ' · Administrador de CURO' : ''}</p>
@@ -613,9 +736,10 @@ function accountPage() {
 // ---------- Arranque ----------
 // ?ir=aprobaciones (enlace de los avisos por correo) abre directamente Aprobaciones.
 function startPage() {
-  const ir = new URLSearchParams(location.search).get('ir');
-  if (ir) history.replaceState({}, '', location.pathname);
-  return ir === 'aprobaciones' ? 'Aprobaciones' : 'Inicio';
+  const ir = new URLSearchParams(location.search).get('ir') || lrecall('curo_ir');
+  if (new URLSearchParams(location.search).get('ir')) history.replaceState({}, '', location.pathname);
+  lstore('curo_ir', null);
+  return ir === 'aprobaciones' ? 'Aprobaciones' : ir === 'agente' ? 'Mi agente' : 'Inicio';
 }
 async function boot() {
   const q = new URLSearchParams(location.search);
@@ -630,6 +754,9 @@ async function boot() {
   const { data } = await sb.auth.getSession();
   session = data.session;
   if (!session) {
+    // Si venía a una sección concreta (por ejemplo ?ir=agente), se recuerda para después de entrar.
+    const ir = q.get('ir');
+    if (ir) { lstore('curo_ir', ir); history.replaceState({}, '', location.pathname); }
     home();
     const pp = lrecall('curo_pending_preview');
     const box = document.getElementById('publicInstruction');

@@ -125,3 +125,40 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 .modePrice{font-weight:700;margin:0}
 .modal .field select,.modal .field textarea{width:100%;font:inherit;padding:10px 12px;border:1px solid #d9deea;border-radius:10px;background:#fff}
 .small{font-size:13px}
+
+/* Mi agente: agente IA personal */
+.modeCard.agente .modeTag{background:#fff1e0;color:#b45309}
+.agentSetup{display:grid;gap:14px}.agentSetup h2{margin:0}
+.profileGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.profileCard{display:flex;flex-direction:column;gap:4px;text-align:left;padding:12px;border:1.5px solid #e1e6f0;border-radius:14px;background:#fff;cursor:pointer;font:inherit;color:inherit;min-width:0}
+.profileCard small{color:#667085;font-size:12px;line-height:1.35}
+.profileCard:hover{border-color:#9aa6f7}.profileCard.sel{border-color:#3b4ff0;background:#f2f4ff;box-shadow:0 0 0 2px #3b4ff0 inset}
+.profileIcon{font-size:24px;line-height:1}
+.agentSetup textarea,.agentSetup input[type=time],.agAdd input{font:inherit;padding:10px 12px;border:1px solid #d9deea;border-radius:10px;background:#fff;width:100%;box-sizing:border-box}
+.inlineField{display:flex;align-items:center;gap:10px;margin-top:8px}.inlineField input{width:auto!important}
+.agHead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.agWho{display:flex;align-items:center;gap:12px}.agWho small{display:block}
+.agGrid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:14px;align-items:start}
+@media(max-width:900px){.agGrid{grid-template-columns:1fr}}
+.agChat{display:flex;flex-direction:column;gap:10px;min-height:420px}
+.agMsgs{flex:1;max-height:55vh;min-height:280px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:4px}
+.agMsg{max-width:85%;padding:10px 13px;border-radius:14px;line-height:1.5;font-size:15px;overflow-wrap:anywhere}
+.agMsg.bot{background:#f3f5fa;align-self:flex-start;border-bottom-left-radius:4px}
+.agMsg.me{background:#3b4ff0;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.agForm{display:flex;gap:8px;align-items:flex-end}.agForm .dictationWrap{flex:1}
+.agForm textarea{width:100%;box-sizing:border-box;font:inherit;padding:10px 12px;border:1px solid #d9deea;border-radius:12px;resize:vertical}
+.agTabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.agTab{border:1px solid #e1e6f0;background:#fff;border-radius:99px;padding:6px 12px;font:inherit;font-size:14px;cursor:pointer;color:inherit}
+.agTab.active{background:#0d1426;color:#fff;border-color:#0d1426}
+.agCount{margin-left:6px;font-weight:700;font-size:12px;opacity:.8}.agCount:empty{display:none}
+.agList{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.agItem{display:flex;align-items:flex-start;gap:10px;padding:9px 10px;border:1px solid #edf0f6;border-radius:12px}
+.agItem>div{flex:1;min-width:0}.agItem b{display:block;font-weight:600;overflow-wrap:anywhere}.agItem small{display:block;color:#667085;font-size:13px}
+.agItem.done b{text-decoration:line-through;color:#98a2b3}
+.agItem .iconBtn{width:28px;height:28px;font-size:17px;flex:none}
+.agCheck{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid #9aa6f7;background:#fff;cursor:pointer;color:#14866d;font-weight:800;line-height:1;padding:0;margin-top:1px}
+.agItem.done .agCheck{border-color:#14866d;background:#e3f5ef}
+.agEmpty{padding:10px 2px}
+.agDone{margin-top:10px}.agDone summary{cursor:pointer;color:#667085;font-size:14px;margin-bottom:6px}
+.agAdd{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}.agAdd input{flex:1;min-width:140px}
+@media(max-width:850px){.shell{grid-template-columns:minmax(0,1fr)}.side{min-width:0}.sideFoot{flex-wrap:wrap;justify-content:flex-start;word-break:normal}.sideFoot small{flex-basis:100%;overflow-wrap:anywhere}.agForm{flex-direction:column;align-items:stretch}}

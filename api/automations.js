@@ -28,6 +28,15 @@ module.exports = handler(async (req, res) => {
   const q = query(req);
 
   if (req.method === 'GET') {
+    const q = query(req);
+    if (q.runs) {
+      // Historial de ejecuciones (antes /api/runs; unido aquí por el límite de funciones del plan de Vercel).
+      let qs = `user_id=eq.${enc(user.id)}&order=started_at.desc&limit=${Math.min(Number(q.limit) || 50, 200)}`;
+      if (q.automation_id) qs += `&automation_id=eq.${enc(q.automation_id)}`;
+      if (q.id) qs += `&id=eq.${enc(q.id)}`;
+      qs += '&select=*,automate_automations(name)';
+      return json(res, 200, { runs: await db.select('automate_runs', qs) });
+    }
     const rows = await db.select('automate_automations', `user_id=eq.${enc(user.id)}&select=*&order=created_at.desc`);
     return json(res, 200, { automations: rows });
   }

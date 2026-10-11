@@ -9,6 +9,7 @@ const { nextRun } = require('../_lib/schedule');
 const executor = require('../_lib/executor');
 const google = require('../_lib/google');
 const { isAdmin } = require('../_lib/account');
+const agent = require('../_lib/agent');
 
 const BUDGET_MS = 200000; // el motor se activa cada 5 min; dejamos margen para no solaparse
 
@@ -85,6 +86,18 @@ module.exports = async (req, res) => {
         try { await runOne(a, 'curo_new_user', { type: 'curo_new_user', name: ev.payload.name, email: ev.payload.email, registered_at: ev.created_at }); processed++; }
         catch (e) { report.errors.push(`${a.id}: ${e.message}`); }
       }
+    }
+
+    // 4) Resumen de la mañana del agente IA personal
+    report.agent_briefs = 0;
+    const briefs = await db.select('agent_settings', `brief_enabled=eq.true&brief_next_at=lte.${enc(new Date().toISOString())}&select=user_id,brief_time,brief_next_at&order=brief_next_at.asc&limit=10`);
+    for (const s of briefs) {
+      if (left() < 15000) break;
+      const next = nextRun({ frequency: 'daily', time: s.brief_time || '08:00' }, new Date()).toISOString();
+      const claimed = await db.update('agent_settings', `user_id=eq.${enc(s.user_id)}&brief_next_at=eq.${enc(s.brief_next_at)}`, { brief_next_at: next });
+      if (!claimed.length) continue;
+      try { await agent.sendBrief(s.user_id); report.agent_briefs++; }
+      catch (e) { report.errors.push(`agente ${s.user_id}: ${e.message}`); }
     }
   } catch (e) {
     report.errors.push(e.message);

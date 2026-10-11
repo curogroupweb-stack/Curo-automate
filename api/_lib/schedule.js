@@ -53,4 +53,4 @@ function describe(config = {}) {
   }
 }
 
-module.exports = { nextRun, describe };
+module.exports = { nextRun, describe, madridToUtc, madridParts };
