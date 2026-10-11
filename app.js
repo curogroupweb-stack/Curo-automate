@@ -735,11 +735,17 @@ function accountPage() {
 
 // ---------- Arranque ----------
 // ?ir=aprobaciones (enlace de los avisos por correo) abre directamente Aprobaciones.
+// Se recuerda unos segundos porque al entrar con sesión se llama dos veces (arranque y aviso de sesión).
+let startCache = null;
 function startPage() {
-  const ir = new URLSearchParams(location.search).get('ir') || lrecall('curo_ir');
-  if (new URLSearchParams(location.search).get('ir')) history.replaceState({}, '', location.pathname);
+  if (startCache && Date.now() - startCache.t < 5000) return startCache.p;
+  const q = new URLSearchParams(location.search).get('ir');
+  const ir = q || lrecall('curo_ir');
+  if (q) history.replaceState({}, '', location.pathname);
   lstore('curo_ir', null);
-  return ir === 'aprobaciones' ? 'Aprobaciones' : ir === 'agente' ? 'Mi agente' : 'Inicio';
+  const p = ir === 'aprobaciones' ? 'Aprobaciones' : ir === 'agente' ? 'Mi agente' : 'Inicio';
+  startCache = { p, t: Date.now() };
+  return p;
 }
 async function boot() {
   const q = new URLSearchParams(location.search);
@@ -757,6 +763,8 @@ async function boot() {
     // Si venía a una sección concreta (por ejemplo ?ir=agente), se recuerda para después de entrar.
     const ir = q.get('ir');
     if (ir) { lstore('curo_ir', ir); history.replaceState({}, '', location.pathname); }
+    // El agente personal necesita cuenta: se va directo a iniciar sesión en CURO Group.
+    if (ir === 'agente') return login('signup');
     home();
     const pp = lrecall('curo_pending_preview');
     const box = document.getElementById('publicInstruction');
