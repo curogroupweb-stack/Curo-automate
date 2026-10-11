@@ -238,3 +238,9 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 .wDots{display:flex;gap:6px;justify-content:center}.wDots span{width:36px;height:6px;border-radius:3px;background:#e5e7eb}.wDots span.on{background:#3b4ff0}.wDots span.done{background:#9aa6f7}
 .wPriv{text-align:center;margin-top:18px}
 .wCenter .profileGrid{width:100%}
+/* Voz del agente */
+.agSay{flex:none;align-self:center;border:1px solid #e1e6f0;background:#fff;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:14px;line-height:1;padding:0;opacity:.75}
+.agSay:hover,.agSay:focus-visible,.agSay.speaking{opacity:1;border-color:#7c3aed}
+.agSay.speaking{background:#f3edff}
+.wListen{margin-top:8px;padding:6px 0;font-weight:700;color:#3b4ff0}
+.agVoiceBtn{white-space:nowrap}

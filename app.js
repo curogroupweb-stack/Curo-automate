@@ -161,6 +161,7 @@ function blobToBase64(blob) { return new Promise((ok, ko) => { const r = new Fil
 function stopDictation(discard) { if (!activeRecognition) return; activeRecognition.discard = !!discard; try { activeRecognition.rec.stop(); } catch {} }
 async function toggleDictation(targetId, btn) {
   if (activeRecognition) return stopDictation(false);
+  try { if (typeof stopSpeaking === 'function') stopSpeaking(); } catch {}
   const target = document.getElementById(targetId); if (!target) return;
   const label = btn.querySelector('span');
   const setLabel = t => { if (label) label.textContent = t; };
@@ -296,6 +297,7 @@ function aiBadge() {
 }
 async function refreshMe() { me = await api('me'); return me; }
 async function go(page) {
+  try { if (typeof stopSpeaking === 'function') stopSpeaking(); } catch {}
   if (!session) return login('login');
   try { await refreshMe(); } catch (e) { return shell(page, `<div class="card"><p>${esc(e.message)}</p><button class="btn primary" onclick="go('${page}')">Reintentar</button></div>`); }
   const pages = { Inicio: inicio, 'Mi agente': agentPage, Automatizaciones: automationsPage, Aprobaciones: approvalsPage, Historial: historyPage, Conexiones: connectionsPage, Conocimiento: knowledgePage, Cuenta: accountPage };
@@ -761,6 +763,7 @@ function agentWelcome(pickKey) {
   renderWelcome();
 }
 function renderWelcome() {
+  try { stopSpeaking(); } catch {}
   const w = welcome, a = w.profile ? agentByKey(w.profile) : null;
   const first = (me?.user?.name || '').split(' ')[0];
   const hi = first ? `, ${esc(first)}` : '';
@@ -772,7 +775,7 @@ function renderWelcome() {
       <div class="profileGrid">${AGENTS.map(x => `<button type="button" class="profileCard" onclick="welcome.profile='${x.key}';welcome.step='hola';renderWelcome()"><img class="profilePic" src="${agentImg(x.key)}" alt=""><b>${esc(x.name)}</b><small class="profileFor">${esc(x.label)}</small></button>`).join('')}</div></div>`;
   } else if (w.step === 'hola') {
     body = `<div class="wCenter wHello"><img class="wBig" src="${agentPose(a.key, 'saluda')}" alt="${esc(a.name)} saluda">
-      <div class="agBubble wBubble"><b>¡Hola${hi}! Soy ${esc(a.name)}.</b><p>Voy a ser tu agente personal. Te ayudo a recordar lo importante, ordenar tus pendientes y proyectos, y cada mañana te digo qué tienes por delante.</p></div>
+      <div class="agBubble wBubble"><b>¡Hola${hi}! Soy ${esc(a.name)}.</b><p>Voy a ser tu agente personal. Te ayudo a recordar lo importante, ordenar tus pendientes y proyectos, y cada mañana te digo qué tienes por delante.</p>${voiceOk() ? `<button type="button" class="btn linkbtn wListen" onclick="speakMsg(this)" aria-label="Escuchar a ${esc(a.name)}">🔊 Escuchar a ${esc(a.name)}</button>` : ''}</div>
       <button class="btn primary wGo" onclick="welcome.step='about';renderWelcome()">¡Empecemos!</button>
       <button class="btn linkbtn" onclick="welcome.step='perfil';renderWelcome()">No es mi perfil</button></div>`;
   } else if (w.step === 'about' || w.step === 'goals') {
@@ -790,7 +793,7 @@ function renderWelcome() {
       <div class="actions"><button class="btn ghost" onclick="welcome.step='goals';renderWelcome()">Atrás</button><button class="btn primary" id="wSave" onclick="welcomeSave(this)">Listo</button></div></div>`;
   } else if (w.step === 'listo') {
     body = `<div class="wCenter wHello"><img class="wBig wJump" src="${agentPose(a.key, 'celebra')}" alt="${esc(a.name)} celebra">
-      <div class="agBubble wBubble"><b>¡Perfecto${hi}!</b><p>Ya te conozco un poco. Cuéntame qué tienes que hacer esta semana y lo voy ordenando por ti.</p></div>
+      <div class="agBubble wBubble"><b>¡Perfecto${hi}!</b><p>Ya te conozco un poco. Cuéntame qué tienes que hacer esta semana y lo voy ordenando por ti.</p>${voiceOk() ? `<button type="button" class="btn linkbtn wListen" onclick="speakMsg(this)" aria-label="Escuchar">🔊 Escuchar</button>` : ''}</div>
       <button class="btn primary wGo" onclick="welcome=null;renderAgent()">Hablar con ${esc(a.name)}</button></div>`;
   }
   shell('Mi agente', `<div class="card wCard">${body}<p class="muted small wPriv">No le cuentes contraseñas, datos bancarios ni de salud. Puedes borrar cualquier cosa que recuerde cuando quieras.</p></div>`);
@@ -813,6 +816,82 @@ async function welcomeSave(btn) {
     welcome.step = 'listo'; renderWelcome();
   } catch (e) { done(); info('No se pudo guardar', e.message); }
 }
+
+// ---------- Voz del agente (lectura en voz alta con las voces del navegador) ----------
+// Por defecto en silencio: solo habla si el usuario lo activa o toca 🔊 en un mensaje.
+const VOICE_KEY = 'curo_agent_voice';
+const AGENT_PITCH = { docente: 0.95, autonomo: 1, estudiante: 1.15, emprendedor: 1.08, community: 1.05, creador: 1.15, pyme: 0.9, profesional: 1, descubridor: 1.25 };
+const voiceOk = () => 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+function voicePrefs() { return { on: false, volume: 1, rate: 1, ...(lrecall(VOICE_KEY) || {}) }; }
+function saveVoicePrefs(p) { lstore(VOICE_KEY, p); }
+let voiceBtn = null;
+function pickVoice() {
+  const vs = (speechSynthesis.getVoices() || []).filter(v => /^es(-|_|$)/i.test(v.lang));
+  if (!vs.length) return null;
+  const score = v => (/es[-_]ES/i.test(v.lang) ? 3 : /es[-_](MX|US|AR|419)/i.test(v.lang) ? 2 : 1) + (/Google|Mónica|Monica|Paulina|Marisol|Helena|Elvira|Natural|Premium|Enhanced/i.test(v.name) ? 3 : 0) + (v.localService ? 0 : 1);
+  return vs.sort((a, b) => score(b) - score(a))[0];
+}
+function cleanForSpeech(t) {
+  return String(t || '').replace(/https?:\/\/\S+/g, 'el enlace').replace(/[•·▪►*#_`>|]/g, ' ').replace(/\p{Extended_Pictographic}/gu, '').replace(/\s+/g, ' ').trim();
+}
+function stopSpeaking() {
+  if (!voiceOk()) return;
+  try { speechSynthesis.cancel(); } catch {}
+  if (voiceBtn) { voiceBtn.classList.remove('speaking'); voiceBtn.textContent = voiceBtn.dataset.label || '🔊'; voiceBtn.setAttribute('aria-label', voiceBtn.dataset.aria || 'Escuchar este mensaje'); voiceBtn = null; }
+}
+// Lee por frases (Chrome corta los textos largos a los ~15 segundos).
+function speak(text, btn, force, over) {
+  if (!voiceOk()) return false;
+  const p = { ...voicePrefs(), ...(over || {}) };
+  if (!force && !p.on) return false;
+  stopSpeaking();
+  if (activeRecognition) return false; // no habla mientras el usuario dicta
+  const clean = cleanForSpeech(text); if (!clean) return false;
+  const parts = clean.match(/[^.!?¿¡]+[.!?]*|[¿¡][^?!]+[?!]/g) || [clean];
+  const voice = pickVoice();
+  const pitch = AGENT_PITCH[agentState?.settings?.profile || welcome?.profile] || 1;
+  if (btn) { voiceBtn = btn; if (!btn.dataset.label) btn.dataset.label = btn.textContent; btn.dataset.aria = btn.getAttribute('aria-label') || ''; btn.classList.add('speaking'); btn.textContent = '⏹' + (btn.classList.contains('wListen') ? ' Parar' : ''); btn.setAttribute('aria-label', 'Dejar de escuchar'); }
+  parts.map(s => s.trim()).filter(Boolean).forEach((s, i, arr) => {
+    const u = new SpeechSynthesisUtterance(s);
+    u.lang = voice?.lang || 'es-ES'; if (voice) u.voice = voice;
+    u.volume = Math.max(0, Math.min(1, Number(p.volume) || 1)); u.rate = Number(p.rate) || 1; u.pitch = pitch;
+    if (i === arr.length - 1) u.onend = u.onerror = () => { if (voiceBtn === btn) stopSpeaking(); };
+    speechSynthesis.speak(u);
+  });
+  return true;
+}
+function speakMsg(btn) {
+  if (btn.classList.contains('speaking')) return stopSpeaking();
+  let t = btn.closest('.agBotRow')?.querySelector('.agMsg')?.innerText || '';
+  if (!t) { const b = btn.closest('.agBubble')?.cloneNode(true); b?.querySelectorAll('button').forEach(x => x.remove()); t = b?.innerText || ''; }
+  speak(t, btn, true);
+}
+function voiceToggleHtml() {
+  if (!voiceOk()) return '';
+  const p = voicePrefs();
+  return `<button class="btn ghost smallBtn agVoiceBtn" id="agVoiceBtn" onclick="openVoicePanel()" aria-label="Voz del agente: ${p.on ? 'activada' : 'en silencio'}">${p.on ? '🔊 Con voz' : '🔇 Silencio'}</button>`;
+}
+function openVoicePanel() {
+  const p = voicePrefs(), name = agentByKey(agentState?.settings?.profile).name;
+  const hasEs = !!pickVoice();
+  const m = modal('Voz de tu agente', `
+    <label class="toggle"><input type="checkbox" id="vOn" ${p.on ? 'checked' : ''}> Que ${esc(name)} lea en voz alta cada respuesta nueva</label>
+    <p class="muted small">Apagado, ${esc(name)} solo escribe. Igual puedes tocar 🔊 en cualquier mensaje para escucharlo.</p>
+    <label class="field">Volumen de la voz <input id="vVol" type="range" min="0.1" max="1" step="0.1" value="${p.volume}"></label>
+    <label class="field">Velocidad <select id="vRate"><option value="0.85" ${p.rate == 0.85 ? 'selected' : ''}>Lenta</option><option value="1" ${p.rate == 1 ? 'selected' : ''}>Normal</option><option value="1.15" ${p.rate == 1.15 ? 'selected' : ''}>Rápida</option></select></label>
+    <p class="muted small">Este volumen es el de la voz del agente. Si tu computadora o tu celular están en silencio o con el volumen bajo, súbelo también ahí.</p>
+    ${hasEs ? '' : '<div class="notice warn">Tu navegador no tiene voces en español instaladas, así que la voz puede sonar con acento. Prueba con Chrome, Safari o Edge.</div>'}`, {
+    actions: `<button class="btn ghost" id="vTest">Probar voz</button><button class="btn primary" id="vSave">Guardar</button>`
+  });
+  const read = () => ({ on: m.querySelector('#vOn').checked, volume: Number(m.querySelector('#vVol').value), rate: Number(m.querySelector('#vRate').value) });
+  m.querySelector('#vTest').addEventListener('click', () => speak(`Hola, soy ${name}. Así sueno cuando te hablo.`, null, true, read()));
+  m.querySelector('#vSave').addEventListener('click', () => {
+    const np = read(); saveVoicePrefs(np); closeModals(); stopSpeaking();
+    const b = document.getElementById('agVoiceBtn'); if (b) b.outerHTML = voiceToggleHtml();
+    toast(np.on ? `${name} te leerá sus respuestas.` : `${name} queda en silencio: solo escribe.`);
+  });
+}
+if (voiceOk()) { try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => {}; } catch {} window.addEventListener('pagehide', stopSpeaking); }
 
 async function agentPage() {
   loading('Mi agente', 'Abriendo tu agente…');
@@ -881,7 +960,8 @@ function selectSetupAgent(key) {
 }
 function agentMsgHtml(m) {
   const txt = `<div class="agMsg ${m.role === 'user' ? 'me' : 'bot'}">${esc(m.content).replace(/\n/g, '<br>')}</div>`;
-  return m.role === 'user' ? txt : `<div class="agBotRow"><img class="agAvatar" src="${agentImg(agentState?.settings?.profile || 'descubridor')}" alt="">${txt}</div>`;
+  const say = voiceOk() ? `<button type="button" class="agSay" onclick="speakMsg(this)" aria-label="Escuchar este mensaje" title="Escuchar">🔊</button>` : '';
+  return m.role === 'user' ? txt : `<div class="agBotRow"><img class="agAvatar" src="${agentImg(agentState?.settings?.profile || 'descubridor')}" alt="">${txt}${say}</div>`;
 }
 function agentItemsHtml() {
   const items = (agentState.items || []).filter(i => agentTab === 'agenda' ? (i.kind === 'agenda' || (i.due_at && i.kind !== 'memoria')) : i.kind === agentTab);
@@ -900,7 +980,7 @@ function renderAgent() {
   const first = (me?.user?.name || '').split(' ')[0];
   shell('Mi agente', `
     <div class="agHead card"><div class="agWho"><img class="agAvatar big" src="${agentImg(s.profile)}" alt=""><div><b>${esc(agentByKey(s.profile).name)} · tu agente AIA</b><small class="muted">${esc(prof.label || '')}</small><small class="muted">${s.brief_enabled ? `Resumen cada día a las ${esc(String(s.brief_time || '08:00').slice(0, 5))}` : 'Resumen diario desactivado'}</small></div></div>
-      <div class="actions"><button class="btn ghost smallBtn" id="agBriefNow">Enviarme el resumen ahora</button><button class="btn ghost smallBtn" onclick="agentSetup(true)">Ajustes</button></div></div>
+      <div class="actions">${voiceToggleHtml()}<button class="btn ghost smallBtn" id="agBriefNow">Enviarme el resumen ahora</button><button class="btn ghost smallBtn" onclick="agentSetup(true)">Ajustes</button></div></div>
     <div class="agGrid">
       <div class="card agChat">
         <div class="agMsgs" id="agMsgs">${msgs.length ? msgs.map(agentMsgHtml).join('') + agentReturnGreeting(msgs) : agentMsgHtml({ role: 'assistant', content: `Hola${first ? `, ${first}` : ''}. Soy ${agentByKey(s.profile).name}, tu agente personal. Cuéntame en qué estás trabajando, qué tienes que hacer esta semana o qué te gustaría organizar, y lo iré recordando por ti.` }) + `<div class="agStarters"><small class="muted">PUEDES EMPEZAR POR AQUÍ</small>${(AGENT_STARTERS[s.profile] || AGENT_STARTERS.descubridor).map((t, i) => `<button type="button" class="exampleChip" onclick="agentStarter(${i})">${esc(t)}</button>`).join('')}</div>`}</div>
@@ -952,6 +1032,7 @@ function agentStarter(i) {
 async function agentSend() {
   const input = document.getElementById('agInput'), text = input?.value.trim();
   if (!text) return;
+  stopSpeaking();
   const box = document.getElementById('agMsgs');
   box.insertAdjacentHTML('beforeend', agentMsgHtml({ role: 'user', content: text }) + '<div class="agMsg bot typing" id="agTyping"><span class="spin"></span> Pensando…</div>');
   box.scrollTop = box.scrollHeight; input.value = '';
@@ -962,6 +1043,7 @@ async function agentSend() {
     agentState.items = r.items;
     const c = r.changes || {};
     renderAgent();
+    if (voicePrefs().on) { const rows = document.querySelectorAll('#agMsgs .agBotRow'); const last = rows[rows.length - 1]; speak(r.reply, last?.querySelector('.agSay'), false); }
     const n = (c.added || 0) + (c.done || 0) + (c.updated || 0);
     if (n) toast(`Tu agente actualizó ${n} ${n === 1 ? 'cosa' : 'cosas'} en tus listas.`);
   } catch (e) {
