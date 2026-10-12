@@ -2,6 +2,8 @@
 // 1) Automatizaciones programadas que toca ejecutar.
 // 2) Correos nuevos en Gmail para automatizaciones "cuando llegue un correo".
 // 3) Altas nuevas en CURO para automatizaciones de bienvenida (solo administradores).
+// 4) Resumen de la mañana del agente IA personal (brief diario).
+// 5) Avisos por correo 15 minutos antes de cada evento de la agenda del agente IA personal.
 const { json, query } = require('../_lib/http');
 const { safeEqual } = require('../_lib/crypto');
 const { db, enc } = require('../_lib/db');
@@ -99,6 +101,10 @@ module.exports = async (req, res) => {
       try { await agent.sendBrief(s.user_id); report.agent_briefs++; }
       catch (e) { report.errors.push(`agente ${s.user_id}: ${e.message}`); }
     }
+
+    // 5) Avisos de reunión: correo 15 minutos antes de cada evento de la agenda
+    try { report.agent_reminders = await agent.sendDueReminders(); }
+    catch (e) { report.errors.push(`avisos agenda: ${e.message}`); }
   } catch (e) {
     report.errors.push(e.message);
   }

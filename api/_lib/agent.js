@@ -240,4 +240,35 @@ async function deleteMessage(userId, id) {
   return { replyId: reply?.id ?? null };
 }
 
-module.exports = { PROFILES, loadState, clearChat, deleteMessage, chatTurn, saveSettings, itemOp, buildBrief, sendBrief, parseDue };
+// Avisos de reunión: manda un correo cuando falta poco para un evento de la agenda (kind='agenda').
+// Lo llama el motor (tick) cada 5 min; cada evento se avisa una sola vez (reminder_sent_at).
+const REMINDER_MINUTES_BEFORE = 15;
+async function sendDueReminders() {
+  if (!brevo.enabled()) return 0;
+  const now = Date.now();
+  // Ventana de ~5 min centrada en "dentro de 15 minutos", para que no se escape ningún evento
+  // entre una pasada del motor y la siguiente.
+  const from = new Date(now + (REMINDER_MINUTES_BEFORE - 2) * 60000).toISOString();
+  const to = new Date(now + (REMINDER_MINUTES_BEFORE + 3) * 60000).toISOString();
+  const due = await db.select(
+    'agent_items',
+    `kind=eq.agenda&status=eq.activo&reminder_sent_at=is.null&due_at=gte.${enc(from)}&due_at=lte.${enc(to)}&select=id,user_id,title,detail,due_at&limit=50`
+  );
+  let sent = 0;
+  for (const item of due) {
+    // Reserva atómica: solo un tick manda el aviso de cada evento.
+    const claimed = await db.update('agent_items', `id=eq.${enc(item.id)}&reminder_sent_at=is.null`, { reminder_sent_at: new Date().toISOString() });
+    if (!claimed.length) continue;
+    try {
+      const u = await userEmail(item.user_id);
+      if (!u?.email) continue;
+      const subject = `En ${REMINDER_MINUTES_BEFORE} min: ${item.title}`;
+      const body = `Hola${u.name ? `, ${u.name}` : ''}.\n\nTe recuerdo que tienes "${item.title}" a las ${fmtDue(item.due_at)}.${item.detail ? `\n\n${item.detail}` : ''}\n\nAbre tu agente: https://automate.curogroup.net/?ir=agente`;
+      await brevo.send({ to: u.email, subject, body, html: renderBranded({ subject, body }) });
+      sent++;
+    } catch { /* seguimos con los demás aunque uno falle */ }
+  }
+  return sent;
+}
+
+module.exports = { PROFILES, loadState, clearChat, deleteMessage, chatTurn, saveSettings, itemOp, buildBrief, sendBrief, sendDueReminders, parseDue };
