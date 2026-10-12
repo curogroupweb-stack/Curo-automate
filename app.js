@@ -1018,17 +1018,37 @@ function agentItemsHtml() {
   const empty = { pendiente: 'Sin pendientes. Cuéntale a tu agente lo que tienes que hacer.', proyecto: 'Aún no hay proyectos. Háblale de lo que estás preparando.', agenda: 'Nada en la agenda. Dile tus citas y entregas con fecha.', memoria: 'Todavía no recuerda nada. Cuéntale sobre ti y tu trabajo.' }[agentTab];
   return `<ul class="agList">${active.map(row).join('') || `<li class="muted agEmpty">${empty}</li>`}</ul>${done.length ? `<details class="agDone"><summary>Hechos (${done.length})</summary><ul class="agList">${done.map(row).join('')}</ul></details>` : ''}`;
 }
+// Cuándo cambia de pose el personaje de la cabecera (mientras no tenga animación):
+// saluda al volver tras un rato sin usarlo o la primera vez; celebra cuando guarda algo en las listas;
+// ups si algo falla; duerme si hay un rato sin actividad en la pantalla.
+let agentHeroTimer = null, agentIdleTimer = null;
+function agentHeroPose(pose, holdMs) {
+  const img = document.getElementById('agHeroPic'); if (!img) return;
+  const key = agentState?.settings?.profile; if (!key) return;
+  clearTimeout(agentHeroTimer);
+  img.src = agentPose(key, pose);
+  if (holdMs) agentHeroTimer = setTimeout(() => { if (img.isConnected) img.src = agentImg(key); }, holdMs);
+}
+function agentResetIdle() {
+  clearTimeout(agentIdleTimer);
+  const img = document.getElementById('agHeroPic');
+  if (img && img.src.includes('-duerme')) img.src = agentImg(agentState?.settings?.profile);
+  agentIdleTimer = setTimeout(() => agentHeroPose('duerme'), 90000);
+}
 function renderAgent() {
   const s = agentState.settings, prof = agentState.profiles.find(p => p.key === s.profile) || {};
   const msgs = agentState.messages || [];
   const first = (me?.user?.name || '').split(' ')[0];
+  const greeting = agentReturnGreeting(msgs);
+  const heroPose = (greeting || !msgs.length) ? agentPose(s.profile, 'saluda') : agentImg(s.profile);
+  clearTimeout(agentHeroTimer); clearTimeout(agentIdleTimer);
   shell('Mi agente', `
-    <div class="agHead card"><div class="agWho"><img class="agAvatar big" src="${agentImg(s.profile)}" alt=""><div><b>${esc(agentByKey(s.profile).name)} · tu agente AIA</b><small class="muted">${esc(prof.label || '')}</small><small class="muted">${s.brief_enabled ? `Resumen cada día a las ${esc(String(s.brief_time || '08:00').slice(0, 5))}` : 'Resumen diario desactivado'}</small></div></div>
+    <div class="agHead card"><div class="agWho"><img class="agAvatar big" id="agHeroPic" src="${heroPose}" alt=""><div><b>${esc(agentByKey(s.profile).name)} · tu agente AIA</b><small class="muted">${esc(prof.label || '')}</small><small class="muted">${s.brief_enabled ? `Resumen cada día a las ${esc(String(s.brief_time || '08:00').slice(0, 5))}` : 'Resumen diario desactivado'}</small></div></div>
       <div class="actions"><button class="btn ghost smallBtn" onclick="go('Inicio')">← Volver al inicio</button>${voiceToggleHtml()}<button class="btn ghost smallBtn" id="agBriefNow">Enviarme el resumen ahora</button><button class="btn ghost smallBtn" onclick="agentSetup(true)">Ajustes</button></div></div>
     <div class="agGrid">
       <div class="card agChat">
         <div class="agChatBar"><small class="muted">CONVERSACIÓN</small>${msgs.length ? `<button type="button" class="btn ghost smallBtn" onclick="agentClearAsk()">🗑 Borrar conversación</button>` : ''}</div>
-        <div class="agMsgs" id="agMsgs">${msgs.length ? msgs.map(agentMsgHtml).join('') + agentReturnGreeting(msgs) : agentMsgHtml({ role: 'assistant', content: `Hola${first ? `, ${first}` : ''}. Soy ${agentByKey(s.profile).name}, tu agente personal. Cuéntame en qué estás trabajando, qué tienes que hacer esta semana o qué te gustaría organizar, y lo iré recordando por ti.` }) + `<div class="agStarters"><small class="muted">PUEDES EMPEZAR POR AQUÍ</small>${(AGENT_STARTERS[s.profile] || AGENT_STARTERS.descubridor).map((t, i) => `<button type="button" class="exampleChip" onclick="agentStarter(${i})">${esc(t)}</button>`).join('')}</div>`}</div>
+        <div class="agMsgs" id="agMsgs">${msgs.length ? msgs.map(agentMsgHtml).join('') + greeting : agentMsgHtml({ role: 'assistant', content: `Hola${first ? `, ${first}` : ''}. Soy ${agentByKey(s.profile).name}, tu agente personal. Cuéntame en qué estás trabajando, qué tienes que hacer esta semana o qué te gustaría organizar, y lo iré recordando por ti.` }) + `<div class="agStarters"><small class="muted">PUEDES EMPEZAR POR AQUÍ</small>${(AGENT_STARTERS[s.profile] || AGENT_STARTERS.descubridor).map((t, i) => `<button type="button" class="exampleChip" onclick="agentStarter(${i})">${esc(t)}</button>`).join('')}</div>`}</div>
         <form class="agForm" onsubmit="event.preventDefault();agentSend()">
           <div class="dictationWrap"><textarea id="agInput" rows="2" maxlength="2000" placeholder="Escribe a ${esc(agentByKey(s.profile).name)}…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();agentSend()}"></textarea>
           <button class="dictateBtn" type="button" onclick="toggleDictation('agInput',this)" aria-label="Dictar">🎙 <span>Dictar</span></button></div>
@@ -1048,6 +1068,10 @@ function renderAgent() {
     catch (err) { info('No se pudo enviar el resumen', err.message); }
     finally { done(); }
   });
+  if (greeting) agentHeroTimer = setTimeout(() => { const img = document.getElementById('agHeroPic'); if (img) img.src = agentImg(s.profile); }, 4000);
+  agentResetIdle();
+  document.getElementById('agInput')?.addEventListener('input', agentResetIdle);
+  document.getElementById('agMsgs')?.addEventListener('click', agentResetIdle);
 }
 // Borrar la conversación: se pide confirmación; pendientes, proyectos, agenda y memoria no se tocan.
 function agentClearAsk() {
@@ -1106,11 +1130,12 @@ async function agentSend() {
     renderAgent();
     if (voicePrefs().on) { const rows = document.querySelectorAll('#agMsgs .agBotRow'); const last = rows[rows.length - 1]; speak(r.reply, last?.querySelector('.agSay'), false); }
     const n = (c.added || 0) + (c.done || 0) + (c.updated || 0);
-    if (n) toast(`Tu agente actualizó ${n} ${n === 1 ? 'cosa' : 'cosas'} en tus listas.`);
+    if (n) { toast(`Tu agente actualizó ${n} ${n === 1 ? 'cosa' : 'cosas'} en tus listas.`); agentHeroPose('celebra', 2500); }
   } catch (e) {
     document.getElementById('agTyping')?.remove(); done();
     const i = document.getElementById('agInput'); if (i && !i.value) i.value = text;
     info('Tu agente no pudo responder', e.message);
+    agentHeroPose('ups', 2500);
   }
 }
 async function agentItem(op, id) {
