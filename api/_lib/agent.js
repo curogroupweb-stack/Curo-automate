@@ -224,10 +224,20 @@ async function clearChat(userId) {
   await db.update('agent_messages', `user_id=eq.${enc(userId)}&cleared=is.false`, { cleared: true });
 }
 
-// Borra un único mensaje (el usuario solo puede borrar los suyos, no las respuestas del agente).
+// Borra un único mensaje (el usuario solo puede borrar los suyos, no las respuestas del agente
+// directamente). Si el agente ya le había contestado a ese mensaje, esa respuesta también se
+// borra, para que no quede descontextualizada en la pantalla.
 async function deleteMessage(userId, id) {
   if (!/^\d+$/.test(String(id ?? ''))) throw new HttpError(400, 'Mensaje no válido.');
+  const msg = await db.one('agent_messages', `id=eq.${enc(id)}&user_id=eq.${enc(userId)}&role=eq.user&select=id,created_at`);
+  if (!msg) return { replyId: null };
   await db.update('agent_messages', `id=eq.${enc(id)}&user_id=eq.${enc(userId)}&role=eq.user`, { cleared: true });
+  const reply = await db.one(
+    'agent_messages',
+    `user_id=eq.${enc(userId)}&role=eq.assistant&cleared=is.false&created_at=gt.${enc(msg.created_at)}&select=id&order=created_at.asc`
+  );
+  if (reply) await db.update('agent_messages', `id=eq.${enc(reply.id)}&user_id=eq.${enc(userId)}`, { cleared: true });
+  return { replyId: reply?.id ?? null };
 }
 
 module.exports = { PROFILES, loadState, clearChat, deleteMessage, chatTurn, saveSettings, itemOp, buildBrief, sendBrief, parseDue };

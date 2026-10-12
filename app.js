@@ -995,16 +995,19 @@ function agentMsgHtml(m) {
   }
   const txt = `<div class="agMsg bot">${esc(m.content).replace(/\n/g, '<br>')}</div>`;
   const say = voiceOk() ? `<button type="button" class="agSay" onclick="speakMsg(this)" aria-label="Escuchar este mensaje" title="Escuchar">🔊</button>` : '';
-  return `<div class="agBotRow"><img class="agAvatar" src="${agentImg(agentState?.settings?.profile || 'descubridor')}" alt="">${txt}${say}</div>`;
+  return `<div class="agBotRow" data-id="${m.id || ''}"><img class="agAvatar" src="${agentImg(agentState?.settings?.profile || 'descubridor')}" alt="">${txt}${say}</div>`;
 }
-// Borra un único mensaje propio (no hace falta borrar toda la conversación).
+// Borra un único mensaje propio (no hace falta borrar toda la conversación). Si el agente ya
+// había contestado a ese mensaje, esa respuesta también se borra para no dejarla descontextualizada.
 async function agentDeleteMsg(id, btn) {
   const row = btn.closest('.agMsgRow');
   btn.disabled = true;
   try {
-    await api('agent', { method: 'POST', body: { action: 'deleteMessage', id } });
-    agentState.messages = (agentState.messages || []).filter(m => m.id !== id);
+    const r = await api('agent', { method: 'POST', body: { action: 'deleteMessage', id } });
+    const delIds = new Set([String(id), r.replyId != null ? String(r.replyId) : null].filter(Boolean));
+    agentState.messages = (agentState.messages || []).filter(m => !delIds.has(String(m.id)));
     row?.remove();
+    if (r.replyId != null) document.querySelector(`.agBotRow[data-id="${r.replyId}"]`)?.remove();
   } catch (err) { btn.disabled = false; info('No se pudo borrar', err.message); }
 }
 function agentItemsHtml() {
