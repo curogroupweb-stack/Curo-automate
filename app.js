@@ -748,7 +748,7 @@ function openAgent() {
 }
 // ---------- Bienvenida del agente (primera vez): en el centro, con las preguntas de a una ----------
 // Poses disponibles por agente; si falta alguna se usa la imagen fija.
-const AGENT_POSES = { autonomo: ['saluda', 'celebra', 'ups', 'duerme'], docente: ['saluda', 'celebra', 'ups', 'duerme'], profesional: ['saluda', 'celebra', 'ups', 'duerme'], descubridor: ['saluda', 'celebra', 'ups', 'duerme'] };
+const AGENT_POSES = { autonomo: ['saluda', 'celebra', 'ups', 'duerme'], docente: ['saluda', 'celebra', 'ups', 'duerme'], profesional: ['saluda', 'celebra', 'ups', 'duerme'], descubridor: ['saluda', 'celebra', 'ups', 'duerme'], estudiante: ['saluda'] };
 const agentPose = (k, pose) => (AGENT_POSES[k] || []).includes(pose) ? `img/agentes/${k}-${pose}.png?v=4` : agentImg(k);
 let welcome = null;
 // Cómo le gusta que le hablen: opciones para tocar, nada para escribir.
