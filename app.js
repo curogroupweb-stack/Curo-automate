@@ -1130,10 +1130,12 @@ async function agentSend() {
     agentState.messages = [...(agentState.messages || []), { id: r.userMsgId, role: 'user', content: text }, { id: r.botMsgId, role: 'assistant', content: r.reply }];
     agentState.items = r.items;
     const c = r.changes || {};
+    if (r.pendingApprovals) { try { await refreshMe(); } catch {} }
     renderAgent();
     if (voicePrefs().on) { const rows = document.querySelectorAll('#agMsgs .agBotRow'); const last = rows[rows.length - 1]; speak(r.reply, last?.querySelector('.agSay'), false); }
     const n = (c.added || 0) + (c.done || 0) + (c.updated || 0);
     if (n) { toast(`Tu agente actualizó ${n} ${n === 1 ? 'cosa' : 'cosas'} en tus listas.`); agentHeroPose('celebra', 2500); }
+    if (r.pendingApprovals) toast('Dejó un correo listo en Aprobaciones para que lo revises.');
   } catch (e) {
     document.getElementById('agTyping')?.remove(); done();
     const i = document.getElementById('agInput'); if (i && !i.value) i.value = text;

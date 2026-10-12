@@ -1,7 +1,8 @@
 // Agente IA personal.
 // GET  -> { profiles, settings, items, messages }
 // POST { action:'setup', profile, about, goals, tone, brief_enabled, brief_time }
-// POST { action:'chat', message }
+// POST { action:'chat', message }  -> el agente puede usar herramientas reales (buscar en internet,
+//                                     leer una web, y si Gmail está conectado: buscar/leer/enviar correo)
 // POST { action:'item', op:'add'|'done'|'undo'|'delete', ... }
 // POST { action:'clear' }  -> borra la conversación (pendientes y memoria se mantienen)
 // POST { action:'deleteMessage', id }  -> borra un único mensaje (solo los propios); si el agente

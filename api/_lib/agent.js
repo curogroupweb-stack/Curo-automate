@@ -6,6 +6,8 @@ const { HttpError, SUPABASE_URL } = require('./http');
 const { nextRun, madridToUtc } = require('./schedule');
 const brevo = require('./brevo');
 const { renderBranded } = require('./email_template');
+const google = require('./google');
+const tools = require('./tools');
 
 const PROFILES = {
   docente: { name: 'Bruno', label: 'Docente', focus: 'clases, planificación, evaluaciones, comunicación con familias y alumnos, materiales didácticos' },
@@ -52,8 +54,11 @@ function itemsForPrompt(items) {
   return out.join('\n\n') || '(todavía no hay nada guardado)';
 }
 
-function systemPrompt(st, name) {
+function systemPrompt(st, name, allowedTools = []) {
   const p = PROFILES[st.settings.profile] || PROFILES.descubridor;
+  const toolsNote = allowedTools.length
+    ? `\nHERRAMIENTAS DISPONIBLES: ${allowedTools.join(', ')}. Úsalas cuando de verdad ayuden a resolver lo que te pide (buscar algo real en internet, leer o enviar un correo suyo); si puedes responder bien con lo que ya sabes o con el texto que te dio, no las uses. Un correo a otra persona (no a él mismo) queda guardado para que lo apruebe antes de enviarse: díselo.`
+    : `\nTODAVÍA NO TIENES HERRAMIENTAS CONECTADAS (por ejemplo, no tiene Gmail conectado). Si te pide algo que las necesite, explícale amablemente qué falta conectar; mientras tanto ayúdale igual con lo que puedas resolver solo pensando (traducir, resumir, redactar, explicar, dar ideas) usando el texto que te dé.`;
   return `Te llamas ${p.name}, un agente AIA de CURO Group, y eres el agente IA personal de ${name || 'esta persona'}. Su perfil es: ${p.label} (te centras en ${p.focus}).
 ${p.rule ? `REGLA DE TU PERFIL: ${p.rule}\n` : ''}${st.settings.about ? `Lo que te contó de sí: ${st.settings.about}\n` : ''}${st.settings.goals ? `Sus objetivos: ${st.settings.goals}\n` : ''}${st.settings.tone ? `Tono que prefiere: ${st.settings.tone}\n` : ''}Fecha y hora actual (Madrid): ${madridNow()}.
 
@@ -62,15 +67,17 @@ ${itemsForPrompt(st.items)}
 
 CÓMO TRABAJAS
 - Hablas en español, cercano y práctico, frases cortas. Sin Markdown (nada de asteriscos ni almohadillas); para listas usa "•".
+- No eres solo un cuaderno de notas: resuelve de verdad lo que te pida con la IA (traducir un texto, resumir, explicar, redactar, dar ideas, analizar algo que te pega) y no solo lo apuntes.
 - Recuerdas lo importante: guarda en memoria datos útiles y estables (sus proyectos, preferencias, temas recurrentes), apunta pendientes cuando diga que tiene que hacer algo, y citas con fecha en la agenda.
 - Organiza proyectos por etapas y dile cuál es el siguiente paso.
 - Si algo ya está hecho, márcalo como hecho. No dupliques lo que ya existe en la memoria: actualízalo.
 - No inventes datos. Si falta información importante (por ejemplo la fecha de una entrega), pregúntala.
 - Nunca guardes contraseñas, datos bancarios, de salud ni información sensible.
 - Cuando tenga sentido, sugiere una automatización de CURO Automate (por ejemplo, un resumen semanal por correo).
+${toolsNote}
 
-RESPONDE SOLO CON ESTE JSON (sin texto fuera):
-{"reply":"tu respuesta para la persona",
+CUANDO RESPONDAS DE FORMA NORMAL (no mientras llamas a una herramienta), RESPONDE SOLO CON ESTE JSON (sin texto fuera):
+{"reply":"tu respuesta para la persona (puede ser larga si la tarea lo pide, por ejemplo una traducción o un resumen completos)",
  "add":[{"kind":"memoria|pendiente|proyecto|agenda","title":"corto","detail":"opcional","due":"AAAA-MM-DD HH:MM opcional (hora de Madrid)"}],
  "done":["id de 8 caracteres de lo que ya está hecho"],
  "update":[{"id":"id de 8 caracteres","title":"opcional","detail":"opcional","due":"opcional"}]}`;
@@ -111,6 +118,16 @@ async function applyChanges(userId, st, out) {
   return changes;
 }
 
+// Herramientas que "Mi agente" puede usar en el chat (subconjunto de las de Automatizaciones:
+// de momento sin curo_stats, que es solo para datos internos de la plataforma).
+const AGENT_TOOLS = ['web_search', 'fetch_url', 'gmail_search', 'gmail_read', 'gmail_send'];
+const MAX_AGENT_TOOL_TURNS = 4;
+
+async function agentConnections(userId) {
+  const g = await google.status(userId).catch(() => ({ connected: false }));
+  return { google: !!g.connected, email: g.email || '' };
+}
+
 async function chatTurn(user, message, { isAdmin } = {}) {
   const text = String(message || '').trim().slice(0, 2000);
   if (!text) throw new HttpError(400, 'Escribe un mensaje.');
@@ -123,14 +140,45 @@ async function chatTurn(user, message, { isAdmin } = {}) {
   }
   const userMsg = await db.insert('agent_messages', { user_id: user.id, role: 'user', content: text });
   const history = st.messages.slice(-12).map(m => ({ role: m.role, content: m.content.slice(0, 1500) }));
-  const res = await chat({ system: systemPrompt(st, user.name), messages: [...history, { role: 'user', content: text }], maxTokens: 1500, temperature: 0.4 });
+
+  const conn = await agentConnections(user.id);
+  const allowed = AGENT_TOOLS.filter(n => tools.available({ google: conn.google }).includes(n));
+  const defs = allowed.map(n => ({ name: n, description: tools.CATALOG[n].description, parameters: tools.CATALOG[n].parameters }));
+  const p = PROFILES[st.settings.profile] || PROFILES.descubridor;
+  const ctx = {
+    userId: user.id, approvalMode: 'always', approvals: [],
+    selfEmails: conn.email ? [conn.email.toLowerCase()] : [],
+    automation: { name: `Chat con ${p.name}` }
+  };
+
+  const messages = [...history, { role: 'user', content: text }];
+  const used = { web_search: 0, fetch_url: 0 };
+  let res;
+  for (let turn = 0; turn < MAX_AGENT_TOOL_TURNS; turn++) {
+    res = await chat({ system: systemPrompt(st, user.name, allowed), messages, tools: defs, maxTokens: 1500, temperature: 0.4 });
+    if (!res.tool_calls?.length) break;
+    messages.push({ role: 'assistant', content: res.text || '', tool_calls: res.tool_calls });
+    for (const call of res.tool_calls) {
+      let result;
+      if ((call.name === 'web_search' && used.web_search >= 2) || (call.name === 'fetch_url' && used.fetch_url >= 2)) {
+        result = { error: 'Ya hiciste suficientes búsquedas o lecturas. Responde ya con lo que tienes.' };
+      } else {
+        if (call.name === 'web_search') used.web_search++;
+        if (call.name === 'fetch_url') used.fetch_url++;
+        try { result = await tools.execute(call.name, call.args || {}, ctx); }
+        catch (e) { result = { error: e.message }; }
+      }
+      messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result ?? null).slice(0, 3500) });
+    }
+  }
+
   const out = extractJson(res.text) || {};
   let reply = String(out.reply || '').trim();
   if (!reply) reply = String(res.text || '').replace(/^\s*\{[\s\S]*\}\s*$/, '').trim() || 'Perdona, no he podido responder ahora. ¿Me lo repites?';
   reply = reply.replace(/\*\*(.+?)\*\*/g, '$1').replace(/^#{1,6}\s+/gm, '').slice(0, 4000);
   const changes = await applyChanges(user.id, st, out);
   const botMsg = await db.insert('agent_messages', { user_id: user.id, role: 'assistant', content: reply });
-  return { reply, changes, userMsgId: userMsg?.id, botMsgId: botMsg?.id };
+  return { reply, changes, userMsgId: userMsg?.id, botMsgId: botMsg?.id, pendingApprovals: ctx.approvals.length || undefined };
 }
 
 async function saveSettings(userId, b) {
