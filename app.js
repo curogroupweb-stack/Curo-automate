@@ -751,9 +751,15 @@ function openAgent() {
 const AGENT_POSES = { docente: ['saluda', 'celebra', 'ups', 'duerme'], profesional: ['saluda', 'celebra', 'ups', 'duerme'], descubridor: ['saluda', 'celebra', 'ups', 'duerme'] };
 const agentPose = (k, pose) => (AGENT_POSES[k] || []).includes(pose) ? `img/agentes/${k}-${pose}.png?v=4` : agentImg(k);
 let welcome = null;
+// Cómo le gusta que le hablen: opciones para tocar, nada para escribir.
+const TONE_OPTIONS = [
+  { v: 'Directo y breve: frases cortas, solo lo esencial.', l: 'Directo y breve', d: 'Frases cortas, solo lo esencial' },
+  { v: 'Con una explicación breve de cada cosa, sin dar por hecho que ya lo sabe.', l: 'Con un poco más de explicación', d: 'Que le aclare el porqué de cada cosa' },
+  { v: 'Cercano y cálido, con alguna sonrisa de vez en cuando.', l: 'Cercano y cálido', d: 'Como charlando con alguien de confianza' }
+];
 function agentWelcome(pickKey) {
   if (pickKey && lrecall('curo_pick_login')) { lstore('curo_pick_login', null); setTimeout(() => toast('Ya tenías tu sesión de CURO abierta, así que entraste directo.'), 400); }
-  welcome = { step: pickKey ? 'hola' : 'perfil', profile: pickKey || null, about: '', goals: '', brief: true, time: '08:00' };
+  welcome = { step: pickKey ? 'hola' : 'perfil', profile: pickKey || null, about: '', goals: '', tone: '', brief: true, time: '08:00' };
   // Intereses marcados al registrarse en CURO: punto de partida para "¿En qué quieres que te ayude?".
   try { if (sb.auth.getUser) Promise.resolve().then(() => sb.auth.getUser()).then(({ data }) => {
     const ints = data?.user?.user_metadata?.interests;
@@ -767,7 +773,7 @@ function renderWelcome() {
   const w = welcome, a = w.profile ? agentByKey(w.profile) : null;
   const first = (me?.user?.name || '').split(' ')[0];
   const hi = first ? `, ${esc(first)}` : '';
-  const steps = ['about', 'goals', 'brief'];
+  const steps = ['about', 'goals', 'tono', 'brief'];
   const dots = steps.includes(w.step) ? `<div class="wDots" aria-hidden="true">${steps.map(s => `<span class="${s === w.step ? 'on' : steps.indexOf(s) < steps.indexOf(w.step) ? 'done' : ''}"></span>`).join('')}</div>` : '';
   let body = '';
   if (w.step === 'perfil') {
@@ -786,11 +792,15 @@ function renderWelcome() {
       <div class="dictationWrap"><textarea id="wInput" rows="3" maxlength="2000" placeholder="${ph}">${esc(isAbout ? w.about : w.goals)}</textarea>
       <button class="dictateBtn" type="button" onclick="toggleDictation('wInput',this)" aria-label="Dictar la respuesta">🎙 <span>Dictar</span></button></div>
       <div class="actions"><button class="btn ghost" onclick="welcomeNext(true)">Saltar</button><button class="btn primary" onclick="welcomeNext(false)">Siguiente</button></div></div>`;
+  } else if (w.step === 'tono') {
+    body = `<div class="wChat">${dots}<div class="agBotRow"><img class="agAvatar big" src="${agentImg(a.key)}" alt=""><div class="agMsg bot">¿Cómo te gusta que te hable?</div></div>
+      <div class="toneGrid">${TONE_OPTIONS.map(t => `<button type="button" class="toneCard ${w.tone === t.v ? 'sel' : ''}" onclick="welcome.tone='${t.v.replace(/'/g, "\\'")}';welcome.step='brief';renderWelcome()"><b>${esc(t.l)}</b><small>${esc(t.d)}</small></button>`).join('')}</div>
+      <div class="actions"><button class="btn ghost" onclick="welcome.step='goals';renderWelcome()">Atrás</button><button class="btn linkbtn" onclick="welcome.step='brief';renderWelcome()">Da igual, elige tú</button></div></div>`;
   } else if (w.step === 'brief') {
     body = `<div class="wChat">${dots}<div class="agBotRow"><img class="agAvatar big" src="${agentImg(a.key)}" alt=""><div class="agMsg bot">¿Te mando cada mañana un correo con tu agenda, tus pendientes y el siguiente paso?</div></div>
       <div class="wChoices"><label class="toggle"><input type="radio" name="wBrief" value="1" ${w.brief ? 'checked' : ''}> Sí, por favor</label><label class="toggle"><input type="radio" name="wBrief" value="0" ${w.brief ? '' : 'checked'}> Ahora no</label>
       <label class="field inlineField">Hora (Madrid)<input id="wTime" type="time" value="${esc(w.time)}"></label></div>
-      <div class="actions"><button class="btn ghost" onclick="welcome.step='goals';renderWelcome()">Atrás</button><button class="btn primary" id="wSave" onclick="welcomeSave(this)">Listo</button></div></div>`;
+      <div class="actions"><button class="btn ghost" onclick="welcome.step='tono';renderWelcome()">Atrás</button><button class="btn primary" id="wSave" onclick="welcomeSave(this)">Listo</button></div></div>`;
   } else if (w.step === 'listo') {
     body = `<div class="wCenter wHello"><img class="wBig wJump" src="${agentPose(a.key, 'celebra')}" alt="${esc(a.name)} celebra">
       <div class="agBubble wBubble"><b>¡Perfecto${hi}!</b><p>Ya te conozco un poco. Cuéntame qué tienes que hacer esta semana y lo voy ordenando por ti.</p>${voiceOk() ? `<button type="button" class="btn linkbtn wListen" onclick="speakMsg(this)" aria-label="Escuchar">🔊 Escuchar</button>` : ''}</div>
@@ -803,7 +813,7 @@ function welcomeNext(skip) {
   stopDictation(true);
   const v = skip ? '' : (document.getElementById('wInput')?.value.trim() || '');
   if (welcome.step === 'about') { welcome.about = v; welcome.step = 'goals'; }
-  else { welcome.goals = v; welcome.step = 'brief'; }
+  else { welcome.goals = v; welcome.step = 'tono'; }
   renderWelcome();
 }
 async function welcomeSave(btn) {
@@ -811,7 +821,7 @@ async function welcomeSave(btn) {
   welcome.time = document.getElementById('wTime')?.value || '08:00';
   const done = busy(btn, 'Guardando…');
   try {
-    const { settings } = await api('agent', { method: 'POST', body: { action: 'setup', profile: welcome.profile, about: welcome.about, goals: welcome.goals, brief_enabled: welcome.brief, brief_time: welcome.time } });
+    const { settings } = await api('agent', { method: 'POST', body: { action: 'setup', profile: welcome.profile, about: welcome.about, goals: welcome.goals, tone: welcome.tone, brief_enabled: welcome.brief, brief_time: welcome.time } });
     agentState.settings = settings;
     welcome.step = 'listo'; renderWelcome();
   } catch (e) { done(); info('No se pudo guardar', e.message); }
@@ -940,6 +950,8 @@ function agentSetup(edit = false) {
     ${chosen ? `<details class="agOther" ${edit ? '' : ''}><summary>¿No es tu perfil? Cámbialo aquí</summary>${grid}</details>` : `<small class="muted">1. ¿CUÁL ES TU PERFIL?</small>${grid}`}
     <label class="field"><span class="agQ">¿A qué te dedicas?</span> <span class="muted">(opcional)</span><div class="dictationWrap"><textarea id="agAbout" rows="3" maxlength="2000" placeholder="Por ejemplo: soy profesora de primaria en Madrid y doy clases de inglés por las tardes.">${esc(s.about || '')}</textarea><button class="dictateBtn" type="button" onclick="toggleDictation('agAbout',this)" aria-label="Dictar">🎙 <span>Dictar</span></button></div></label>
     <label class="field"><span class="agQ">¿En qué quieres que te ayude?</span> <span class="muted">(opcional)</span><div class="dictationWrap"><textarea id="agGoals" rows="3" maxlength="2000" placeholder="Por ejemplo: organizar mis clases de la semana, no olvidarme de las entregas y preparar materiales.">${esc(s.goals || '')}</textarea><button class="dictateBtn" type="button" onclick="toggleDictation('agGoals',this)" aria-label="Dictar">🎙 <span>Dictar</span></button></div></label>
+    <div class="plannerStep"><small class="agQ">¿CÓMO TE GUSTA QUE TE HABLE?</small>
+      <div class="toneGrid" id="agToneGrid">${TONE_OPTIONS.map(t => `<button type="button" class="toneCard ${s.tone === t.v ? 'sel' : ''}" data-tone="${esc(t.v)}" onclick="document.querySelectorAll('#agToneGrid .toneCard').forEach(b=>b.classList.toggle('sel',b===this));this.blur()"><b>${esc(t.l)}</b><small>${esc(t.d)}</small></button>`).join('')}</div></div>
     <div class="plannerStep"><small class="agQ">¿TE MANDO CADA MAÑANA UN RESUMEN?</small>
       <label class="toggle"><input type="checkbox" id="agBrief" ${s.brief_enabled === false ? '' : 'checked'}> Sí, un correo con mi agenda, mis pendientes y el siguiente paso</label>
       <label class="field inlineField">Hora (Madrid)<input id="agTime" type="time" value="${esc(time)}"></label></div>
@@ -958,7 +970,8 @@ function agentSetup(edit = false) {
     if (!profile) return toast('Elige primero tu perfil.', 'warn');
     const done = busy(e.currentTarget, 'Guardando…');
     try {
-      const { settings } = await api('agent', { method: 'POST', body: { action: 'setup', profile, about: agAbout.value.trim(), goals: agGoals.value.trim(), brief_enabled: agBrief.checked, brief_time: agTime.value || '08:00' } });
+      const tone = document.querySelector('#agToneGrid .toneCard.sel')?.dataset.tone || '';
+      const { settings } = await api('agent', { method: 'POST', body: { action: 'setup', profile, about: agAbout.value.trim(), goals: agGoals.value.trim(), tone, brief_enabled: agBrief.checked, brief_time: agTime.value || '08:00' } });
       agentState.settings = settings;
       toast(edit ? 'Cambios guardados.' : `¡${agentByKey(profile).name} ya está listo!`);
       renderAgent();

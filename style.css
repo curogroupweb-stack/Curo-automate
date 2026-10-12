@@ -264,3 +264,8 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 .agAvatar.talking,.wBig.talking{box-shadow:none;filter:drop-shadow(0 0 6px #a78bfa)}
 /* Barra de la conversación del agente (borrar) */
 .agChatBar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;min-height:32px}
+/* Preferencia de tono del agente (bienvenida y ajustes): opciones para tocar, sin escribir */
+.toneGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:10px 0}
+.toneCard{display:flex;flex-direction:column;gap:4px;text-align:left;padding:14px;border:1.5px solid #e1e6f0;border-radius:14px;background:#fff;cursor:pointer;font:inherit;color:inherit}
+.toneCard:hover{border-color:#9aa6f7}.toneCard.sel{border-color:#3b4ff0;background:#f2f4ff;box-shadow:0 0 0 2px #3b4ff0 inset}
+.toneCard small{color:#667085}
