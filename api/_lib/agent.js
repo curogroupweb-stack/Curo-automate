@@ -36,7 +36,7 @@ async function loadState(userId) {
   const [settings, items, messages] = await Promise.all([
     db.one('agent_settings', `user_id=eq.${enc(userId)}&select=*`),
     db.select('agent_items', `user_id=eq.${enc(userId)}&select=*&order=status.asc,due_at.asc.nullslast,updated_at.desc&limit=200`),
-    db.select('agent_messages', `user_id=eq.${enc(userId)}&cleared=is.false&select=role,content,created_at&order=created_at.desc&limit=30`)
+    db.select('agent_messages', `user_id=eq.${enc(userId)}&cleared=is.false&select=id,role,content,created_at&order=created_at.desc&limit=30`)
   ]);
   return { settings, items, messages: messages.reverse() };
 }
@@ -121,7 +121,7 @@ async function chatTurn(user, message, { isAdmin } = {}) {
     const sent = await db.select('agent_messages', `user_id=eq.${enc(user.id)}&role=eq.user&created_at=gte.${enc(today.toISOString())}&select=id&limit=${DAILY_LIMIT + 1}`);
     if (sent.length >= DAILY_LIMIT) throw new HttpError(429, `Hoy ya has enviado ${DAILY_LIMIT} mensajes a tu agente. Mañana podrás seguir.`);
   }
-  await db.insert('agent_messages', { user_id: user.id, role: 'user', content: text });
+  const userMsg = await db.insert('agent_messages', { user_id: user.id, role: 'user', content: text });
   const history = st.messages.slice(-12).map(m => ({ role: m.role, content: m.content.slice(0, 1500) }));
   const res = await chat({ system: systemPrompt(st, user.name), messages: [...history, { role: 'user', content: text }], maxTokens: 1500, temperature: 0.4 });
   const out = extractJson(res.text) || {};
@@ -129,8 +129,8 @@ async function chatTurn(user, message, { isAdmin } = {}) {
   if (!reply) reply = String(res.text || '').replace(/^\s*\{[\s\S]*\}\s*$/, '').trim() || 'Perdona, no he podido responder ahora. ¿Me lo repites?';
   reply = reply.replace(/\*\*(.+?)\*\*/g, '$1').replace(/^#{1,6}\s+/gm, '').slice(0, 4000);
   const changes = await applyChanges(user.id, st, out);
-  await db.insert('agent_messages', { user_id: user.id, role: 'assistant', content: reply });
-  return { reply, changes };
+  const botMsg = await db.insert('agent_messages', { user_id: user.id, role: 'assistant', content: reply });
+  return { reply, changes, userMsgId: userMsg?.id, botMsgId: botMsg?.id };
 }
 
 async function saveSettings(userId, b) {
@@ -224,4 +224,10 @@ async function clearChat(userId) {
   await db.update('agent_messages', `user_id=eq.${enc(userId)}&cleared=is.false`, { cleared: true });
 }
 
-module.exports = { PROFILES, loadState, clearChat, chatTurn, saveSettings, itemOp, buildBrief, sendBrief, parseDue };
+// Borra un único mensaje (el usuario solo puede borrar los suyos, no las respuestas del agente).
+async function deleteMessage(userId, id) {
+  if (!/^\d+$/.test(String(id ?? ''))) throw new HttpError(400, 'Mensaje no válido.');
+  await db.update('agent_messages', `id=eq.${enc(id)}&user_id=eq.${enc(userId)}&role=eq.user`, { cleared: true });
+}
+
+module.exports = { PROFILES, loadState, clearChat, deleteMessage, chatTurn, saveSettings, itemOp, buildBrief, sendBrief, parseDue };

@@ -989,9 +989,23 @@ function selectSetupAgent(key) {
   const btn = document.getElementById('agSave'); if (btn && !/Guardar/.test(btn.textContent)) btn.textContent = `Empezar con ${agentByKey(key).name}`;
 }
 function agentMsgHtml(m) {
-  const txt = `<div class="agMsg ${m.role === 'user' ? 'me' : 'bot'}">${esc(m.content).replace(/\n/g, '<br>')}</div>`;
+  if (m.role === 'user') {
+    const del = m.id ? `<button type="button" class="agMsgDel" onclick="agentDeleteMsg('${m.id}',this)" aria-label="Borrar este mensaje" title="Borrar este mensaje">×</button>` : '';
+    return `<div class="agMsgRow me"><div class="agMsg me">${esc(m.content).replace(/\n/g, '<br>')}</div>${del}</div>`;
+  }
+  const txt = `<div class="agMsg bot">${esc(m.content).replace(/\n/g, '<br>')}</div>`;
   const say = voiceOk() ? `<button type="button" class="agSay" onclick="speakMsg(this)" aria-label="Escuchar este mensaje" title="Escuchar">🔊</button>` : '';
-  return m.role === 'user' ? txt : `<div class="agBotRow"><img class="agAvatar" src="${agentImg(agentState?.settings?.profile || 'descubridor')}" alt="">${txt}${say}</div>`;
+  return `<div class="agBotRow"><img class="agAvatar" src="${agentImg(agentState?.settings?.profile || 'descubridor')}" alt="">${txt}${say}</div>`;
+}
+// Borra un único mensaje propio (no hace falta borrar toda la conversación).
+async function agentDeleteMsg(id, btn) {
+  const row = btn.closest('.agMsgRow');
+  btn.disabled = true;
+  try {
+    await api('agent', { method: 'POST', body: { action: 'deleteMessage', id } });
+    agentState.messages = (agentState.messages || []).filter(m => m.id !== id);
+    row?.remove();
+  } catch (err) { btn.disabled = false; info('No se pudo borrar', err.message); }
 }
 function agentItemsHtml() {
   const items = (agentState.items || []).filter(i => agentTab === 'agenda' ? (i.kind === 'agenda' || (i.due_at && i.kind !== 'memoria')) : i.kind === agentTab);
@@ -1086,7 +1100,7 @@ async function agentSend() {
   const done = busy(document.getElementById('agSend'), '…');
   try {
     const r = await api('agent', { method: 'POST', body: { action: 'chat', message: text } });
-    agentState.messages = [...(agentState.messages || []), { role: 'user', content: text }, { role: 'assistant', content: r.reply }];
+    agentState.messages = [...(agentState.messages || []), { id: r.userMsgId, role: 'user', content: text }, { id: r.botMsgId, role: 'assistant', content: r.reply }];
     agentState.items = r.items;
     const c = r.changes || {};
     renderAgent();

@@ -4,6 +4,7 @@
 // POST { action:'chat', message }
 // POST { action:'item', op:'add'|'done'|'undo'|'delete', ... }
 // POST { action:'clear' }  -> borra la conversación (pendientes y memoria se mantienen)
+// POST { action:'deleteMessage', id }  -> borra un único mensaje (solo los propios)
 // POST { action:'brief' }  -> envía ahora el resumen al correo de la cuenta
 const { handler, json, readBody, requireUser, HttpError } = require('./_lib/http');
 const { isAdmin } = require('./_lib/account');
@@ -33,6 +34,10 @@ module.exports = handler(async (req, res) => {
     }
     case 'clear': {
       await agent.clearChat(user.id);
+      return json(res, 200, { ok: true });
+    }
+    case 'deleteMessage': {
+      await agent.deleteMessage(user.id, b.id);
       return json(res, 200, { ok: true });
     }
     case 'brief': {

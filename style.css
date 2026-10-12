@@ -269,3 +269,10 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 .toneCard{display:flex;flex-direction:column;gap:4px;text-align:left;padding:14px;border:1.5px solid #e1e6f0;border-radius:14px;background:#fff;cursor:pointer;font:inherit;color:inherit}
 .toneCard:hover{border-color:#9aa6f7}.toneCard.sel{border-color:#3b4ff0;background:#f2f4ff;box-shadow:0 0 0 2px #3b4ff0 inset}
 .toneCard small{color:#667085}
+/* Borrar un mensaje propio del chat (x junto a la burbuja) */
+.agMsgRow.me{display:flex;align-items:center;gap:6px;align-self:flex-end;max-width:85%}
+.agMsgRow.me .agMsg.me{max-width:100%;align-self:auto}
+.agMsgDel{flex:none;width:22px;height:22px;border-radius:50%;border:1px solid #dbe2ef;background:#fff;color:#8a93a6;cursor:pointer;font-size:14px;line-height:1;padding:0;opacity:0;transition:opacity .15s}
+.agMsgRow.me:hover .agMsgDel,.agMsgDel:focus-visible{opacity:1}
+.agMsgDel:hover{border-color:#e35151;color:#e35151}
+@media(hover:none){.agMsgDel{opacity:1}}
