@@ -21,7 +21,7 @@ const PROFILES = {
   descubridor: { name: 'Sandy', label: 'Descubridor', focus: 'intereses personales, cosas que quiere aprender, compras que está pensando, viajes, ideas y descubrimientos' }
 };
 const KINDS = ['memoria', 'pendiente', 'proyecto', 'agenda'];
-const DAILY_LIMIT = Number(process.env.AGENT_DAILY_MESSAGES || 40);
+const DAILY_LIMIT = Number(process.env.AGENT_DAILY_MESSAGES || 18); // tope del plan gratis; ajustable sin tocar código
 
 const madridNow = () => new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', dateStyle: 'full', timeStyle: 'short' }).format(new Date());
 const fmtDue = v => v ? new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(v)) : '';
