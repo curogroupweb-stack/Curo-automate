@@ -136,8 +136,8 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 .profileIcon{font-size:24px;line-height:1}
 .agentSetup textarea,.agentSetup input[type=time],.agAdd input{font:inherit;padding:10px 12px;border:1px solid #d9deea;border-radius:10px;background:#fff;width:100%;box-sizing:border-box}
 .inlineField{display:flex;align-items:center;gap:10px;margin-top:8px}.inlineField input{width:auto!important}
-.agHead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
-.agWho{display:flex;align-items:center;gap:12px}.agWho small{display:block}
+.agHead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;padding:12px 20px;overflow:visible}
+.agWho{display:flex;align-items:center;gap:16px}.agWho small{display:block}
 .agGrid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:14px;align-items:start}
 @media(max-width:900px){.agGrid{grid-template-columns:1fr}}
 .agChat{display:flex;flex-direction:column;gap:10px;min-height:420px}
@@ -192,7 +192,7 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 .profileCard{align-items:stretch}.profileCard b{font-size:17px;text-align:center}
 .profileFor{text-align:center;font-weight:700;color:#0f766e!important}
 .agAvatar{width:48px;height:48px;border-radius:50%;object-fit:cover;flex:none;border:2px solid #fff;box-shadow:0 2px 8px #1f2a4414}
-.agAvatar.big{width:150px;height:150px}
+.agAvatar.big{width:150px;height:150px;margin:-26px 0}
 .agBotRow{display:flex;gap:8px;align-items:flex-end;align-self:flex-start;max-width:92%}.agBotRow .agMsg{max-width:100%}
 @media(max-width:560px){.agCards{grid-template-columns:1fr 1fr;gap:10px}.agCardBody{padding:10px 10px 12px;gap:6px}.agCardBody h3{font-size:18px}.agCardBody p{font-size:13px}.agCardBody ul{display:none}.agCardFor{font-size:10px;padding:3px 7px}.agCardBody .btn{padding:10px 8px;font-size:13px}}
 /* 8 agentes siempre en filas completas: 4 por fila en pantalla grande, 2 en tablet y móvil */
