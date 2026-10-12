@@ -758,7 +758,7 @@ const TONE_OPTIONS = [
   { v: 'Cercano y cálido, con alguna sonrisa de vez en cuando.', l: 'Cercano y cálido', d: 'Como charlando con alguien de confianza' }
 ];
 function agentWelcome(pickKey) {
-  if (pickKey && lrecall('curo_pick_login')) { lstore('curo_pick_login', null); setTimeout(() => toast('Ya tenías tu sesión de CURO abierta, así que entraste directo.'), 400); }
+  if (pickKey && lrecall('curo_pick_login')) { lstore('curo_pick_login', null); setTimeout(() => toast('¡Ya estás dentro! Vamos a armar tu agente.'), 400); }
   welcome = { step: pickKey ? 'hola' : 'perfil', profile: pickKey || null, about: '', goals: '', tone: '', brief: true, time: '08:00' };
   // Intereses marcados al registrarse en CURO: punto de partida para "¿En qué quieres que te ayude?".
   try { if (sb.auth.getUser) Promise.resolve().then(() => sb.auth.getUser()).then(({ data }) => {
@@ -939,8 +939,8 @@ async function agentPage() {
 function agentSetup(edit = false) {
   const s = { ...(agentState.settings || {}) };
   const pick = takeAgentPick(); if (pick) s.profile = pick;
-  // Si venía de "Entrar o crear mi cuenta" y ya tenía la sesión de CURO abierta, no se le pidió entrar: se le avisa.
-  if (pick && lrecall('curo_pick_login')) { lstore('curo_pick_login', null); setTimeout(() => toast('Ya tenías tu sesión de CURO abierta, así que entraste directo.'), 400); }
+  // Al volver de "Entrar o crear mi cuenta" se le confirma que ya está dentro (sin afirmar si tuvo o no que escribir su contraseña).
+  if (pick && lrecall('curo_pick_login')) { lstore('curo_pick_login', null); setTimeout(() => toast('¡Ya estás dentro! Vamos a armar tu agente.'), 400); }
   const chosen = s.profile ? agentByKey(s.profile) : null;
   const time = String(s.brief_time || '08:00').slice(0, 5);
   const first = (me?.user?.name || '').split(' ')[0];
