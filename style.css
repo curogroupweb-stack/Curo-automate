@@ -262,3 +262,5 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 .wBig{filter:drop-shadow(0 12px 16px #1f2a4422)}
 .agAvatar{border-radius:0;border:0;box-shadow:none;object-fit:contain;background:none}
 .agAvatar.talking,.wBig.talking{box-shadow:none;filter:drop-shadow(0 0 6px #a78bfa)}
+/* Barra de la conversación del agente (borrar) */
+.agChatBar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;min-height:32px}

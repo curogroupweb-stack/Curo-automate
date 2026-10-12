@@ -3,6 +3,7 @@
 // POST { action:'setup', profile, about, goals, tone, brief_enabled, brief_time }
 // POST { action:'chat', message }
 // POST { action:'item', op:'add'|'done'|'undo'|'delete', ... }
+// POST { action:'clear' }  -> borra la conversación (pendientes y memoria se mantienen)
 // POST { action:'brief' }  -> envía ahora el resumen al correo de la cuenta
 const { handler, json, readBody, requireUser, HttpError } = require('./_lib/http');
 const { isAdmin } = require('./_lib/account');
@@ -29,6 +30,10 @@ module.exports = handler(async (req, res) => {
       await agent.itemOp(user.id, b);
       const st = await agent.loadState(user.id);
       return json(res, 200, { items: st.items });
+    }
+    case 'clear': {
+      await agent.clearChat(user.id);
+      return json(res, 200, { ok: true });
     }
     case 'brief': {
       const r = await agent.sendBrief(user.id);

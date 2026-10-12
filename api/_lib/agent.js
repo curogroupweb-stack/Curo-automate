@@ -36,7 +36,7 @@ async function loadState(userId) {
   const [settings, items, messages] = await Promise.all([
     db.one('agent_settings', `user_id=eq.${enc(userId)}&select=*`),
     db.select('agent_items', `user_id=eq.${enc(userId)}&select=*&order=status.asc,due_at.asc.nullslast,updated_at.desc&limit=200`),
-    db.select('agent_messages', `user_id=eq.${enc(userId)}&select=role,content,created_at&order=created_at.desc&limit=30`)
+    db.select('agent_messages', `user_id=eq.${enc(userId)}&cleared=is.false&select=role,content,created_at&order=created_at.desc&limit=30`)
   ]);
   return { settings, items, messages: messages.reverse() };
 }
@@ -218,4 +218,10 @@ async function sendBrief(userId) {
   return { to: u.email, subject, body };
 }
 
-module.exports = { PROFILES, loadState, chatTurn, saveSettings, itemOp, buildBrief, sendBrief, parseDue };
+// Borra la conversación de la pantalla y de lo que el agente lee del chat.
+// Se marca (no se elimina) para que el límite diario de mensajes siga contando bien.
+async function clearChat(userId) {
+  await db.update('agent_messages', `user_id=eq.${enc(userId)}&cleared=is.false`, { cleared: true });
+}
+
+module.exports = { PROFILES, loadState, clearChat, chatTurn, saveSettings, itemOp, buildBrief, sendBrief, parseDue };

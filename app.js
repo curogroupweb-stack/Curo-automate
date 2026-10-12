@@ -997,9 +997,10 @@ function renderAgent() {
   const first = (me?.user?.name || '').split(' ')[0];
   shell('Mi agente', `
     <div class="agHead card"><div class="agWho"><img class="agAvatar big" src="${agentImg(s.profile)}" alt=""><div><b>${esc(agentByKey(s.profile).name)} · tu agente AIA</b><small class="muted">${esc(prof.label || '')}</small><small class="muted">${s.brief_enabled ? `Resumen cada día a las ${esc(String(s.brief_time || '08:00').slice(0, 5))}` : 'Resumen diario desactivado'}</small></div></div>
-      <div class="actions">${voiceToggleHtml()}<button class="btn ghost smallBtn" id="agBriefNow">Enviarme el resumen ahora</button><button class="btn ghost smallBtn" onclick="agentSetup(true)">Ajustes</button></div></div>
+      <div class="actions"><button class="btn ghost smallBtn" onclick="go('Inicio')">← Volver al inicio</button>${voiceToggleHtml()}<button class="btn ghost smallBtn" id="agBriefNow">Enviarme el resumen ahora</button><button class="btn ghost smallBtn" onclick="agentSetup(true)">Ajustes</button></div></div>
     <div class="agGrid">
       <div class="card agChat">
+        <div class="agChatBar"><small class="muted">CONVERSACIÓN</small>${msgs.length ? `<button type="button" class="btn ghost smallBtn" onclick="agentClearAsk()">🗑 Borrar conversación</button>` : ''}</div>
         <div class="agMsgs" id="agMsgs">${msgs.length ? msgs.map(agentMsgHtml).join('') + agentReturnGreeting(msgs) : agentMsgHtml({ role: 'assistant', content: `Hola${first ? `, ${first}` : ''}. Soy ${agentByKey(s.profile).name}, tu agente personal. Cuéntame en qué estás trabajando, qué tienes que hacer esta semana o qué te gustaría organizar, y lo iré recordando por ti.` }) + `<div class="agStarters"><small class="muted">PUEDES EMPEZAR POR AQUÍ</small>${(AGENT_STARTERS[s.profile] || AGENT_STARTERS.descubridor).map((t, i) => `<button type="button" class="exampleChip" onclick="agentStarter(${i})">${esc(t)}</button>`).join('')}</div>`}</div>
         <form class="agForm" onsubmit="event.preventDefault();agentSend()">
           <div class="dictationWrap"><textarea id="agInput" rows="2" maxlength="2000" placeholder="Escribe a ${esc(agentByKey(s.profile).name)}…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();agentSend()}"></textarea>
@@ -1019,6 +1020,22 @@ function renderAgent() {
     try { const r = await api('agent', { method: 'POST', body: { action: 'brief' } }); toast('Resumen enviado a ' + r.to); }
     catch (err) { info('No se pudo enviar el resumen', err.message); }
     finally { done(); }
+  });
+}
+// Borrar la conversación: se pide confirmación; pendientes, proyectos, agenda y memoria no se tocan.
+function agentClearAsk() {
+  const name = agentByKey(agentState?.settings?.profile).name;
+  const m = modal('¿Borrar la conversación?', `<p>Se borran los mensajes del chat con ${esc(name)} y empiezas una conversación nueva.</p><p class="muted">Tus pendientes, proyectos, agenda y lo que ${esc(name)} recuerda de ti (pestaña Memoria) no se borran.</p>`, {
+    actions: `<button class="btn ghost" onclick="closeModals()">Cancelar</button><button class="btn primary" id="agClearOk">Sí, borrar</button>`
+  });
+  m.querySelector('#agClearOk').addEventListener('click', async e => {
+    const done = busy(e.currentTarget, 'Borrando…');
+    try {
+      await api('agent', { method: 'POST', body: { action: 'clear' } });
+      try { stopSpeaking(); } catch {}
+      agentState.messages = [];
+      closeModals(); renderAgent(); toast('Conversación borrada.');
+    } catch (err) { done(); info('No se pudo borrar', err.message); }
   });
 }
 // Al volver después de unas horas: saludo según la hora y lo que tiene para hoy (no se guarda en el historial).
