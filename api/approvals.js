@@ -40,13 +40,21 @@ module.exports = handler(async (req, res) => {
   const locked = await db.update('automate_approvals', `id=eq.${enc(id)}&status=eq.pending`, { status: 'approved', decided_at: new Date().toISOString() });
   if (!locked.length) throw new HttpError(409, 'Esta aprobación ya se está procesando.');
 
-  const action = { ...ap.action_payload, ...(payload && typeof payload === 'object' ? {
-    to: payload.to ?? ap.action_payload.to, subject: payload.subject ?? ap.action_payload.subject, body: payload.body ?? ap.action_payload.body
-  } : {}) };
+  const editableFields = ap.action_type === 'calendar_create_event'
+    ? ['summary', 'description', 'location', 'start', 'end', 'attendees']
+    : ['to', 'subject', 'body'];
+  const action = { ...ap.action_payload };
+  if (payload && typeof payload === 'object') for (const f of editableFields) if (payload[f] !== undefined) action[f] = payload[f];
   try {
-    if (ap.action_type !== 'gmail_send') throw new Error('Tipo de acción no soportado.');
-    const brand = await isAdmin(user.id);
-    const sent = await sendEmail(user.id, action, { brand });
+    let sent;
+    if (ap.action_type === 'gmail_send') {
+      const brand = await isAdmin(user.id);
+      sent = await sendEmail(user.id, action, { brand });
+    } else if (ap.action_type === 'calendar_create_event') {
+      sent = await google.createEvent(user.id, action);
+    } else {
+      throw new Error('Tipo de acción no soportado.');
+    }
     await db.update('automate_approvals', `id=eq.${enc(id)}`, { action_payload: action, result: { sent: true, ...sent } });
     await refreshRunStatus(ap.run_id);
     return json(res, 200, { status: 'approved', sent });

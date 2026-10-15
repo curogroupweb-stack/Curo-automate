@@ -32,4 +32,28 @@ async function approvalPending(ctx, { to, subject, body }) {
   }
 }
 
-module.exports = { approvalPending };
+async function calendarApprovalPending(ctx, { summary, start, attendees }) {
+  const me = (ctx.selfEmails || [])[0];
+  if (!me) return;
+  const link = `${APP_URL()}/?ir=aprobaciones`;
+  const text = [
+    `Tienes un evento preparado por CURO Automate esperando tu aprobación.`,
+    ``,
+    `Automatización: ${ctx.automation?.name || '—'}`,
+    `Evento: ${summary}`,
+    `Con: ${(attendees || []).join(', ')}`,
+    `Cuándo: ${start}`,
+    ``,
+    `Revísalo y apruébalo aquí:`,
+    link,
+    ``,
+    `No se enviará ninguna invitación hasta que lo apruebes.`
+  ].join('\n');
+  try {
+    await google.sendMessage(ctx.userId, { to: me, subject: `CURO Automate: 1 evento para aprobar (${summary})`, body: text });
+  } catch (e) {
+    console.error('[curo-automate] No se pudo enviar el aviso de aprobación:', e.message);
+  }
+}
+
+module.exports = { approvalPending, calendarApprovalPending };

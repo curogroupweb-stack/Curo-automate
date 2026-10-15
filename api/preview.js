@@ -105,7 +105,7 @@ module.exports = handler(async (req, res) => {
   // Se cuenta antes de llamar a la IA para que reintentos simultáneos no se salten el límite.
   await db.insert('automate_previews', { device_hash: deviceHash, ip_hash: ipHash });
 
-  const p = await plan(text, { connections: { google: false, email: '' }, isAdmin: false });
+  const p = await plan(text, { connections: { google: false, email: '', google_calendar: false }, isAdmin: false });
   let example = '';
   if (p.feasible) {
     try { example = await exampleResult(text, p); } catch { example = ''; }

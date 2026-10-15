@@ -23,6 +23,22 @@ const CATALOG = {
     description: 'Envía un correo desde el Gmail del usuario. Los correos al propio usuario se envían al momento. Si van a otra persona y la automatización requiere aprobación, el correo queda como borrador pendiente y el usuario lo aprueba antes de enviarlo. Para responder, pasa reply_to_message_id.',
     parameters: { type: 'object', properties: { to: { type: 'string' }, subject: { type: 'string' }, body: { type: 'string' }, reply_to_message_id: { type: 'string' } }, required: ['to', 'subject', 'body'] }
   },
+  calendar_list_events: {
+    needs: 'google_calendar',
+    label: 'Ver próximos eventos del Calendar',
+    description: 'Lista los próximos eventos del Google Calendar del usuario (por defecto, los próximos 14 días). Devuelve título, inicio, fin, lugar y asistentes.',
+    parameters: { type: 'object', properties: { days: { type: 'integer', minimum: 1, maximum: 90 }, max_results: { type: 'integer', minimum: 1, maximum: 20 } } }
+  },
+  calendar_create_event: {
+    needs: 'google_calendar',
+    label: 'Crear un evento en el Calendar',
+    description: 'Crea un evento en el Google Calendar del usuario (por ejemplo una reunión con un padre/madre, una entrega de boletines). start y end en formato ISO (ej. "2026-10-20T17:00:00"). Si incluye attendees (emails de otras personas), el evento queda pendiente de aprobación antes de enviarles la invitación.',
+    parameters: { type: 'object', properties: {
+      summary: { type: 'string' }, description: { type: 'string' }, location: { type: 'string' },
+      start: { type: 'string' }, end: { type: 'string' },
+      attendees: { type: 'array', items: { type: 'string' } }
+    }, required: ['summary', 'start', 'end'] }
+  },
   web_search: {
     needs: null,
     label: 'Buscar en internet',
@@ -222,6 +238,22 @@ async function execute(name, args, ctx) {
       }
       const sent = await sendEmail(ctx.userId, args, { brand: ctx.brand });
       return { status: toSelf ? 'enviado_al_usuario' : 'enviado', ...sent };
+    }
+    case 'calendar_list_events': return google.listUpcomingEvents(ctx.userId, { days: args.days, max: args.max_results });
+    case 'calendar_create_event': {
+      const attendees = (args.attendees || []).filter(Boolean);
+      if (attendees.length && ctx.approvalMode === 'always') {
+        const ap = await db.insert('automate_approvals', {
+          run_id: ctx.runId, automation_id: ctx.automation?.id || null, user_id: ctx.userId,
+          action_type: 'calendar_create_event',
+          action_payload: { summary: args.summary, description: args.description || null, location: args.location || null, start: args.start, end: args.end, attendees },
+          summary: `Evento "${args.summary}" con ${attendees.join(', ')}`
+        });
+        ctx.approvals.push(ap.id);
+        await require('./notify').calendarApprovalPending(ctx, args);
+        return { status: 'pendiente_de_aprobacion', note: 'El evento se ha guardado pendiente de aprobación porque invita a otras personas. El usuario lo revisará en Aprobaciones antes de que salgan las invitaciones. No lo vuelvas a crear.' };
+      }
+      return google.createEvent(ctx.userId, args);
     }
     case 'curo_stats': {
       if (!ctx.brand) return { error: 'Solo la cuenta administradora de CURO puede consultar los datos de la plataforma.' };

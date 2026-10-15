@@ -7,7 +7,7 @@ const TRIGGERS = ['manual', 'schedule', 'gmail_new_message', 'curo_new_user'];
 
 function systemPrompt({ connections, isAdmin }) {
   const tools = Object.entries(CATALOG).filter(([, t]) => t.needs !== 'admin' || isAdmin).map(([n, t]) =>
-    `- ${n}: ${t.label}${t.needs === 'google' && !connections.google ? ' (requiere conectar Google; aún NO conectado, pero puedes incluirla)' : ''}`).join('\n');
+    `- ${n}: ${t.label}${t.needs === 'google' && !connections.google ? ' (requiere conectar Google; aún NO conectado, pero puedes incluirla)' : ''}${t.needs === 'google_calendar' && !connections.google_calendar ? ' (requiere conectar Google con permiso de Calendar; aún no concedido, pero puedes incluirla)' : ''}`).join('\n');
   return `Eres el planificador de CURO Automate, un servicio que automatiza tareas a personas sin conocimientos técnicos.
 Tu trabajo: leer lo que el usuario quiere delegar y devolver un plan en JSON. No ejecutas nada.
 
@@ -21,9 +21,9 @@ HERRAMIENTAS que podrá usar al ejecutarse:
 ${tools}
 
 REGLAS
-- Si la tarea envía correos a otras personas, approval debe ser "always" salvo que el usuario diga explícitamente que se envíe sin revisar.
+- Si la tarea envía correos o invitaciones de calendario a otras personas, approval debe ser "always" salvo que el usuario diga explícitamente que se envíe sin revisar.
 - inputs: solo para disparador manual y solo datos que cambian en cada ejecución y no se pueden obtener con las herramientas. Máximo 4. Para otros disparadores, inputs = [].
-- Si algo no se puede hacer con estas herramientas (WhatsApp, Instagram, pagos, Excel, calendario...), dilo en limitations y propone la parte que sí se puede. feasible=false solo si no se puede hacer nada útil.
+- Si algo no se puede hacer con estas herramientas (WhatsApp, Instagram, pagos, Excel...), dilo en limitations y propone la parte que sí se puede. feasible=false solo si no se puede hacer nada útil.
 - questions: máximo 2 preguntas imprescindibles; si se puede suponer algo razonable, supónlo y no preguntes.
 - Escribe todo en español claro, sin jerga técnica. steps: 3 a 7 pasos cortos que entienda cualquiera. Nunca menciones nombres internos (curo_new_user, gmail_send, web_search, etc.).
 - name: 2 a 5 palabras en español normal, con mayúscula inicial y espacios (por ejemplo "Bienvenida a nuevos usuarios"), nunca con guiones bajos.
@@ -68,10 +68,11 @@ function normalize(raw, { connections, isAdmin, instruction }) {
   const tools = [...new Set((Array.isArray(p.tools) ? p.tools : []).filter(n => CATALOG[n] && (CATALOG[n].needs !== 'admin' || isAdmin)))];
   if (type === 'gmail_new_message') { if (!tools.includes('gmail_read')) tools.unshift('gmail_read'); }
   if (type === 'curo_new_user' && !tools.includes('gmail_send')) tools.push('gmail_send');
-  const needsGoogle = tools.some(n => CATALOG[n].needs === 'google') || type === 'gmail_new_message';
+  const needsGoogle = tools.some(n => CATALOG[n].needs === 'google' || CATALOG[n].needs === 'google_calendar') || type === 'gmail_new_message';
   const sendsEmail = tools.includes('gmail_send');
+  const invitesOthers = tools.includes('calendar_create_event');
   let approval = p.approval === 'never' ? 'never' : 'always';
-  if (!sendsEmail) approval = 'never';
+  if (!sendsEmail && !invitesOthers) approval = 'never';
 
   const inputs = type === 'manual' && Array.isArray(p.inputs)
     ? p.inputs.slice(0, 4).map((x, i) => ({

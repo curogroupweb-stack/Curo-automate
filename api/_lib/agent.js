@@ -16,6 +16,7 @@ const PROFILES = {
     'Contenidos por materia: ayudas a preparar clases, actividades y evaluaciones de la materia que dé, adaptadas al nivel de sus alumnos.',
     'Parte administrativa: redactas boletines o informes de evaluación, comunicados para familias, y actas o guiones de reuniones (con otros docentes, con dirección, con familias) — listos para enviar o imprimir, no solo ideas sueltas.',
     'Si tiene Gmail conectado, puedes enviar esos boletines o comunicados directamente a quien corresponda (a otra persona siempre queda para que lo apruebe antes).',
+    'Si tiene el Calendar conectado, puedes ver sus próximas reuniones y crear eventos (reuniones con familias, entrega de boletines, claustros); si invita a alguien más, la invitación queda pendiente de su aprobación.',
   ] },
   community: { name: 'Kai', label: 'Community manager', focus: 'calendario de publicaciones, campañas, clientes, métricas y tendencias en redes', expertise: [
     'Conoces buenas prácticas por red (Instagram, TikTok, LinkedIn, etc.): formatos, tono y mejores horarios de cada una.',
@@ -46,10 +47,12 @@ const PROFILES = {
     'Ayudas a organizar al equipo: tareas, reuniones, seguimiento de clientes y procesos internos.',
     'Preparas informes, actas de reunión y comunicados para el equipo o los clientes, listos para enviar.',
     'Si tiene Gmail conectado, puedes enviarlos (a otra persona quedan para aprobar).',
+    'Si tiene el Calendar conectado, puedes ver y crear reuniones del equipo o con clientes (las invitaciones a terceros quedan pendientes de su aprobación).',
   ] },
   profesional: { name: 'Hachi', label: 'Profesionales', focus: 'citas y agenda, consultas de clientes o pacientes, seguimiento de casos, documentos, trámites y organización del día (médicos, abogados, psicólogos, secretarios, administrativos y otros profesionales)', rule: 'Ayudas con la agenda, los recordatorios y la organización, pero NUNCA guardes datos de salud, historias clínicas ni datos personales de pacientes o clientes: si te los cuenta, recuérdale amablemente que no los guardas y anota solo lo organizativo (por ejemplo "Consulta a las 10" sin nombre ni diagnóstico).', expertise: [
     'Ayudas con la agenda, los recordatorios de citas y la organización de trámites y documentos del día a día.',
     'Puedes redactar comunicados o recordatorios genéricos para enviar por correo (sin datos de salud ni personales de pacientes o clientes).',
+    'Si tiene el Calendar conectado, puedes ver y crear citas (por ejemplo "Consulta 10:00", sin nombre ni motivo de la consulta); si invita a alguien, queda pendiente de su aprobación.',
   ] },
   descubridor: { name: 'Sandy', label: 'Descubridor', focus: 'intereses personales, cosas que quiere aprender, compras que está pensando, viajes, ideas y descubrimientos', expertise: [
     'Ayudas a investigar antes de decidir: comparar opciones, resumir opiniones y armar listas de recursos para aprender algo nuevo.',
@@ -159,12 +162,12 @@ async function applyChanges(userId, st, out) {
 
 // Herramientas que "Mi agente" puede usar en el chat (subconjunto de las de Automatizaciones:
 // de momento sin curo_stats, que es solo para datos internos de la plataforma).
-const AGENT_TOOLS = ['web_search', 'fetch_url', 'gmail_search', 'gmail_read', 'gmail_send'];
+const AGENT_TOOLS = ['web_search', 'fetch_url', 'gmail_search', 'gmail_read', 'gmail_send', 'calendar_list_events', 'calendar_create_event'];
 const MAX_AGENT_TOOL_TURNS = 4;
 
 async function agentConnections(userId) {
   const g = await google.status(userId).catch(() => ({ connected: false }));
-  return { google: !!g.connected, email: g.email || '' };
+  return { google: !!g.connected, email: g.email || '', google_calendar: !!g.canCalendar };
 }
 
 async function chatTurn(user, message, { isAdmin } = {}) {
@@ -181,7 +184,7 @@ async function chatTurn(user, message, { isAdmin } = {}) {
   const history = st.messages.slice(-12).map(m => ({ role: m.role, content: m.content.slice(0, 1500) }));
 
   const conn = await agentConnections(user.id);
-  const allowed = AGENT_TOOLS.filter(n => tools.available({ google: conn.google }).includes(n));
+  const allowed = AGENT_TOOLS.filter(n => tools.available({ google: conn.google, google_calendar: conn.google_calendar }).includes(n));
   const defs = allowed.map(n => ({ name: n, description: tools.CATALOG[n].description, parameters: tools.CATALOG[n].parameters }));
   const p = PROFILES[st.settings.profile] || PROFILES.descubridor;
   const ctx = {

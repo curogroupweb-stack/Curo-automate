@@ -562,29 +562,39 @@ async function approvalsPage() {
 }
 function apCard(ap) {
   const p = ap.action_payload || {};
+  const isEvent = ap.action_type === 'calendar_create_event';
+  const fields = isEvent
+    ? `<label class="field">Título<input data-f="summary" value="${esc(p.summary)}"></label>
+       <label class="field">Con (emails, separados por coma)<input data-f="attendees" value="${esc((p.attendees || []).join(', '))}"></label>
+       <label class="field">Inicio<input data-f="start" type="datetime-local" value="${esc(String(p.start || '').slice(0, 16))}"></label>
+       <label class="field">Fin<input data-f="end" type="datetime-local" value="${esc(String(p.end || '').slice(0, 16))}"></label>
+       <label class="field">Lugar<input data-f="location" value="${esc(p.location || '')}"></label>
+       <label class="field">Descripción<textarea data-f="description" rows="4">${esc(p.description || '')}</textarea></label>`
+    : `<label class="field">Para<input data-f="to" value="${esc(p.to)}"></label>
+       <label class="field">Asunto<input data-f="subject" value="${esc(p.subject)}"></label>
+       <label class="field">Mensaje<textarea data-f="body" rows="9">${esc(p.body)}</textarea></label>`;
   return `<div class="card apCard" id="ap-${ap.id}">
-    <div class="row"><div><small class="muted">${esc(ap.automate_automations?.name || 'Automatización')} · ${fmtDate(ap.created_at)}</small><h3>Correo para ${esc(p.to)}</h3></div><span class="badge warn">Pendiente</span></div>
+    <div class="row"><div><small class="muted">${esc(ap.automate_automations?.name || 'Automatización')} · ${fmtDate(ap.created_at)}</small><h3>${isEvent ? 'Evento para ' + esc((p.attendees || []).join(', ')) : 'Correo para ' + esc(p.to)}</h3></div><span class="badge warn">Pendiente</span></div>
     ${ap.result?.error ? `<div class="notice danger"><b>Último intento falló:</b> ${esc(ap.result.error)}</div>` : ''}
-    <label class="field">Para<input data-f="to" value="${esc(p.to)}"></label>
-    <label class="field">Asunto<input data-f="subject" value="${esc(p.subject)}"></label>
-    <label class="field">Mensaje<textarea data-f="body" rows="9">${esc(p.body)}</textarea></label>
-    <div class="actions"><button class="btn ghost" onclick="decide('${ap.id}','reject',this)">Descartar</button><button class="btn primary" onclick="decide('${ap.id}','approve',this)">Aprobar y enviar</button></div>
+    ${fields}
+    <div class="actions"><button class="btn ghost" onclick="decide('${ap.id}','reject',this)">Descartar</button><button class="btn primary" onclick="decide('${ap.id}','approve',this)">${isEvent ? 'Aprobar y enviar invitación' : 'Aprobar y enviar'}</button></div>
   </div>`;
 }
 async function decide(id, decision, btn) {
   const card = document.getElementById('ap-' + id);
-  const payload = {}; card.querySelectorAll('[data-f]').forEach(el => payload[el.dataset.f] = el.value);
+  const payload = {};
+  card.querySelectorAll('[data-f]').forEach(el => payload[el.dataset.f] = el.dataset.f === 'attendees' ? el.value.split(',').map(s => s.trim()).filter(Boolean) : el.value);
   const done = busy(btn, decision === 'approve' ? 'Enviando…' : 'Descartando…');
   try {
     await api('approvals', { method: 'POST', body: { id, decision, payload } });
-    toast(decision === 'approve' ? `Correo enviado a ${payload.to}.` : 'Correo descartado.');
+    toast(decision === 'approve' ? 'Aprobado y enviado.' : 'Descartado.');
     await refreshMe(); approvalsPage();
   } catch (e) { done(); info('No se pudo completar', e.message); }
 }
 async function approvalsHistory() {
   const { approvals } = await api('approvals?status=all');
   const done = approvals.filter(a => a.status !== 'pending');
-  modal('Aprobaciones anteriores', done.length ? `<table class="table"><thead><tr><th>Fecha</th><th>Para</th><th>Asunto</th><th>Estado</th></tr></thead><tbody>${done.map(a => `<tr><td>${fmtDate(a.decided_at || a.created_at)}</td><td>${esc(a.action_payload?.to)}</td><td>${esc(a.action_payload?.subject)}</td><td>${a.status === 'approved' ? '<span class="badge ok">Enviado</span>' : a.status === 'rejected' ? '<span class="badge">Descartado</span>' : '<span class="badge danger">Error</span>'}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Aún no hay aprobaciones anteriores.</p>', { wide: true });
+  modal('Aprobaciones anteriores', done.length ? `<table class="table"><thead><tr><th>Fecha</th><th>Resumen</th><th>Estado</th></tr></thead><tbody>${done.map(a => `<tr><td>${fmtDate(a.decided_at || a.created_at)}</td><td>${esc(a.summary || '')}</td><td>${a.status === 'approved' ? '<span class="badge ok">Enviado</span>' : a.status === 'rejected' ? '<span class="badge">Descartado</span>' : '<span class="badge danger">Error</span>'}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Aún no hay aprobaciones anteriores.</p>', { wide: true });
 }
 
 // ---------- Historial ----------
@@ -607,13 +617,17 @@ function openRun(id) { const r = runsCache.find(x => x.id === id); if (r) showRu
 // ---------- Conexiones ----------
 function connectionsPage() {
   const g = me.connections.google;
+  const needsCalendarUpgrade = g.connected && !g.canCalendar;
   shell('Conexiones', `<p class="muted">Las aplicaciones que CURO puede usar en tu nombre. Solo actúa con las que conectes y puedes desconectarlas cuando quieras.</p>
     <div class="connGrid">
-      <div class="card conn"><div class="row"><h3>Gmail</h3><span class="badge ${g.connected ? 'ok' : 'warn'}">${g.connected ? 'Conectado' : 'Sin conectar'}</span></div>
-        <p class="muted">${g.connected ? `Cuenta: <b>${esc(g.email)}</b>. CURO puede leer tu bandeja y enviar correos (siempre con tu aprobación si así lo eliges).` : 'Permite a CURO leer correos y enviar respuestas desde tu cuenta.'}</p>
-        <div class="actions">${g.connected ? `<button class="btn ghost" onclick="connectGoogle()">Cambiar de cuenta</button><button class="btn ghost danger" onclick="disconnectGoogle(this)">Desconectar</button>` : `<button class="btn primary" onclick="connectGoogle()">Conectar Gmail</button>`}</div></div>
+      <div class="card conn"><div class="row"><h3>Google</h3><span class="badge ${g.connected ? 'ok' : 'warn'}">${g.connected ? 'Conectado' : 'Sin conectar'}</span></div>
+        <p class="muted">${g.connected ? `Cuenta: <b>${esc(g.email)}</b>.` : 'Permite a CURO usar tu Gmail y tu Calendar.'}</p>
+        <p class="muted">Gmail: ${g.connected ? 'leer tu bandeja y enviar correos (con tu aprobación si así lo eliges).' : 'leer correos y enviar respuestas.'}</p>
+        <p class="muted">Calendar: ${g.canCalendar ? 'ver y crear eventos (las invitaciones a otras personas quedan para tu aprobación).' : needsCalendarUpgrade ? 'pendiente — reconecta para activarlo.' : 'ver y crear eventos.'}</p>
+        ${needsCalendarUpgrade ? `<div class="notice">Conectaste Google antes de que sumáramos Calendar. Reconecta para darle también ese permiso.</div>` : ''}
+        <div class="actions">${g.connected ? `<button class="btn ghost" onclick="connectGoogle()">${needsCalendarUpgrade ? 'Reconectar y activar Calendar' : 'Cambiar de cuenta'}</button><button class="btn ghost danger" onclick="disconnectGoogle(this)">Desconectar</button>` : `<button class="btn primary" onclick="connectGoogle()">Conectar Google</button>`}</div></div>
       <div class="card conn"><div class="row"><h3>Internet</h3><span class="badge ok">Disponible</span></div><p class="muted">Buscar información y leer páginas web públicas. No necesita conexión.</p></div>
-      ${['Outlook', 'Google Drive y Sheets', 'Google Calendar', 'WhatsApp Business'].map(n => `<div class="card conn soon"><div class="row"><h3>${n}</h3><span class="badge">Próximamente</span></div><p class="muted">Estamos preparando esta conexión.</p></div>`).join('')}
+      ${['Outlook', 'Google Drive', 'WhatsApp Business'].map(n => `<div class="card conn soon"><div class="row"><h3>${n}</h3><span class="badge">Próximamente</span></div><p class="muted">Estamos preparando esta conexión.</p></div>`).join('')}
     </div>`);
 }
 async function connectGoogle() {

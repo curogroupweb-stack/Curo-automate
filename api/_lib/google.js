@@ -6,7 +6,8 @@ const { HttpError } = require('./http');
 const SCOPES = [
   'openid', 'email', 'profile',
   'https://www.googleapis.com/auth/gmail.readonly',
-  'https://www.googleapis.com/auth/gmail.send'
+  'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/calendar.events'
 ];
 const cfg = () => ({
   id: process.env.GOOGLE_CLIENT_ID,
@@ -62,7 +63,11 @@ async function status(userId) {
   const s = await getStored(userId);
   if (!s?.tokens) return { connected: false };
   const scopes = String(s.row.scopes || '');
-  return { connected: true, email: s.row.account_email, canRead: scopes.includes('gmail.readonly'), canSend: scopes.includes('gmail.send') };
+  return {
+    connected: true, email: s.row.account_email,
+    canRead: scopes.includes('gmail.readonly'), canSend: scopes.includes('gmail.send'),
+    canCalendar: scopes.includes('calendar.events')
+  };
 }
 
 async function disconnect(userId) {
@@ -99,6 +104,48 @@ async function gmail(userId, path, opts = {}) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new HttpError(400, 'Gmail: ' + (j.error?.message || r.status));
   return j;
+}
+
+async function calendarApi(userId, path, opts = {}) {
+  const token = await accessToken(userId);
+  const r = await fetch(`https://www.googleapis.com/calendar/v3${path}`, {
+    ...opts, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', ...(opts.headers || {}) }
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new HttpError(400, 'Calendar: ' + (j.error?.message || r.status));
+  return j;
+}
+
+async function listUpcomingEvents(userId, { max = 10, days = 14 } = {}) {
+  const now = new Date();
+  const to = new Date(now.getTime() + Math.min(Math.max(Number(days) || 14, 1), 90) * 864e5);
+  const q = new URLSearchParams({
+    timeMin: now.toISOString(), timeMax: to.toISOString(), singleEvents: 'true', orderBy: 'startTime',
+    maxResults: String(Math.min(Number(max) || 10, 20))
+  });
+  const j = await calendarApi(userId, `/calendars/primary/events?${q}`);
+  return (j.items || []).map(e => ({
+    id: e.id,
+    title: e.summary || '(Sin título)',
+    start: madridDate(e.start?.dateTime || e.start?.date),
+    end: madridDate(e.end?.dateTime || e.end?.date),
+    all_day: !e.start?.dateTime,
+    location: e.location || '',
+    attendees: (e.attendees || []).map(a => a.email).filter(Boolean),
+    link: e.htmlLink || ''
+  }));
+}
+
+async function createEvent(userId, { summary, description, start, end, location, attendees }) {
+  if (!summary || !start || !end) throw new HttpError(400, 'Faltan título, inicio o fin del evento.');
+  const body = {
+    summary, description: description || undefined, location: location || undefined,
+    start: { dateTime: new Date(start).toISOString(), timeZone: 'Europe/Madrid' },
+    end: { dateTime: new Date(end).toISOString(), timeZone: 'Europe/Madrid' },
+    attendees: (attendees || []).filter(Boolean).map(email => ({ email }))
+  };
+  const j = await calendarApi(userId, '/calendars/primary/events?sendUpdates=all', { method: 'POST', body: JSON.stringify(body) });
+  return { id: j.id, title: j.summary, start: madridDate(j.start?.dateTime), end: madridDate(j.end?.dateTime), link: j.htmlLink || '' };
 }
 
 function madridDate(v) {
@@ -168,4 +215,4 @@ async function sendMessage(userId, { to, subject, body, reply_to_message_id, htm
   return { id: sent.id, thread_id: sent.threadId, to };
 }
 
-module.exports = { authUrl, exchangeCode, saveConnection, status, disconnect, searchMessages, readMessage, sendMessage };
+module.exports = { authUrl, exchangeCode, saveConnection, status, disconnect, searchMessages, readMessage, sendMessage, listUpcomingEvents, createEvent };

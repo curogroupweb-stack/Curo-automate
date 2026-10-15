@@ -10,7 +10,7 @@ const KEEP_FULL_TOOL_RESULTS = 2; // los resultados antiguos se resumen para aho
 
 async function connectionsFor(userId) {
   const g = await google.status(userId).catch(() => ({ connected: false }));
-  return { google: !!g.connected, email: g.email || '' };
+  return { google: !!g.connected, email: g.email || '', google_calendar: !!g.canCalendar };
 }
 
 async function knowledgeFor(userId) {
@@ -40,6 +40,7 @@ REGLAS
 - Si falta información imprescindible, no la inventes: explícalo en el resultado final.
 - Para enviar correos usa gmail_send con un texto completo, cordial y listo para enviar, en el idioma del destinatario.
 - No envíes correos a direcciones que no aparezcan en el evento, en los correos leídos o en la petición del usuario.
+- Para eventos de calendario, invita solo a quien aparezca en la petición del usuario, en el evento o en los correos leídos; nunca inventes asistentes.
 - Si el evento es un correo recibido: responde solo si lo escribió una persona con una consulta o petición real. Si es automático (notificaciones, avisos de sistemas, boletines, códigos de verificación, remitentes no-reply), no respondas: termina explicando que no requería respuesta.
 - Al responder un correo recibido, usa gmail_send con reply_to_message_id igual al id del mensaje, para que la respuesta vaya en el mismo hilo.
 - Sé eficiente: como máximo 3 búsquedas y 2 lecturas de páginas. No repitas llamadas iguales.
@@ -90,6 +91,9 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
     const missing = (automation.plan?.tools || []).filter(n => !allowed.includes(n));
     if (missing.some(n => tools.CATALOG[n]?.needs === 'google')) {
       return finishRun({ status: 'failed', error: 'Gmail no está conectado. Conéctalo en Conexiones y vuelve a ejecutar.' });
+    }
+    if (missing.some(n => tools.CATALOG[n]?.needs === 'google_calendar')) {
+      return finishRun({ status: 'failed', error: 'El Calendar no está conectado (o falta volver a conceder el permiso). Reconéctalo en Conexiones y vuelve a ejecutar.' });
     }
     const defs = tools.definitions(allowed);
     const now = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', dateStyle: 'full', timeStyle: 'short' }).format(new Date());
