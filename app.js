@@ -744,7 +744,7 @@ function agentsLanding() {
       <span class="pill">TU AGENTE IA PERSONAL · AGENTES AIA</span>
       <h1>Un compañero que te conoce y <span class="grad">no empieza de cero</span> cada vez</h1>
       <p>Busca tu perfil: cada uno tiene su agente. Recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>
-      <div class="agHeroRow">${AGENTS.map(a => `<button type="button" class="agHeroPick" onclick="showAgentCard('${a.key}')" aria-label="Ver a ${esc(a.name)}"><img src="${agentImg(a.key)}" alt=""><span>${esc(a.name)}</span></button>`).join('')}</div>
+      <div class="agHeroRow">${AGENTS.map(a => `<button type="button" class="agHeroPick" onclick="showAgentCard('${a.key}')" aria-label="Ver a ${esc(a.name)}">${agentPic(a.key, 'saluda', '', '')}<span>${esc(a.name)}</span></button>`).join('')}</div>
       <a class="btn primary" href="#elige">Buscar mi perfil</a>
     </section>
     <section class="section" id="elige">
@@ -807,10 +807,10 @@ function openAgent() {
 }
 // ---------- Bienvenida del agente (primera vez): en el centro, con las preguntas de a una ----------
 // Poses disponibles por agente; si falta alguna se usa la imagen fija.
-const AGENT_POSES = { autonomo: ['saluda', 'celebra', 'ups', 'duerme'], docente: ['saluda', 'celebra', 'ups', 'duerme'], profesional: ['saluda', 'celebra', 'ups', 'duerme'], descubridor: ['saluda', 'celebra', 'ups', 'duerme'], estudiante: ['saluda', 'celebra', 'ups', 'duerme'], pyme: ['saluda', 'celebra', 'ups', 'duerme'], emprendedor: ['saluda', 'celebra', 'ups', 'duerme'] };
+const AGENT_POSES = { autonomo: ['saluda', 'celebra', 'ups', 'duerme'], docente: ['saluda', 'celebra', 'ups', 'duerme'], profesional: ['saluda', 'celebra', 'ups', 'duerme'], descubridor: ['saluda', 'celebra', 'ups', 'duerme'], estudiante: ['saluda', 'celebra', 'ups', 'duerme'], community: ['saluda', 'celebra', 'ups', 'duerme'], creador: ['saluda', 'celebra', 'ups', 'duerme'], pyme: ['saluda', 'celebra', 'ups', 'duerme'], emprendedor: ['saluda', 'celebra', 'ups', 'duerme'] };
 const agentPose = (k, pose) => (AGENT_POSES[k] || []).includes(pose) ? `img/agentes/${k}-${pose}.png?v=4` : agentImg(k);
 // Vídeos con movimiento (comprimidos, sin sonido, en bucle). Si una pose no tiene vídeo se usa el dibujo fijo.
-const AGENT_VIDEOS = { docente: ['saluda', 'ups', 'celebra', 'duerme'], profesional: ['saluda', 'ups', 'celebra', 'duerme'], pyme: ['saluda', 'ups', 'celebra', 'duerme'], estudiante: ['saluda', 'ups', 'celebra', 'duerme'], emprendedor: ['saluda', 'ups', 'celebra', 'duerme'], descubridor: ['saluda', 'ups', 'celebra', 'duerme'] };
+const AGENT_VIDEOS = { docente: ['saluda', 'ups', 'celebra', 'duerme'], profesional: ['saluda', 'ups', 'celebra', 'duerme'], pyme: ['saluda', 'ups', 'celebra', 'duerme'], estudiante: ['saluda', 'ups', 'celebra', 'duerme'], emprendedor: ['saluda', 'ups', 'celebra', 'duerme'], descubridor: ['saluda', 'ups', 'celebra', 'duerme'], community: ['saluda', 'ups', 'celebra', 'duerme'], creador: ['saluda', 'ups', 'celebra', 'duerme'] };
 const agentVideo = (k, pose) => (AGENT_VIDEOS[k] || []).includes(pose) ? `img/agentes/${k}-${pose}` : null;
 // <video> si existe, si no <img>. cls/alt se aplican a ambos.
 function agentPic(k, pose, cls, alt, extra) {
@@ -846,9 +846,9 @@ function renderWelcome() {
   let body = '';
   if (w.step === 'perfil') {
     body = `<div class="wCenter"><h2>¿A qué te dedicas?</h2><p class="muted">Elige tu perfil y conoce al agente que te va a acompañar.</p>
-      <div class="profileGrid">${AGENTS.map(x => `<button type="button" class="profileCard" onclick="welcome.profile='${x.key}';welcome.step='hola';renderWelcome()"><img class="profilePic" src="${agentImg(x.key)}" alt=""><b>${esc(x.name)}</b><small class="profileFor">${esc(x.label)}</small></button>`).join('')}</div></div>`;
+      <div class="profileGrid">${AGENTS.map(x => `<button type="button" class="profileCard" onclick="welcome.profile='${x.key}';welcome.step='hola';renderWelcome()">${agentPic(x.key, 'saluda', 'profilePic', '')}<b>${esc(x.name)}</b><small class="profileFor">${esc(x.label)}</small></button>`).join('')}</div></div>`;
   } else if (w.step === 'hola') {
-    body = `<div class="wCenter wHello"><img class="wBig" src="${agentPose(a.key, 'saluda')}" alt="${esc(a.name)} saluda">
+    body = `<div class="wCenter wHello">${agentPic(a.key, 'saluda', 'wBig', `${esc(a.name)} saluda`)}
       <div class="agBubble wBubble"><b>¡Hola${hi}! Soy ${esc(a.name)}.</b><p>Voy a ser tu agente personal. Te ayudo a recordar lo importante, ordenar tus pendientes y proyectos, y cada mañana te digo qué tienes por delante.</p>${voiceOk() ? `<button type="button" class="btn linkbtn wListen" onclick="speakMsg(this)" aria-label="Escuchar a ${esc(a.name)}">🔊 Escuchar a ${esc(a.name)}</button>` : ''}</div>
       <button class="btn primary wGo" onclick="welcome.step='about';renderWelcome()">¡Empecemos!</button>
       <button class="btn linkbtn" onclick="welcome.step='perfil';renderWelcome()">No es mi perfil</button></div>`;
@@ -856,21 +856,21 @@ function renderWelcome() {
     const isAbout = w.step === 'about';
     const q = isAbout ? '¿A qué te dedicas?' : '¿En qué quieres que te ayude?';
     const ph = isAbout ? 'Por ejemplo: soy profesora de primaria en Madrid y doy clases de inglés por las tardes.' : 'Por ejemplo: organizar mis clases de la semana, no olvidarme de las entregas y preparar materiales.';
-    body = `<div class="wChat">${dots}<div class="agBotRow"><img class="agAvatar big" src="${agentImg(a.key)}" alt=""><div class="agMsg bot">${q}</div></div>
+    body = `<div class="wChat">${dots}<div class="agBotRow">${agentPic(a.key, 'ups', 'agAvatar big', '')}<div class="agMsg bot">${q}</div></div>
       <div class="dictationWrap"><textarea id="wInput" rows="3" maxlength="2000" placeholder="${ph}">${esc(isAbout ? w.about : w.goals)}</textarea>
       <button class="dictateBtn" type="button" onclick="toggleDictation('wInput',this)" aria-label="Dictar la respuesta">🎙 <span>Dictar</span></button></div>
       <div class="actions"><button class="btn ghost" onclick="welcomeNext(true)">Saltar</button><button class="btn primary" onclick="welcomeNext(false)">Siguiente</button></div></div>`;
   } else if (w.step === 'tono') {
-    body = `<div class="wChat">${dots}<div class="agBotRow"><img class="agAvatar big" src="${agentImg(a.key)}" alt=""><div class="agMsg bot">¿Cómo te gusta que te hable?</div></div>
+    body = `<div class="wChat">${dots}<div class="agBotRow">${agentPic(a.key, 'ups', 'agAvatar big', '')}<div class="agMsg bot">¿Cómo te gusta que te hable?</div></div>
       <div class="toneGrid">${TONE_OPTIONS.map(t => `<button type="button" class="toneCard ${w.tone === t.v ? 'sel' : ''}" onclick="welcome.tone='${t.v.replace(/'/g, "\\'")}';welcome.step='brief';renderWelcome()"><b>${esc(t.l)}</b><small>${esc(t.d)}</small></button>`).join('')}</div>
       <div class="actions"><button class="btn ghost" onclick="welcome.step='goals';renderWelcome()">Atrás</button><button class="btn linkbtn" onclick="welcome.step='brief';renderWelcome()">Da igual, elige tú</button></div></div>`;
   } else if (w.step === 'brief') {
-    body = `<div class="wChat">${dots}<div class="agBotRow"><img class="agAvatar big" src="${agentImg(a.key)}" alt=""><div class="agMsg bot">¿Te mando cada mañana un correo con tu agenda, tus pendientes y el siguiente paso?</div></div>
+    body = `<div class="wChat">${dots}<div class="agBotRow">${agentPic(a.key, 'ups', 'agAvatar big', '')}<div class="agMsg bot">¿Te mando cada mañana un correo con tu agenda, tus pendientes y el siguiente paso?</div></div>
       <div class="wChoices"><label class="toggle"><input type="radio" name="wBrief" value="1" ${w.brief ? 'checked' : ''}> Sí, por favor</label><label class="toggle"><input type="radio" name="wBrief" value="0" ${w.brief ? '' : 'checked'}> Ahora no</label>
       <label class="field inlineField">Hora (Madrid)<input id="wTime" type="time" value="${esc(w.time)}"></label></div>
       <div class="actions"><button class="btn ghost" onclick="welcome.step='tono';renderWelcome()">Atrás</button><button class="btn primary" id="wSave" onclick="welcomeSave(this)">Listo</button></div></div>`;
   } else if (w.step === 'listo') {
-    body = `<div class="wCenter wHello"><img class="wBig wJump" src="${agentPose(a.key, 'celebra')}" alt="${esc(a.name)} celebra">
+    body = `<div class="wCenter wHello">${agentPic(a.key, 'celebra', 'wBig wJump', `${esc(a.name)} celebra`)}
       <div class="agBubble wBubble"><b>¡Perfecto${hi}!</b><p>Ya te conozco un poco. Cuéntame qué tienes que hacer esta semana y lo voy ordenando por ti.</p>${voiceOk() ? `<button type="button" class="btn linkbtn wListen" onclick="speakMsg(this)" aria-label="Escuchar">🔊 Escuchar</button>` : ''}</div>
       <button class="btn primary wGo" onclick="welcome=null;renderAgent()">Hablar con ${esc(a.name)}</button></div>`;
   }
@@ -1013,7 +1013,7 @@ function agentSetup(edit = false) {
   const chosen = s.profile ? agentByKey(s.profile) : null;
   const time = String(s.brief_time || '08:00').slice(0, 5);
   const first = (me?.user?.name || '').split(' ')[0];
-  const grid = `<div class="profileGrid">${AGENTS.map(a => `<button type="button" class="profileCard ${s.profile === a.key ? 'sel' : ''}" data-p="${a.key}" aria-pressed="${s.profile === a.key}" onclick="selectSetupAgent('${a.key}')"><img class="profilePic" src="${agentImg(a.key)}" alt=""><b>${esc(a.name)}</b><small class="profileFor">${esc(a.label)}</small><small>${esc(a.help)}</small></button>`).join('')}</div>`;
+  const grid = `<div class="profileGrid">${AGENTS.map(a => `<button type="button" class="profileCard ${s.profile === a.key ? 'sel' : ''}" data-p="${a.key}" aria-pressed="${s.profile === a.key}" onclick="selectSetupAgent('${a.key}')">${agentPic(a.key, 'saluda', 'profilePic', '')}<b>${esc(a.name)}</b><small class="profileFor">${esc(a.label)}</small><small>${esc(a.help)}</small></button>`).join('')}</div>`;
   shell('Mi agente', `<div class="card agentSetup">
     <div class="agWelcome" id="agWelcome">${setupWelcome(chosen, first, edit)}</div>
     ${chosen ? `<details class="agOther" ${edit ? '' : ''}><summary>¿No es tu perfil? Cámbialo aquí</summary>${grid}</details>` : `<small class="muted">1. ¿CUÁL ES TU PERFIL?</small>${grid}`}
@@ -1064,7 +1064,7 @@ function agentMsgHtml(m) {
   }
   const txt = `<div class="agMsg bot">${esc(m.content).replace(/\n/g, '<br>')}</div>`;
   const say = voiceOk() ? `<button type="button" class="agSay" onclick="speakMsg(this)" aria-label="Escuchar este mensaje" title="Escuchar">🔊</button>` : '';
-  return `<div class="agBotRow" data-id="${m.id || ''}"><img class="agAvatar" src="${agentRest(agentState?.settings?.profile || 'descubridor')}" alt="">${txt}${say}</div>`;
+  return `<div class="agBotRow" data-id="${m.id || ''}">${agentPic(agentState?.settings?.profile || 'descubridor', 'ups', 'agAvatar', '')}${txt}${say}</div>`;
 }
 // Borra un único mensaje propio (no hace falta borrar toda la conversación). Si el agente ya
 // había contestado a ese mensaje, esa respuesta también se borra para no dejarla descontextualizada.
@@ -1107,7 +1107,7 @@ function agentHeroPose(pose, holdMs) {
 }
 function agentHeroVideo(key, pose) {
   const img = document.getElementById('agHeroPic'), vid = document.getElementById('agHeroVid'); if (!img || !vid) return;
-  const v = pose ? agentVideo(key, pose) : null;
+  const v = agentVideo(key, pose || 'ups'); // sin dibujos fijos: en reposo, pensando con movimiento
   if (!v) { vid.pause(); vid.hidden = true; img.hidden = false; return; }
   vid.innerHTML = `<source src="${v}.mp4?v=2" type="video/mp4">`;
   vid.loop = pose !== 'duerme'; // al dormirse lo hace una vez y se queda dormido
@@ -1155,7 +1155,7 @@ function renderAgent() {
     finally { done(); }
   });
   // Al entrar saluda; sigue saludando hasta que el usuario escriba o toque la conversación.
-  if (hello) agentHeroVideo(s.profile, 'saluda');
+  agentHeroVideo(s.profile, hello ? 'saluda' : null);
   agentResetIdle(false);
   document.getElementById('agInput')?.addEventListener('input', agentResetIdle);
   document.getElementById('agMsgs')?.addEventListener('click', agentResetIdle);

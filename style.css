@@ -286,3 +286,9 @@ video.agVid{mix-blend-mode:multiply;object-fit:cover;display:block;background:tr
 video.agWelcomePic{width:150px;height:150px;border-radius:24px;flex:none}
 .agHeroWrap{display:inline-flex;flex:none}
 @media(max-width:560px){video.agWelcomePic{width:110px;height:110px}}
+/* Vídeos en lugar de dibujos fijos */
+.agHeroRow video.agVid{width:96px;height:96px;object-fit:contain}
+@media(max-width:560px){.agHeroRow video.agVid{width:64px;height:64px}}
+video.profilePic{width:100%;max-width:120px;height:auto}
+video.wBig{height:auto}
+.agBotRow video.agAvatar{width:48px;height:48px;flex:none}
