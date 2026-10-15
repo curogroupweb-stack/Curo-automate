@@ -1031,8 +1031,8 @@ function agentItemsHtml() {
   return `<ul class="agList">${active.map(row).join('') || `<li class="muted agEmpty">${empty}</li>`}</ul>${done.length ? `<details class="agDone"><summary>Hechos (${done.length})</summary><ul class="agList">${done.map(row).join('')}</ul></details>` : ''}`;
 }
 // Cuándo cambia de pose el personaje de la cabecera (mientras no tenga animación):
-// saluda al volver tras un rato sin usarlo o la primera vez; celebra cuando guarda algo en las listas;
-// ups si algo falla; duerme si hay un rato sin actividad en la pantalla.
+// saluda al volver tras un rato sin usarlo o la primera vez; duda (ups) mientras piensa lo que le pidió el usuario;
+// celebra cuando logra algo (guarda en las listas); duerme si hay un rato sin actividad en la pantalla.
 let agentHeroTimer = null, agentIdleTimer = null;
 function agentHeroPose(pose, holdMs) {
   const img = document.getElementById('agHeroPic'); if (!img) return;
@@ -1144,6 +1144,7 @@ async function agentSend() {
   const box = document.getElementById('agMsgs');
   box.insertAdjacentHTML('beforeend', agentMsgHtml({ role: 'user', content: text }) + '<div class="agMsg bot typing" id="agTyping"><span class="spin"></span> Pensando…</div>');
   box.scrollTop = box.scrollHeight; input.value = '';
+  agentHeroPose('ups'); // mientras piensa la respuesta, el agente pone cara de duda
   const done = busy(document.getElementById('agSend'), '…');
   try {
     const r = await api('agent', { method: 'POST', body: { action: 'chat', message: text } });

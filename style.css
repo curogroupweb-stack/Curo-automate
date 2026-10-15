@@ -278,6 +278,9 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 @media(hover:none){.agMsgDel{opacity:1}}
 /* Agentes con movimiento: el fondo blanco del vídeo se funde con el fondo de la tarjeta */
 video.agVid{mix-blend-mode:multiply;object-fit:cover;display:block;background:transparent}
+/* Un solo perrito a la vez: lo que está oculto no se muestra nunca */
+[hidden]{display:none!important}
+@media(max-width:560px){.agHead{padding:12px 14px}.agWho{flex-direction:column;align-items:center;text-align:center;gap:8px;width:100%}.agWho>div{min-width:0}.agAvatar.big{width:130px;height:130px;margin:0}.agHead .actions{width:100%;justify-content:center}.main{padding-bottom:84px}}
 .agCardPic video.agVid{width:100%;max-width:240px;aspect-ratio:1}
 .agPickModal video.agVid{width:120px;height:120px;border-radius:20px}
 video.agWelcomePic{width:150px;height:150px;border-radius:24px;flex:none}
