@@ -276,3 +276,10 @@ a.brandLink{text-decoration:none;color:inherit}.topnav a.backCuro{display:inline
 .agMsgRow.me:hover .agMsgDel,.agMsgDel:focus-visible{opacity:1}
 .agMsgDel:hover{border-color:#e35151;color:#e35151}
 @media(hover:none){.agMsgDel{opacity:1}}
+/* Agentes con movimiento: el fondo blanco del vídeo se funde con el fondo de la tarjeta */
+video.agVid{mix-blend-mode:multiply;object-fit:cover;display:block;background:transparent}
+.agCardPic video.agVid{width:100%;max-width:240px;aspect-ratio:1}
+.agPickModal video.agVid{width:120px;height:120px;border-radius:20px}
+video.agWelcomePic{width:150px;height:150px;border-radius:24px;flex:none}
+.agHeroWrap{display:inline-flex;flex:none}
+@media(max-width:560px){video.agWelcomePic{width:110px;height:110px}}

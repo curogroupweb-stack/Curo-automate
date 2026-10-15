@@ -692,7 +692,7 @@ function agentsLanding() {
       <div class="sectionIntro"><span class="eyebrow">LOS 9 AGENTES AIA</span><h2>¿A qué te dedicas?</h2><p class="muted">Busca tu perfil y conoce al agente que te va a acompañar. Cada uno conoce el trabajo de su perfil y te habla y te propone cosas pensadas para ti.</p></div>
       <div class="agCards">${AGENTS.map(a => `
         <article class="agCard" id="agente-${a.key}">
-          <div class="agCardPic"><img src="${agentImg(a.key)}" alt="${esc(a.name)}, ${esc(a.animal || 'agente AIA')}" loading="lazy"></div>
+          <div class="agCardPic">${agentPic(a.key, 'saluda', '', `${esc(a.name)}, ${esc(a.animal || 'agente AIA')}`, 'loading="lazy"')}</div>
           <div class="agCardBody">
             <span class="agCardFor">${esc(a.label)}</span>
             <h3>${esc(a.name)} <small>${esc(a.vibe)}</small></h3>
@@ -728,7 +728,7 @@ function pickAgent(key) {
   if (session) return go('Mi agente');
   const a = agentByKey(key);
   closeModals();
-  modal(`${esc(a.label)}: tu agente es ${esc(a.name)}`, `<div class="agPickModal"><img src="${agentImg(a.key)}" alt="${esc(a.name)}"><div class="agBubble"><b>¡Hola! Soy ${esc(a.name)}.</b><p>Para poder recordar lo que me cuentes, necesito que entres con tu cuenta de CURO. Si todavía no tienes, la creas gratis en un minuto y vuelves aquí conmigo.</p></div></div>`, {
+  modal(`${esc(a.label)}: tu agente es ${esc(a.name)}`, `<div class="agPickModal">${agentPic(a.key, 'saluda', '', esc(a.name))}<div class="agBubble"><b>¡Hola! Soy ${esc(a.name)}.</b><p>Para poder recordar lo que me cuentes, necesito que entres con tu cuenta de CURO. Si todavía no tienes, la creas gratis en un minuto y vuelves aquí conmigo.</p></div></div>`, {
     actions: `<button class="btn ghost" onclick="closeModals()">Seguir mirando</button><button class="btn primary" onclick="lstore('curo_ir','agente');lstore('curo_pick_login',1);closeModals();login('signup')">Entrar o crear mi cuenta</button>`
   });
 }
@@ -750,6 +750,15 @@ function openAgent() {
 // Poses disponibles por agente; si falta alguna se usa la imagen fija.
 const AGENT_POSES = { autonomo: ['saluda', 'celebra', 'ups', 'duerme'], docente: ['saluda', 'celebra', 'ups', 'duerme'], profesional: ['saluda', 'celebra', 'ups', 'duerme'], descubridor: ['saluda', 'celebra', 'ups', 'duerme'], estudiante: ['saluda'] };
 const agentPose = (k, pose) => (AGENT_POSES[k] || []).includes(pose) ? `img/agentes/${k}-${pose}.png?v=4` : agentImg(k);
+// Vídeos con movimiento (comprimidos, sin sonido, en bucle). Si una pose no tiene vídeo se usa el dibujo fijo.
+const AGENT_VIDEOS = { docente: ['saluda', 'ups', 'celebra', 'duerme'] };
+const agentVideo = (k, pose) => (AGENT_VIDEOS[k] || []).includes(pose) ? `img/agentes/${k}-${pose}` : null;
+// <video> si existe, si no <img>. cls/alt se aplican a ambos.
+function agentPic(k, pose, cls, alt, extra) {
+  const v = agentVideo(k, pose), poster = (AGENT_POSES[k] || []).includes(pose) ? `img/agentes/${k}-${pose}.png?v=4` : agentImg(k);
+  if (v) return `<video class="${cls || ''} agVid" autoplay muted loop playsinline preload="auto" poster="${poster}" aria-label="${alt || ''}" ${extra || ''}><source src="${v}.mp4?v=2" type="video/mp4"></video>`;
+  return `<img class="${cls || ''}" src="${poster}" alt="${alt || ''}" ${extra || ''}>`;
+}
 let welcome = null;
 // Cómo le gusta que le hablen: opciones para tocar, nada para escribir.
 const TONE_OPTIONS = [
@@ -980,7 +989,7 @@ function agentSetup(edit = false) {
 }
 function setupWelcome(a, first, edit) {
   if (!a) return `<span class="pill">CREA TU AGENTE IA PERSONAL</span><h2>Un asistente que te conoce y recuerda lo importante</h2><p class="muted">Elige el agente que más se parece a ti. Recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>`;
-  return `<img class="agWelcomePic" src="${agentImg(a.key)}" alt="${esc(a.name)}"><div class="agBubble"><b>${edit ? `Aquí puedes cambiar cómo te ayudo${first ? `, ${esc(first)}` : ''}.` : `¡Hola${first ? `, ${esc(first)}` : ''}! Soy ${esc(a.name)}.`}</b><p>${edit ? 'Cuéntame si algo cambió en tu trabajo o en lo que necesitas.' : `Voy a ser tu agente personal${a.label ? ` (${esc(a.label.toLowerCase())})` : ''}. Cuéntame un poco de ti para ayudarte mejor: con tres respuestas ya podemos empezar.`}</p></div>`;
+  return `${agentPic(a.key, 'saluda', 'agWelcomePic', esc(a.name))}<div class="agBubble"><b>${edit ? `Aquí puedes cambiar cómo te ayudo${first ? `, ${esc(first)}` : ''}.` : `¡Hola${first ? `, ${esc(first)}` : ''}! Soy ${esc(a.name)}.`}</b><p>${edit ? 'Cuéntame si algo cambió en tu trabajo o en lo que necesitas.' : `Voy a ser tu agente personal${a.label ? ` (${esc(a.label.toLowerCase())})` : ''}. Cuéntame un poco de ti para ayudarte mejor: con tres respuestas ya podemos empezar.`}</p></div>`;
 }
 function selectSetupAgent(key) {
   document.querySelectorAll('.profileCard').forEach(b => { const on = b.dataset.p === key; b.classList.toggle('sel', on); b.setAttribute('aria-pressed', on); });
@@ -1029,13 +1038,23 @@ function agentHeroPose(pose, holdMs) {
   const img = document.getElementById('agHeroPic'); if (!img) return;
   const key = agentState?.settings?.profile; if (!key) return;
   clearTimeout(agentHeroTimer);
+  if (holdMs && agentVideo(key, pose)) holdMs = Math.max(holdMs, 5200);
   img.src = agentPose(key, pose);
-  if (holdMs) agentHeroTimer = setTimeout(() => { if (img.isConnected) img.src = agentImg(key); }, holdMs);
+  agentHeroVideo(key, pose);
+  if (holdMs) agentHeroTimer = setTimeout(() => { if (img.isConnected) { img.src = agentImg(key); agentHeroVideo(key, null); } }, holdMs);
+}
+function agentHeroVideo(key, pose) {
+  const img = document.getElementById('agHeroPic'), vid = document.getElementById('agHeroVid'); if (!img || !vid) return;
+  const v = pose ? agentVideo(key, pose) : null;
+  if (!v) { vid.pause(); vid.hidden = true; img.hidden = false; return; }
+  vid.innerHTML = `<source src="${v}.mp4?v=2" type="video/mp4">`;
+  vid.poster = img.src; vid.load(); vid.hidden = false; img.hidden = true;
+  const p = vid.play(); if (p && p.catch) p.catch(() => { vid.hidden = true; img.hidden = false; });
 }
 function agentResetIdle() {
   clearTimeout(agentIdleTimer);
   const img = document.getElementById('agHeroPic');
-  if (img && img.src.includes('-duerme')) img.src = agentImg(agentState?.settings?.profile);
+  if (img && img.src.includes('-duerme')) { img.src = agentImg(agentState?.settings?.profile); agentHeroVideo(agentState?.settings?.profile, null); }
   agentIdleTimer = setTimeout(() => agentHeroPose('duerme'), 90000);
 }
 function renderAgent() {
@@ -1046,7 +1065,7 @@ function renderAgent() {
   const heroPose = (greeting || !msgs.length) ? agentPose(s.profile, 'saluda') : agentImg(s.profile);
   clearTimeout(agentHeroTimer); clearTimeout(agentIdleTimer);
   shell('Mi agente', `
-    <div class="agHead card"><div class="agWho"><img class="agAvatar big" id="agHeroPic" src="${heroPose}" alt=""><div><b>${esc(agentByKey(s.profile).name)} · tu agente AIA</b><small class="muted">${esc(prof.label || '')}</small><small class="muted">${s.brief_enabled ? `Resumen cada día a las ${esc(String(s.brief_time || '08:00').slice(0, 5))}` : 'Resumen diario desactivado'}</small></div></div>
+    <div class="agHead card"><div class="agWho"><span class="agHeroWrap"><img class="agAvatar big" id="agHeroPic" src="${heroPose}" alt=""><video class="agAvatar big agVid" id="agHeroVid" muted loop playsinline hidden></video></span><div><b>${esc(agentByKey(s.profile).name)} · tu agente AIA</b><small class="muted">${esc(prof.label || '')}</small><small class="muted">${s.brief_enabled ? `Resumen cada día a las ${esc(String(s.brief_time || '08:00').slice(0, 5))}` : 'Resumen diario desactivado'}</small></div></div>
       <div class="actions"><button class="btn ghost smallBtn" onclick="go('Inicio')">← Volver al inicio</button>${voiceToggleHtml()}<button class="btn ghost smallBtn" id="agBriefNow">Enviarme el resumen ahora</button><button class="btn ghost smallBtn" onclick="agentSetup(true)">Ajustes</button></div></div>
     <div class="agGrid">
       <div class="card agChat">
@@ -1071,7 +1090,8 @@ function renderAgent() {
     catch (err) { info('No se pudo enviar el resumen', err.message); }
     finally { done(); }
   });
-  if (greeting) agentHeroTimer = setTimeout(() => { const img = document.getElementById('agHeroPic'); if (img) img.src = agentImg(s.profile); }, 4000);
+  if (greeting || !msgs.length) agentHeroVideo(s.profile, 'saluda');
+  if (greeting) agentHeroTimer = setTimeout(() => { const img = document.getElementById('agHeroPic'); if (img) { img.src = agentImg(s.profile); agentHeroVideo(s.profile, null); } }, agentVideo(s.profile, 'saluda') ? 5200 : 4000);
   agentResetIdle();
   document.getElementById('agInput')?.addEventListener('input', agentResetIdle);
   document.getElementById('agMsgs')?.addEventListener('click', agentResetIdle);
