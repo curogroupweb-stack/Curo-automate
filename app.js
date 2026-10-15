@@ -943,6 +943,7 @@ async function agentPage() {
     return pk ? agentWelcome(pk) : agentsLanding();
   }
   const pick = lrecall('curo_agent_pick');
+  agentJustEntered = true; // al entrar, el agente siempre saluda
   pick ? agentSetup(true) : renderAgent();
 }
 function agentSetup(edit = false) {
@@ -1004,7 +1005,7 @@ function agentMsgHtml(m) {
   }
   const txt = `<div class="agMsg bot">${esc(m.content).replace(/\n/g, '<br>')}</div>`;
   const say = voiceOk() ? `<button type="button" class="agSay" onclick="speakMsg(this)" aria-label="Escuchar este mensaje" title="Escuchar">🔊</button>` : '';
-  return `<div class="agBotRow" data-id="${m.id || ''}"><img class="agAvatar" src="${agentImg(agentState?.settings?.profile || 'descubridor')}" alt="">${txt}${say}</div>`;
+  return `<div class="agBotRow" data-id="${m.id || ''}"><img class="agAvatar" src="${agentRest(agentState?.settings?.profile || 'descubridor')}" alt="">${txt}${say}</div>`;
 }
 // Borra un único mensaje propio (no hace falta borrar toda la conversación). Si el agente ya
 // había contestado a ese mensaje, esa respuesta también se borra para no dejarla descontextualizada.
@@ -1033,7 +1034,9 @@ function agentItemsHtml() {
 // Cuándo cambia de pose el personaje de la cabecera (mientras no tenga animación):
 // saluda al volver tras un rato sin usarlo o la primera vez; duda (ups) mientras piensa lo que le pidió el usuario;
 // celebra cuando logra algo (guarda en las listas); duerme si hay un rato sin actividad en la pantalla.
-let agentHeroTimer = null, agentIdleTimer = null;
+let agentHeroTimer = null, agentIdleTimer = null, agentJustEntered = false;
+// Pose de reposo: pensando y trabajando (duda). Si el agente no tiene esa pose, su dibujo fijo.
+const agentRest = k => agentPose(k, 'ups');
 function agentHeroPose(pose, holdMs) {
   const img = document.getElementById('agHeroPic'); if (!img) return;
   const key = agentState?.settings?.profile; if (!key) return;
@@ -1041,7 +1044,7 @@ function agentHeroPose(pose, holdMs) {
   if (holdMs && agentVideo(key, pose)) holdMs = Math.max(holdMs, 5200);
   img.src = agentPose(key, pose);
   agentHeroVideo(key, pose);
-  if (holdMs) agentHeroTimer = setTimeout(() => { if (img.isConnected) { img.src = agentImg(key); agentHeroVideo(key, null); } }, holdMs);
+  if (holdMs) agentHeroTimer = setTimeout(() => { if (img.isConnected) { img.src = agentRest(key); agentHeroVideo(key, null); } }, holdMs);
 }
 function agentHeroVideo(key, pose) {
   const img = document.getElementById('agHeroPic'), vid = document.getElementById('agHeroVid'); if (!img || !vid) return;
@@ -1052,10 +1055,10 @@ function agentHeroVideo(key, pose) {
   vid.poster = img.src; vid.load(); vid.hidden = false; img.hidden = true;
   const p = vid.play(); if (p && p.catch) p.catch(() => { vid.hidden = true; img.hidden = false; });
 }
-function agentResetIdle() {
+function agentResetIdle(wake) {
   clearTimeout(agentIdleTimer);
   const img = document.getElementById('agHeroPic');
-  if (img && img.src.includes('-duerme')) { img.src = agentImg(agentState?.settings?.profile); agentHeroVideo(agentState?.settings?.profile, null); }
+  if (wake !== false && img && (img.src.includes('-duerme') || img.src.includes('-saluda'))) { clearTimeout(agentHeroTimer); img.src = agentRest(agentState?.settings?.profile); agentHeroVideo(agentState?.settings?.profile, null); }
   agentIdleTimer = setTimeout(() => agentHeroPose('duerme'), 90000);
 }
 function renderAgent() {
@@ -1063,7 +1066,8 @@ function renderAgent() {
   const msgs = agentState.messages || [];
   const first = (me?.user?.name || '').split(' ')[0];
   const greeting = agentReturnGreeting(msgs);
-  const heroPose = (greeting || !msgs.length) ? agentPose(s.profile, 'saluda') : agentImg(s.profile);
+  const hello = agentJustEntered || greeting || !msgs.length; agentJustEntered = false;
+  const heroPose = hello ? agentPose(s.profile, 'saluda') : agentRest(s.profile);
   clearTimeout(agentHeroTimer); clearTimeout(agentIdleTimer);
   shell('Mi agente', `
     <div class="agHead card"><div class="agWho"><span class="agHeroWrap"><img class="agAvatar big" id="agHeroPic" src="${heroPose}" alt=""><video class="agAvatar big agVid" id="agHeroVid" muted loop playsinline hidden></video></span><div><b>${esc(agentByKey(s.profile).name)} · tu agente AIA</b><small class="muted">${esc(prof.label || '')}</small><small class="muted">${s.brief_enabled ? `Resumen cada día a las ${esc(String(s.brief_time || '08:00').slice(0, 5))}` : 'Resumen diario desactivado'}</small></div></div>
@@ -1091,9 +1095,9 @@ function renderAgent() {
     catch (err) { info('No se pudo enviar el resumen', err.message); }
     finally { done(); }
   });
-  if (greeting || !msgs.length) agentHeroVideo(s.profile, 'saluda');
-  if (greeting) agentHeroTimer = setTimeout(() => { const img = document.getElementById('agHeroPic'); if (img) { img.src = agentImg(s.profile); agentHeroVideo(s.profile, null); } }, agentVideo(s.profile, 'saluda') ? 5200 : 4000);
-  agentResetIdle();
+  // Al entrar saluda; sigue saludando hasta que el usuario escriba o toque la conversación.
+  if (hello) agentHeroVideo(s.profile, 'saluda');
+  agentResetIdle(false);
   document.getElementById('agInput')?.addEventListener('input', agentResetIdle);
   document.getElementById('agMsgs')?.addEventListener('click', agentResetIdle);
 }
