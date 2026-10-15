@@ -1,7 +1,7 @@
 // Catálogo de herramientas que la IA puede usar al ejecutar una automatización.
 // Cada herramienta declara qué conexión necesita; el planificador solo ofrece las disponibles.
 const google = require('./google');
-const { db } = require('./db');
+const { db, enc } = require('./db');
 const { sendEmail } = require('./mailer');
 
 const CATALOG = {
@@ -38,6 +38,24 @@ const CATALOG = {
       start: { type: 'string' }, end: { type: 'string' },
       attendees: { type: 'array', items: { type: 'string' } }
     }, required: ['summary', 'start', 'end'] }
+  },
+  drive_list_files: {
+    needs: 'google_drive',
+    label: 'Ver los archivos de Drive que el usuario compartió',
+    description: 'Lista los archivos de Google Drive que el usuario eligió compartir con su agente (con el selector de Google en Conexiones). Devuelve id, nombre y tipo de cada uno.',
+    parameters: { type: 'object', properties: {} }
+  },
+  drive_read_file: {
+    needs: 'google_drive',
+    label: 'Leer un archivo de Drive',
+    description: 'Lee el contenido de texto de un archivo de Drive, usando el id devuelto por drive_list_files. Solo funciona con archivos que el usuario haya compartido con su agente.',
+    parameters: { type: 'object', properties: { file_id: { type: 'string' } }, required: ['file_id'] }
+  },
+  drive_save_file: {
+    needs: 'google_drive',
+    label: 'Guardar un archivo nuevo en el Drive del usuario',
+    description: 'Crea un archivo de texto nuevo en el Google Drive del usuario (por ejemplo, un boletín o un informe redactado) y queda guardado ahí.',
+    parameters: { type: 'object', properties: { name: { type: 'string' }, content: { type: 'string' } }, required: ['name', 'content'] }
   },
   web_search: {
     needs: null,
@@ -255,6 +273,16 @@ async function execute(name, args, ctx) {
       }
       return google.createEvent(ctx.userId, args);
     }
+    case 'drive_list_files': {
+      const rows = await db.select('automate_drive_files', `user_id=eq.${enc(ctx.userId)}&select=id,file_id,name,mime_type,created_at&order=created_at.desc`);
+      return rows.length ? rows : { note: 'El usuario todavía no compartió ningún archivo de Drive con su agente (lo hace desde Conexiones).' };
+    }
+    case 'drive_read_file': {
+      const row = (await db.select('automate_drive_files', `user_id=eq.${enc(ctx.userId)}&file_id=eq.${enc(args.file_id)}&select=file_id`))[0];
+      if (!row) return { error: 'Ese archivo no está disponible. El usuario debe elegirlo primero en Conexiones.' };
+      return google.readDriveFile(ctx.userId, args.file_id);
+    }
+    case 'drive_save_file': return google.createDriveFile(ctx.userId, { name: args.name, content: args.content });
     case 'curo_stats': {
       if (!ctx.brand) return { error: 'Solo la cuenta administradora de CURO puede consultar los datos de la plataforma.' };
       return curoStats(args.days);

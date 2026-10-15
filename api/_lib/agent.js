@@ -53,6 +53,7 @@ const PROFILES = {
     'Ayudas con la agenda, los recordatorios de citas y la organización de trámites y documentos del día a día.',
     'Puedes redactar comunicados o recordatorios genéricos para enviar por correo (sin datos de salud ni personales de pacientes o clientes).',
     'Si tiene el Calendar conectado, puedes ver y crear citas (por ejemplo "Consulta 10:00", sin nombre ni motivo de la consulta); si invita a alguien, queda pendiente de su aprobación.',
+    'Si tiene Drive conectado y compartió algún documento con su agente (desde Conexiones), puedes leerlo, y puedes guardar ahí los documentos que redactes (sin datos de salud ni personales de pacientes o clientes).',
   ] },
   descubridor: { name: 'Sandy', label: 'Descubridor', focus: 'intereses personales, cosas que quiere aprender, compras que está pensando, viajes, ideas y descubrimientos', expertise: [
     'Ayudas a investigar antes de decidir: comparar opciones, resumir opiniones y armar listas de recursos para aprender algo nuevo.',
@@ -162,12 +163,12 @@ async function applyChanges(userId, st, out) {
 
 // Herramientas que "Mi agente" puede usar en el chat (subconjunto de las de Automatizaciones:
 // de momento sin curo_stats, que es solo para datos internos de la plataforma).
-const AGENT_TOOLS = ['web_search', 'fetch_url', 'gmail_search', 'gmail_read', 'gmail_send', 'calendar_list_events', 'calendar_create_event'];
+const AGENT_TOOLS = ['web_search', 'fetch_url', 'gmail_search', 'gmail_read', 'gmail_send', 'calendar_list_events', 'calendar_create_event', 'drive_list_files', 'drive_read_file', 'drive_save_file'];
 const MAX_AGENT_TOOL_TURNS = 4;
 
 async function agentConnections(userId) {
   const g = await google.status(userId).catch(() => ({ connected: false }));
-  return { google: !!g.connected, email: g.email || '', google_calendar: !!g.canCalendar };
+  return { google: !!g.connected, email: g.email || '', google_calendar: !!g.canCalendar, google_drive: !!g.canDrive };
 }
 
 async function chatTurn(user, message, { isAdmin } = {}) {
@@ -184,7 +185,7 @@ async function chatTurn(user, message, { isAdmin } = {}) {
   const history = st.messages.slice(-12).map(m => ({ role: m.role, content: m.content.slice(0, 1500) }));
 
   const conn = await agentConnections(user.id);
-  const allowed = AGENT_TOOLS.filter(n => tools.available({ google: conn.google, google_calendar: conn.google_calendar }).includes(n));
+  const allowed = AGENT_TOOLS.filter(n => tools.available({ google: conn.google, google_calendar: conn.google_calendar, google_drive: conn.google_drive }).includes(n));
   const defs = allowed.map(n => ({ name: n, description: tools.CATALOG[n].description, parameters: tools.CATALOG[n].parameters }));
   const p = PROFILES[st.settings.profile] || PROFILES.descubridor;
   const ctx = {

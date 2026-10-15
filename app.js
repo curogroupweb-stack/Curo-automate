@@ -615,20 +615,65 @@ async function historyPage(automationId) {
 function openRun(id) { const r = runsCache.find(x => x.id === id); if (r) showRun(r, r.automate_automations?.name); }
 
 // ---------- Conexiones ----------
-function connectionsPage() {
+async function connectionsPage() {
+  loading('Conexiones');
   const g = me.connections.google;
-  const needsCalendarUpgrade = g.connected && !g.canCalendar;
+  const driveFiles = g.connected && g.canDrive ? (await api('google?action=drive_files').catch(() => ({ files: [] }))).files : [];
+  const needsUpgrade = g.connected && (!g.canCalendar || !g.canDrive);
   shell('Conexiones', `<p class="muted">Las aplicaciones que CURO puede usar en tu nombre. Solo actúa con las que conectes y puedes desconectarlas cuando quieras.</p>
     <div class="connGrid">
       <div class="card conn"><div class="row"><h3>Google</h3><span class="badge ${g.connected ? 'ok' : 'warn'}">${g.connected ? 'Conectado' : 'Sin conectar'}</span></div>
-        <p class="muted">${g.connected ? `Cuenta: <b>${esc(g.email)}</b>.` : 'Permite a CURO usar tu Gmail y tu Calendar.'}</p>
+        <p class="muted">${g.connected ? `Cuenta: <b>${esc(g.email)}</b>.` : 'Permite a CURO usar tu Gmail, tu Calendar y tu Drive.'}</p>
         <p class="muted">Gmail: ${g.connected ? 'leer tu bandeja y enviar correos (con tu aprobación si así lo eliges).' : 'leer correos y enviar respuestas.'}</p>
-        <p class="muted">Calendar: ${g.canCalendar ? 'ver y crear eventos (las invitaciones a otras personas quedan para tu aprobación).' : needsCalendarUpgrade ? 'pendiente — reconecta para activarlo.' : 'ver y crear eventos.'}</p>
-        ${needsCalendarUpgrade ? `<div class="notice">Conectaste Google antes de que sumáramos Calendar. Reconecta para darle también ese permiso.</div>` : ''}
-        <div class="actions">${g.connected ? `<button class="btn ghost" onclick="connectGoogle()">${needsCalendarUpgrade ? 'Reconectar y activar Calendar' : 'Cambiar de cuenta'}</button><button class="btn ghost danger" onclick="disconnectGoogle(this)">Desconectar</button>` : `<button class="btn primary" onclick="connectGoogle()">Conectar Google</button>`}</div></div>
+        <p class="muted">Calendar: ${g.canCalendar ? 'ver y crear eventos (las invitaciones a otras personas quedan para tu aprobación).' : g.connected ? 'pendiente — reconecta para activarlo.' : 'ver y crear eventos.'}</p>
+        <p class="muted">Drive: ${g.canDrive ? 'crear y guardar archivos, y leer los que elijas compartir.' : g.connected ? 'pendiente — reconecta para activarlo.' : 'crear, guardar y leer archivos que elijas compartir.'}</p>
+        ${needsUpgrade ? `<div class="notice">Conectaste Google antes de que sumáramos estos permisos. Reconecta para activarlos.</div>` : ''}
+        <div class="actions">${g.connected ? `<button class="btn ghost" onclick="connectGoogle()">${needsUpgrade ? 'Reconectar y activar todo' : 'Cambiar de cuenta'}</button><button class="btn ghost danger" onclick="disconnectGoogle(this)">Desconectar</button>` : `<button class="btn primary" onclick="connectGoogle()">Conectar Google</button>`}</div>
+        ${g.canDrive ? `<div class="connSub"><h4>Archivos de Drive compartidos con tu agente</h4>
+          ${driveFiles.length ? `<ul class="fileList">${driveFiles.map(f => `<li>${esc(f.name)}<button class="btn ghost danger smallBtn" onclick="removeDriveFile('${f.id}',this)">Quitar</button></li>`).join('')}</ul>` : '<p class="muted">Todavía no compartiste ningún archivo.</p>'}
+          <button class="btn ghost smallBtn" onclick="openDrivePicker()">+ Elegir un archivo de Drive</button></div>` : ''}
+      </div>
       <div class="card conn"><div class="row"><h3>Internet</h3><span class="badge ok">Disponible</span></div><p class="muted">Buscar información y leer páginas web públicas. No necesita conexión.</p></div>
-      ${['Outlook', 'Google Drive', 'WhatsApp Business'].map(n => `<div class="card conn soon"><div class="row"><h3>${n}</h3><span class="badge">Próximamente</span></div><p class="muted">Estamos preparando esta conexión.</p></div>`).join('')}
+      ${['Outlook', 'WhatsApp Business'].map(n => `<div class="card conn soon"><div class="row"><h3>${n}</h3><span class="badge">Próximamente</span></div><p class="muted">Estamos preparando esta conexión.</p></div>`).join('')}
     </div>`);
+}
+let pickerLoading = null;
+function loadDrivePicker() {
+  if (window.google?.picker) return Promise.resolve();
+  if (!pickerLoading) pickerLoading = new Promise(resolve => {
+    const s = document.createElement('script');
+    s.src = 'https://apis.google.com/js/api.js';
+    s.onload = () => gapi.load('picker', resolve);
+    document.head.appendChild(s);
+  });
+  return pickerLoading;
+}
+async function openDrivePicker() {
+  try {
+    const [{ api_key }, { access_token }] = await Promise.all([
+      api('google?action=picker_config'),
+      api('google?action=picker_token', { method: 'POST' })
+    ]);
+    if (!api_key) return info('Falta un paso', 'El selector de Drive todavía no está activado del lado del servidor.');
+    await loadDrivePicker();
+    const view = new google.picker.DocsView().setIncludeFolders(true);
+    const picker = new google.picker.PickerBuilder().addView(view).setOAuthToken(access_token).setDeveloperKey(api_key)
+      .setCallback(async data => {
+        if (data.action !== google.picker.Action.PICKED) return;
+        const doc = data.docs[0];
+        try {
+          await api('google?action=drive_add', { method: 'POST', body: { file_id: doc.id, name: doc.name, mime_type: doc.mimeType } });
+          toast(`"${doc.name}" compartido con tu agente.`);
+          await refreshMe(); connectionsPage();
+        } catch (e) { info('No se pudo guardar', e.message); }
+      }).build();
+    picker.setVisible(true);
+  } catch (e) { info('No se pudo abrir el selector', e.message); }
+}
+async function removeDriveFile(id, btn) {
+  const done = busy(btn, 'Quitando…');
+  try { await api('google?action=drive_remove', { method: 'POST', body: { id } }); toast('Archivo quitado.'); connectionsPage(); }
+  catch (e) { done(); info('No se pudo quitar', e.message); }
 }
 async function connectGoogle() {
   try {

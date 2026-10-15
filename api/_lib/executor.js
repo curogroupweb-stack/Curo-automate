@@ -10,7 +10,7 @@ const KEEP_FULL_TOOL_RESULTS = 2; // los resultados antiguos se resumen para aho
 
 async function connectionsFor(userId) {
   const g = await google.status(userId).catch(() => ({ connected: false }));
-  return { google: !!g.connected, email: g.email || '', google_calendar: !!g.canCalendar };
+  return { google: !!g.connected, email: g.email || '', google_calendar: !!g.canCalendar, google_drive: !!g.canDrive };
 }
 
 async function knowledgeFor(userId) {
@@ -94,6 +94,9 @@ async function run({ automation, userId, source = 'manual', event = {}, inputs =
     }
     if (missing.some(n => tools.CATALOG[n]?.needs === 'google_calendar')) {
       return finishRun({ status: 'failed', error: 'El Calendar no está conectado (o falta volver a conceder el permiso). Reconéctalo en Conexiones y vuelve a ejecutar.' });
+    }
+    if (missing.some(n => tools.CATALOG[n]?.needs === 'google_drive')) {
+      return finishRun({ status: 'failed', error: 'Drive no está conectado (o falta volver a conceder el permiso). Reconéctalo en Conexiones y vuelve a ejecutar.' });
     }
     const defs = tools.definitions(allowed);
     const now = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', dateStyle: 'full', timeStyle: 'short' }).format(new Date());

@@ -7,7 +7,8 @@ const SCOPES = [
   'openid', 'email', 'profile',
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.send',
-  'https://www.googleapis.com/auth/calendar.events'
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/drive.file'
 ];
 const cfg = () => ({
   id: process.env.GOOGLE_CLIENT_ID,
@@ -66,7 +67,7 @@ async function status(userId) {
   return {
     connected: true, email: s.row.account_email,
     canRead: scopes.includes('gmail.readonly'), canSend: scopes.includes('gmail.send'),
-    canCalendar: scopes.includes('calendar.events')
+    canCalendar: scopes.includes('calendar.events'), canDrive: scopes.includes('drive.file')
   };
 }
 
@@ -148,6 +149,60 @@ async function createEvent(userId, { summary, description, start, end, location,
   return { id: j.id, title: j.summary, start: madridDate(j.start?.dateTime), end: madridDate(j.end?.dateTime), link: j.htmlLink || '' };
 }
 
+async function driveApi(userId, path, opts = {}) {
+  const token = await accessToken(userId);
+  const r = await fetch(`https://www.googleapis.com/drive/v3${path}`, {
+    ...opts, headers: { authorization: `Bearer ${token}`, ...(opts.headers || {}) }
+  });
+  return r;
+}
+
+// El selector de Google (Picker) necesita el token vigente para mostrarle al usuario SUS archivos
+// y, al elegir uno, darle acceso a la app sobre ese archivo puntual (así funciona el scope drive.file).
+async function driveAccessToken(userId) {
+  return accessToken(userId);
+}
+
+async function driveFileMeta(userId, fileId) {
+  const r = await driveApi(userId, `/files/${enc(fileId)}?fields=id,name,mimeType,size`);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new HttpError(400, 'Drive: ' + (j.error?.message || r.status));
+  return j;
+}
+
+async function readDriveFile(userId, fileId) {
+  const meta = await driveFileMeta(userId, fileId);
+  const isGoogleDoc = String(meta.mimeType || '').startsWith('application/vnd.google-apps.');
+  const exportable = { 'application/vnd.google-apps.document': 'text/plain', 'application/vnd.google-apps.spreadsheet': 'text/csv', 'application/vnd.google-apps.presentation': 'text/plain' };
+  let r;
+  if (isGoogleDoc) {
+    const mime = exportable[meta.mimeType];
+    if (!mime) return { name: meta.name, mime_type: meta.mimeType, error: 'Este tipo de archivo de Google (p. ej. un formulario) no se puede leer como texto.' };
+    r = await driveApi(userId, `/files/${enc(fileId)}/export?mimeType=${enc(mime)}`);
+  } else {
+    r = await driveApi(userId, `/files/${enc(fileId)}?alt=media`);
+  }
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new HttpError(400, 'Drive: ' + (j.error?.message || r.status)); }
+  const text = await r.text();
+  return { name: meta.name, mime_type: meta.mimeType, text: text.slice(0, 6000) };
+}
+
+async function createDriveFile(userId, { name, content, mimeType = 'text/plain', folderId }) {
+  if (!name || content === undefined) throw new HttpError(400, 'Falta el nombre o el contenido del archivo.');
+  const boundary = 'curo_' + Math.random().toString(36).slice(2);
+  const metadata = { name, ...(folderId ? { parents: [folderId] } : {}) };
+  const body =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n${content}\r\n` +
+    `--${boundary}--`;
+  const r = await driveApi(userId, '/files?uploadType=multipart&fields=id,name,webViewLink', {
+    method: 'POST', headers: { 'content-type': `multipart/related; boundary=${boundary}` }, body
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new HttpError(400, 'Drive: ' + (j.error?.message || r.status));
+  return { id: j.id, name: j.name, link: j.webViewLink || '' };
+}
+
 function madridDate(v) {
   const d = new Date(v);
   if (isNaN(d)) return v || '';
@@ -215,4 +270,7 @@ async function sendMessage(userId, { to, subject, body, reply_to_message_id, htm
   return { id: sent.id, thread_id: sent.threadId, to };
 }
 
-module.exports = { authUrl, exchangeCode, saveConnection, status, disconnect, searchMessages, readMessage, sendMessage, listUpcomingEvents, createEvent };
+module.exports = {
+  authUrl, exchangeCode, saveConnection, status, disconnect, searchMessages, readMessage, sendMessage,
+  listUpcomingEvents, createEvent, driveAccessToken, driveFileMeta, readDriveFile, createDriveFile
+};
