@@ -748,10 +748,10 @@ function openAgent() {
 }
 // ---------- Bienvenida del agente (primera vez): en el centro, con las preguntas de a una ----------
 // Poses disponibles por agente; si falta alguna se usa la imagen fija.
-const AGENT_POSES = { autonomo: ['saluda', 'celebra', 'ups', 'duerme'], docente: ['saluda', 'celebra', 'ups', 'duerme'], profesional: ['saluda', 'celebra', 'ups', 'duerme'], descubridor: ['saluda', 'celebra', 'ups', 'duerme'], estudiante: ['saluda', 'celebra', 'ups', 'duerme'], pyme: ['saluda', 'ups', 'duerme'] };
+const AGENT_POSES = { autonomo: ['saluda', 'celebra', 'ups', 'duerme'], docente: ['saluda', 'celebra', 'ups', 'duerme'], profesional: ['saluda', 'celebra', 'ups', 'duerme'], descubridor: ['saluda', 'celebra', 'ups', 'duerme'], estudiante: ['saluda', 'celebra', 'ups', 'duerme'], pyme: ['saluda', 'ups', 'duerme'], emprendedor: ['saluda', 'celebra', 'ups', 'duerme'] };
 const agentPose = (k, pose) => (AGENT_POSES[k] || []).includes(pose) ? `img/agentes/${k}-${pose}.png?v=4` : agentImg(k);
 // Vídeos con movimiento (comprimidos, sin sonido, en bucle). Si una pose no tiene vídeo se usa el dibujo fijo.
-const AGENT_VIDEOS = { docente: ['saluda', 'ups', 'celebra', 'duerme'], profesional: ['saluda', 'ups', 'celebra', 'duerme'], pyme: ['saluda', 'ups', 'duerme'], estudiante: ['saluda', 'ups', 'celebra', 'duerme'] };
+const AGENT_VIDEOS = { docente: ['saluda', 'ups', 'celebra', 'duerme'], profesional: ['saluda', 'ups', 'celebra', 'duerme'], pyme: ['saluda', 'ups', 'duerme'], estudiante: ['saluda', 'ups', 'celebra', 'duerme'], emprendedor: ['saluda', 'ups', 'celebra', 'duerme'] };
 const agentVideo = (k, pose) => (AGENT_VIDEOS[k] || []).includes(pose) ? `img/agentes/${k}-${pose}` : null;
 // <video> si existe, si no <img>. cls/alt se aplican a ambos.
 function agentPic(k, pose, cls, alt, extra) {
