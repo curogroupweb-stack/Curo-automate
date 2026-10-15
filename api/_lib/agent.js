@@ -238,6 +238,8 @@ async function saveSettings(userId, b) {
     brief_next_at: brief ? nextRun({ frequency: 'daily', time }).toISOString() : null,
     updated_at: new Date().toISOString()
   };
+  // Apariencia: animal (personaje animado), persona-N (retrato IA) o sencillo (logo AIA).
+  if (b.look !== undefined) row.look = /^(animal|sencillo|persona-[1-9])$/.test(String(b.look)) ? String(b.look) : 'animal';
   await db.upsert('agent_settings', row, 'user_id');
   return row;
 }

@@ -292,3 +292,35 @@ video.agWelcomePic{width:150px;height:150px;border-radius:24px;flex:none}
 video.profilePic{width:100%;max-width:120px;height:auto}
 video.wBig{height:auto}
 .agBotRow video.agAvatar{width:48px;height:48px;flex:none}
+/* Apariencia del agente: persona (retrato IA) o sencillo (logo AIA) */
+.agFace{position:relative;display:inline-grid;place-items:center;width:48px;height:48px;border-radius:50%;flex:none;transition:filter .4s}
+.agFace img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
+.agFace.simple{background:linear-gradient(135deg,#1e2a5a,#2563eb 55%,#00c2a8)}
+.aiaLogo{color:#fff;font-weight:900;font-size:14px;letter-spacing:.04em}
+.agFace.big{width:130px;height:130px;margin:6px}
+.agFace.big .aiaLogo{font-size:38px}
+.aiaTag{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);background:#0d1426;color:#fff;font-size:12px;font-weight:800;padding:3px 10px;border-radius:99px;letter-spacing:.1em;box-shadow:0 2px 6px #0d142633}
+.agFace::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:3px solid transparent;pointer-events:none}
+.agFace[data-pose="ups"]::after{border-color:#a78bfa}
+.agFace.big[data-pose="ups"]::after{animation:faceThink 1.6s ease-in-out infinite}
+.agFace.big[data-pose="saluda"]{animation:faceHi 1.4s ease-in-out 2}
+.agFace.big[data-pose="saluda"]::after{border-color:#2563eb}
+.agFace.big[data-pose="celebra"]::after{border-color:#00c2a8;box-shadow:0 0 22px #00c2a8aa;animation:faceWin .7s ease-out 3}
+.agFace.big[data-pose="duerme"]{filter:grayscale(.7) brightness(.85)}
+.agFace.big[data-pose="duerme"]::before{content:"z z";position:absolute;top:-14px;right:-6px;font-weight:800;color:#667085;font-size:16px;animation:faceZz 2s ease-in-out infinite}
+@keyframes faceThink{0%,100%{opacity:.25;transform:scale(1)}50%{opacity:1;transform:scale(1.06)}}
+@keyframes faceHi{0%,100%{transform:rotate(0)}25%{transform:rotate(-5deg)}75%{transform:rotate(5deg)}}
+@keyframes faceWin{0%{transform:scale(.9);opacity:.3}60%{transform:scale(1.12);opacity:1}100%{transform:scale(1);opacity:.8}}
+@keyframes faceZz{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(-4px)}}
+@media (prefers-reduced-motion:reduce){.agFace,.agFace::after,.agFace::before{animation:none!important}}
+.lookGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px;margin-top:8px}
+.lookCard{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 8px;border:2px solid #e1e7f0;border-radius:16px;background:#fff;cursor:pointer;font:inherit;text-align:center}
+.lookCard.sel{border-color:#7c3aed;box-shadow:0 0 0 3px #7c3aed22}
+.lookCard.soon{opacity:.55;cursor:default}
+.lookCard small{color:#667085;font-size:12px}
+.lookPic{display:grid;place-items:center;width:72px;height:72px}
+.lookPic img,.lookPic video{width:72px;height:72px;object-fit:contain}
+.lookPic .lookFaceImg{object-fit:cover;border-radius:50%}
+.lookPic .agFace{width:64px;height:64px}
+.lookPic .aiaLogo{font-size:20px}
+.agFace.simple .aiaTag{display:none}

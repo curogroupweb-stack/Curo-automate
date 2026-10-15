@@ -818,6 +818,21 @@ function agentPic(k, pose, cls, alt, extra) {
   if (v) return `<video class="${cls || ''} agVid" autoplay muted loop playsinline preload="auto" poster="${poster}" aria-label="${alt || ''}" ${extra || ''}><source src="${v}.mp4?v=2" type="video/mp4"></video>`;
   return `<img class="${cls || ''}" src="${poster}" alt="${alt || ''}" ${extra || ''}>`;
 }
+// ---------- Apariencia del agente: animalito, persona (retrato hecho con IA) o sencillo (logo AIA) ----------
+// Retratos disponibles: al añadir una cara nueva basta con sumarla aquí.
+const PERSONAS = []; // { id: 'persona-1', src: 'img/agentes/personas/persona-1.jpg' }
+function myLook() {
+  const l = agentState?.settings?.look || 'animal';
+  if (l === 'sencillo') return l;
+  return PERSONAS.some(p => p.id === l) ? l : 'animal';
+}
+// Cara del agente cuando no es el animalito. La pose (saluda, ups, celebra, duerme) se muestra con efectos suaves.
+function lookFace(pose, big) {
+  const l = myLook(), p = PERSONAS.find(x => x.id === l);
+  const inner = p ? `<img src="${p.src}" alt="">` : '<span class="aiaLogo">AIA</span>';
+  return `<span class="agFace ${big ? 'big' : ''} ${p ? 'persona' : 'simple'}" data-pose="${pose || 'ups'}">${inner}${big ? '<small class="aiaTag">AIA</small>' : ''}</span>`;
+}
+function pickLook(b) { document.querySelectorAll('#agLookGrid .lookCard').forEach(x => x.classList.toggle('sel', x === b)); b.blur(); }
 let welcome = null;
 // Cómo le gusta que le hablen: opciones para tocar, nada para escribir.
 const TONE_OPTIONS = [
@@ -1013,12 +1028,19 @@ function agentSetup(edit = false) {
   const chosen = s.profile ? agentByKey(s.profile) : null;
   const time = String(s.brief_time || '08:00').slice(0, 5);
   const first = (me?.user?.name || '').split(' ')[0];
+  const lookNow = s.look || 'animal';
+  const lookCards = `<button type="button" class="lookCard ${lookNow === 'animal' ? 'sel' : ''}" data-look="animal" onclick="pickLook(this)"><span class="lookPic">${agentPic(chosen?.key || 'descubridor', 'saluda', '', '')}</span><b>Animalito</b><small>Tu personaje con movimiento</small></button>`
+    + (PERSONAS.length ? PERSONAS.map((p, i) => `<button type="button" class="lookCard ${lookNow === p.id ? 'sel' : ''}" data-look="${p.id}" onclick="pickLook(this)"><span class="lookPic"><img class="lookFaceImg" src="${p.src}" alt=""></span><b>Persona ${i + 1}</b><small>Retrato hecho con IA</small></button>`).join('')
+      : `<button type="button" class="lookCard soon" disabled><span class="lookPic"><span class="agFace simple"><span class="aiaLogo">👤</span></span></span><b>Persona</b><small>Muy pronto</small></button>`)
+    + `<button type="button" class="lookCard ${lookNow === 'sencillo' ? 'sel' : ''}" data-look="sencillo" onclick="pickLook(this)"><span class="lookPic"><span class="agFace simple"><span class="aiaLogo">AIA</span></span></span><b>Sencillo</b><small>Solo el logo AIA</small></button>`;
   const grid = `<div class="profileGrid">${AGENTS.map(a => `<button type="button" class="profileCard ${s.profile === a.key ? 'sel' : ''}" data-p="${a.key}" aria-pressed="${s.profile === a.key}" onclick="selectSetupAgent('${a.key}')">${agentPic(a.key, 'saluda', 'profilePic', '')}<b>${esc(a.name)}</b><small class="profileFor">${esc(a.label)}</small><small>${esc(a.help)}</small></button>`).join('')}</div>`;
   shell('Mi agente', `<div class="card agentSetup">
     <div class="agWelcome" id="agWelcome">${setupWelcome(chosen, first, edit)}</div>
     ${chosen ? `<details class="agOther" ${edit ? '' : ''}><summary>¿No es tu perfil? Cámbialo aquí</summary>${grid}</details>` : `<small class="muted">1. ¿CUÁL ES TU PERFIL?</small>${grid}`}
     <label class="field"><span class="agQ">¿A qué te dedicas?</span> <span class="muted">(opcional)</span><div class="dictationWrap"><textarea id="agAbout" rows="3" maxlength="2000" placeholder="Por ejemplo: soy profesora de primaria en Madrid y doy clases de inglés por las tardes.">${esc(s.about || '')}</textarea><button class="dictateBtn" type="button" onclick="toggleDictation('agAbout',this)" aria-label="Dictar">🎙 <span>Dictar</span></button></div></label>
     <label class="field"><span class="agQ">¿En qué quieres que te ayude?</span> <span class="muted">(opcional)</span><div class="dictationWrap"><textarea id="agGoals" rows="3" maxlength="2000" placeholder="Por ejemplo: organizar mis clases de la semana, no olvidarme de las entregas y preparar materiales.">${esc(s.goals || '')}</textarea><button class="dictateBtn" type="button" onclick="toggleDictation('agGoals',this)" aria-label="Dictar">🎙 <span>Dictar</span></button></div></label>
+    <div class="plannerStep"><small class="agQ">¿CÓMO QUIERES VER A TU AGENTE?</small>
+      <div class="lookGrid" id="agLookGrid">${lookCards}</div></div>
     <div class="plannerStep"><small class="agQ">¿CÓMO TE GUSTA QUE TE HABLE?</small>
       <div class="toneGrid" id="agToneGrid">${TONE_OPTIONS.map(t => `<button type="button" class="toneCard ${s.tone === t.v ? 'sel' : ''}" data-tone="${esc(t.v)}" onclick="document.querySelectorAll('#agToneGrid .toneCard').forEach(b=>b.classList.toggle('sel',b===this));this.blur()"><b>${esc(t.l)}</b><small>${esc(t.d)}</small></button>`).join('')}</div></div>
     <div class="plannerStep"><small class="agQ">¿TE MANDO CADA MAÑANA UN RESUMEN?</small>
@@ -1040,7 +1062,7 @@ function agentSetup(edit = false) {
     const done = busy(e.currentTarget, 'Guardando…');
     try {
       const tone = document.querySelector('#agToneGrid .toneCard.sel')?.dataset.tone || '';
-      const { settings } = await api('agent', { method: 'POST', body: { action: 'setup', profile, about: agAbout.value.trim(), goals: agGoals.value.trim(), tone, brief_enabled: agBrief.checked, brief_time: agTime.value || '08:00' } });
+      const { settings } = await api('agent', { method: 'POST', body: { action: 'setup', profile, about: agAbout.value.trim(), goals: agGoals.value.trim(), tone, look: document.querySelector('#agLookGrid .lookCard.sel')?.dataset.look || 'animal', brief_enabled: agBrief.checked, brief_time: agTime.value || '08:00' } });
       agentState.settings = settings;
       toast(edit ? 'Cambios guardados.' : `¡${agentByKey(profile).name} ya está listo!`);
       renderAgent();
@@ -1064,7 +1086,7 @@ function agentMsgHtml(m) {
   }
   const txt = `<div class="agMsg bot">${esc(m.content).replace(/\n/g, '<br>')}</div>`;
   const say = voiceOk() ? `<button type="button" class="agSay" onclick="speakMsg(this)" aria-label="Escuchar este mensaje" title="Escuchar">🔊</button>` : '';
-  return `<div class="agBotRow" data-id="${m.id || ''}">${agentPic(agentState?.settings?.profile || 'descubridor', 'ups', 'agAvatar', '')}${txt}${say}</div>`;
+  return `<div class="agBotRow" data-id="${m.id || ''}">${myLook() === 'animal' ? agentPic(agentState?.settings?.profile || 'descubridor', 'ups', 'agAvatar', '') : lookFace('ups')}${txt}${say}</div>`;
 }
 // Borra un único mensaje propio (no hace falta borrar toda la conversación). Si el agente ya
 // había contestado a ese mensaje, esa respuesta también se borra para no dejarla descontextualizada.
@@ -1097,6 +1119,12 @@ let agentHeroTimer = null, agentIdleTimer = null, agentJustEntered = false;
 // Pose de reposo: pensando y trabajando (duda). Si el agente no tiene esa pose, su dibujo fijo.
 const agentRest = k => agentPose(k, 'ups');
 function agentHeroPose(pose, holdMs) {
+  const face = document.querySelector('#agFaceWrap .agFace');
+  if (face) {
+    clearTimeout(agentHeroTimer); face.dataset.pose = pose;
+    if (holdMs) agentHeroTimer = setTimeout(() => { if (face.isConnected) face.dataset.pose = 'ups'; }, holdMs);
+    return;
+  }
   const img = document.getElementById('agHeroPic'); if (!img) return;
   const key = agentState?.settings?.profile; if (!key) return;
   clearTimeout(agentHeroTimer);
@@ -1116,6 +1144,8 @@ function agentHeroVideo(key, pose) {
 }
 function agentResetIdle(wake) {
   clearTimeout(agentIdleTimer);
+  const face = document.querySelector('#agFaceWrap .agFace');
+  if (face && wake !== false && ['duerme', 'saluda'].includes(face.dataset.pose)) face.dataset.pose = 'ups';
   const img = document.getElementById('agHeroPic');
   if (wake !== false && img && (img.src.includes('-duerme') || img.src.includes('-saluda'))) { clearTimeout(agentHeroTimer); img.src = agentRest(agentState?.settings?.profile); agentHeroVideo(agentState?.settings?.profile, null); }
   agentIdleTimer = setTimeout(() => agentHeroPose('duerme'), 90000);
@@ -1129,7 +1159,7 @@ function renderAgent() {
   const heroPose = hello ? agentPose(s.profile, 'saluda') : agentRest(s.profile);
   clearTimeout(agentHeroTimer); clearTimeout(agentIdleTimer);
   shell('Mi agente', `
-    <div class="agHead card"><div class="agWho"><span class="agHeroWrap"><img class="agAvatar big" id="agHeroPic" src="${heroPose}" alt=""><video class="agAvatar big agVid" id="agHeroVid" muted loop playsinline hidden></video></span><div><b>${esc(agentByKey(s.profile).name)} · tu agente AIA</b><small class="muted">${esc(prof.label || '')}</small><small class="muted">${s.brief_enabled ? `Resumen cada día a las ${esc(String(s.brief_time || '08:00').slice(0, 5))}` : 'Resumen diario desactivado'}</small></div></div>
+    <div class="agHead card"><div class="agWho"><span class="agHeroWrap" id="agFaceWrap">${myLook() === 'animal' ? `<img class="agAvatar big" id="agHeroPic" src="${heroPose}" alt=""><video class="agAvatar big agVid" id="agHeroVid" muted loop playsinline hidden></video>` : lookFace(hello ? 'saluda' : 'ups', true)}</span><div><b>${esc(agentByKey(s.profile).name)} · tu agente AIA</b><small class="muted">${esc(prof.label || '')}</small><small class="muted">${s.brief_enabled ? `Resumen cada día a las ${esc(String(s.brief_time || '08:00').slice(0, 5))}` : 'Resumen diario desactivado'}</small></div></div>
       <div class="actions"><button class="btn ghost smallBtn" onclick="go('Inicio')">← Volver al inicio</button>${voiceToggleHtml()}<button class="btn ghost smallBtn" id="agBriefNow">Enviarme el resumen ahora</button><button class="btn ghost smallBtn" onclick="agentSetup(true)">Ajustes</button></div></div>
     <div class="agGrid">
       <div class="card agChat">
