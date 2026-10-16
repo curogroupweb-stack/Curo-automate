@@ -9,6 +9,28 @@ const { renderBranded } = require('./email_template');
 const google = require('./google');
 const tools = require('./tools');
 
+// Recorta el resultado de una herramienta para el modelo sin romper el JSON.
+// Antes se cortaba el texto ya convertido a JSON (JSON.stringify(...).slice(0,N)), lo que a veces
+// partía el JSON a la mitad (p. ej. cursos con muchas lecciones) y el modelo, al recibir un JSON
+// inválido/truncado, se confundía e intentaba "completarlo" como si fuera una llamada a una
+// herramienta inventada (p. ej. una llamada a 'JSON'). Ahora, si no entra en el límite, se acortan
+// las listas dentro del propio objeto (de a poco) hasta que el JSON resultante sí entra, así siempre
+// se entrega JSON válido.
+function trimForModel(result, maxLen = 3500) {
+  let json = JSON.stringify(result ?? null);
+  if (json.length <= maxLen) return json;
+  function shrink(node, factor) {
+    if (Array.isArray(node)) return node.slice(0, Math.max(1, Math.floor(node.length * factor))).map(n => shrink(n, factor));
+    if (node && typeof node === 'object') { const out = {}; for (const k of Object.keys(node)) out[k] = shrink(node[k], factor); return out; }
+    return node;
+  }
+  let factor = 0.6, out = JSON.parse(json);
+  for (let i = 0; i < 8 && JSON.stringify(out).length > maxLen; i++) { out = shrink(JSON.parse(json), factor); factor *= 0.6; }
+  if (out && typeof out === 'object' && !Array.isArray(out)) out._nota = 'Se acortó esta lista por espacio; si falta algo, pide ver el resto.';
+  json = JSON.stringify(out);
+  return json.length <= maxLen ? json : JSON.stringify({ _nota: 'Este resultado era demasiado grande para mostrarlo completo.' });
+}
+
 const PROFILES = {
   docente: { name: 'Bruno', label: 'Docente', focus: 'clases, planificación, evaluaciones, comunicación con familias y alumnos, materiales didácticos', expertise: [
     'Pedagogía: conoces principios generales (diseño de clases, evaluación formativa, atención a la diversidad) y los adaptas a la etapa que te cuente (infantil, primaria, secundaria, etc.).',
@@ -231,7 +253,7 @@ async function chatTurn(user, message, { isAdmin } = {}) {
         try { result = await tools.execute(call.name, call.args || {}, ctx); }
         catch (e) { result = { error: e.message }; }
       }
-      messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result ?? null).slice(0, 3500) });
+      messages.push({ role: 'tool', tool_call_id: call.id, content: trimForModel(result) });
     }
   }
 
