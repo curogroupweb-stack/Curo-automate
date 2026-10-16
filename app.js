@@ -280,7 +280,7 @@ function showHelp() {
 }
 
 // ---------- Estructura del espacio privado ----------
-const NAV = ['Inicio', 'Mi agente', 'Automatizaciones', 'Aprobaciones', 'Historial', 'Conexiones', 'Conocimiento', 'Cuenta'];
+const NAV = ['Inicio', 'Mi agente', 'Mis cursos', 'Automatizaciones', 'Aprobaciones', 'Historial', 'Conexiones', 'Conocimiento', 'Cuenta'];
 function shell(page, body) {
   currentPage = page;
   const pending = me?.counts?.pending_approvals || 0;
@@ -300,10 +300,115 @@ async function go(page) {
   try { if (typeof stopSpeaking === 'function') stopSpeaking(); } catch {}
   if (!session) return login('login');
   try { await refreshMe(); } catch (e) { return shell(page, `<div class="card"><p>${esc(e.message)}</p><button class="btn primary" onclick="go('${page}')">Reintentar</button></div>`); }
-  const pages = { Inicio: inicio, 'Mi agente': agentPage, Automatizaciones: automationsPage, Aprobaciones: approvalsPage, Historial: historyPage, Conexiones: connectionsPage, Conocimiento: knowledgePage, Cuenta: accountPage };
+  const pages = { Inicio: inicio, 'Mi agente': agentPage, 'Mis cursos': coursesPage, Automatizaciones: automationsPage, Aprobaciones: approvalsPage, Historial: historyPage, Conexiones: connectionsPage, Conocimiento: knowledgePage, Cuenta: accountPage };
   (pages[page] || inicio)();
 }
 function loading(page, text = 'Cargando…') { shell(page, `<div class="card"><p class="muted"><span class="spin"></span> ${esc(text)}</p></div>`); }
+
+// ---------- Mis cursos: visor visual (texto, video, PDF/flyers, enlaces) ----------
+function curoEmbedUrl(u) {
+  if (!u) return null;
+  const yt = u.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{6,})/);
+  if (yt) return 'https://www.youtube.com/embed/' + yt[1];
+  const vm = u.match(/vimeo\.com\/(\d+)/);
+  if (vm) return 'https://player.vimeo.com/video/' + vm[1];
+  return null;
+}
+function curoIsImage(u) { return /\.(jpe?g|png|webp|gif)(\?.*)?$/i.test(u || ''); }
+function curoLessonMedia(l) {
+  const url = (l.resource_url || '').trim();
+  if (!url) return '';
+  if (curoIsImage(url)) return `<img class="lessonImg" src="${esc(url)}" alt="${esc(l.title)}">`;
+  const embed = curoEmbedUrl(url);
+  if (l.lesson_type === 'video' || embed) {
+    return embed ? `<div class="lessonMedia"><iframe src="${esc(embed)}" allow="autoplay; encrypted-media; fullscreen" allowfullscreen loading="lazy"></iframe></div>`
+      : `<div class="lessonMedia"><video controls src="${esc(url)}"></video></div>`;
+  }
+  if (l.lesson_type === 'audio') return `<audio controls src="${esc(url)}" style="width:100%"></audio>`;
+  if (l.lesson_type === 'pdf') return `<div class="lessonMedia"><iframe src="${esc(url)}"></iframe></div><p><a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener">Abrir PDF en otra pestaña</a></p>`;
+  if (l.lesson_type === 'embed') return `<div class="lessonMedia"><iframe src="${esc(url)}"></iframe></div>`;
+  return `<p><a class="btn primary" href="${esc(url)}" target="_blank" rel="noopener">${l.lesson_type === 'download' ? '⬇️ Descargar' : '🔗 Abrir enlace'}</a></p>`;
+}
+const CURO_LESSON_ICON = { text: '📝', video: '🎬', audio: '🎧', pdf: '📄', download: '⬇️', embed: '🖥️', quiz: '❓', assignment: '✍️', link: '🔗' };
+async function markLessonV(courseId, lessonId, status) {
+  const uid = me?.user?.id; if (!uid) return;
+  const { error } = await sb.from('course_progress').upsert({ user_id: uid, lesson_id: lessonId, status, updated_at: new Date().toISOString() }, { onConflict: 'user_id,lesson_id' });
+  if (error) return toast('No se pudo guardar tu avance: ' + error.message, 'warn');
+  toast(status === 'completado' ? '¡Lección completada!' : 'Avance guardado.', 'ok');
+  coursesPage();
+}
+async function coursesPage() {
+  const view = window.__curoCourseView;
+  if (!view || !view.courseId) return coursesListPage();
+  return coursesDetailPage(view.courseId, view.lessonId);
+}
+async function coursesListPage() {
+  loading('Mis cursos', 'Cargando tus cursos…');
+  const uid = me?.user?.id;
+  const { data: ent, error: e1 } = await sb.from('user_entitlements').select('content_id').eq('user_id', uid).eq('active', true);
+  if (e1) return shell('Mis cursos', `<div class="card"><p>${esc(e1.message)}</p></div>`);
+  const ids = [...new Set((ent || []).map(x => x.content_id))];
+  let courses = [];
+  if (ids.length) {
+    const { data, error } = await sb.from('content').select('id,title,description,short_description,status,visibility').eq('content_type', 'course').in('id', ids);
+    if (error) return shell('Mis cursos', `<div class="card"><p>${esc(error.message)}</p></div>`);
+    courses = data || [];
+  }
+  if (!courses.length) {
+    return shell('Mis cursos', `<div class="card"><h3>Todavía no tienes cursos</h3><p class="muted">Cuando compres o te den acceso a un curso de Curo Group, va a aparecer aquí.</p></div>`);
+  }
+  const courseIds = courses.map(c => c.id);
+  const { data: modules } = await sb.from('course_modules').select('id,course_id').in('course_id', courseIds);
+  const moduleToCourse = {}; (modules || []).forEach(m => moduleToCourse[m.id] = m.course_id);
+  const moduleIds = (modules || []).map(m => m.id);
+  let lessons = [];
+  if (moduleIds.length) { const { data } = await sb.from('course_lessons').select('id,module_id').in('module_id', moduleIds); lessons = data || []; }
+  const totalByCourse = {}, lessonToCourse = {};
+  lessons.forEach(l => { const cId = moduleToCourse[l.module_id]; lessonToCourse[l.id] = cId; totalByCourse[cId] = (totalByCourse[cId] || 0) + 1; });
+  const lessonIds = lessons.map(l => l.id);
+  let done = [];
+  if (lessonIds.length) { const { data } = await sb.from('course_progress').select('lesson_id').eq('user_id', uid).eq('status', 'completado').in('lesson_id', lessonIds); done = data || []; }
+  const doneByCourse = {};
+  done.forEach(p => { const cId = lessonToCourse[p.lesson_id]; if (cId) doneByCourse[cId] = (doneByCourse[cId] || 0) + 1; });
+  shell('Mis cursos', `<div class="grid">${courses.map(c => {
+    const total = totalByCourse[c.id] || 0, got = doneByCourse[c.id] || 0, pct = total ? Math.round(got / total * 100) : 0;
+    return `<div class="card"><h3>🎓 ${esc(c.title)}</h3><p class="muted">${esc(c.short_description || c.description || 'Sin descripción.')}</p>
+    <div class="row"><span class="badge ${pct === 100 ? 'ok' : 'warn'}">${pct}% completado</span></div>
+    <div class="actions"><button class="btn primary" onclick='window.__curoCourseView={courseId:${JSON.stringify(c.id)}};coursesPage()'>Entrar al curso</button></div></div>`;
+  }).join('')}</div>`);
+}
+async function coursesDetailPage(courseId, lessonId) {
+  loading('Mis cursos', 'Cargando el curso…');
+  const uid = me?.user?.id;
+  const { data: course, error: ce } = await sb.from('content').select('id,title,description,short_description').eq('id', courseId).maybeSingle();
+  if (ce || !course) return shell('Mis cursos', `<div class="card"><p>No se pudo abrir este curso.</p><button class="btn ghost" onclick="window.__curoCourseView=null;coursesPage()">← Mis cursos</button></div>`);
+  const { data: modules } = await sb.from('course_modules').select('id,title,sort_order').eq('course_id', courseId).order('sort_order', { ascending: true });
+  const moduleIds = (modules || []).map(m => m.id);
+  let lessons = [];
+  if (moduleIds.length) { const { data } = await sb.from('course_lessons').select('*').in('module_id', moduleIds).order('sort_order', { ascending: true }); lessons = data || []; }
+  const lessonIds = lessons.map(l => l.id);
+  let progress = {};
+  if (lessonIds.length) { const { data } = await sb.from('course_progress').select('lesson_id,status').eq('user_id', uid).in('lesson_id', lessonIds); (data || []).forEach(p => progress[p.lesson_id] = p.status); }
+  const lessonsByModule = {}; lessons.forEach(l => (lessonsByModule[l.module_id] ||= []).push(l));
+  const current = lessonId ? lessons.find(l => l.id === lessonId) : lessons[0];
+  const sidebar = (modules || []).map(m => `<div class="courseModGroup"><div class="courseModTitle">${esc(m.title)}</div>${(lessonsByModule[m.id] || []).map(l => {
+    const st = progress[l.id] || 'pendiente';
+    const icon = st === 'completado' ? '✅' : st === 'en_curso' ? '🟡' : '⬜';
+    const active = current && current.id === l.id ? ' active' : '';
+    return `<button class="courseLessonBtn${active}" onclick='window.__curoCourseView={courseId:${JSON.stringify(courseId)},lessonId:${JSON.stringify(l.id)}};coursesPage()'>${icon} ${CURO_LESSON_ICON[l.lesson_type] || '📝'} ${esc(l.title)}</button>`;
+  }).join('') || `<div class="muted" style="padding:6px 10px">🔒 Se desbloquea con el curso completo</div>`}</div>`).join('') || '<p class="muted">Este curso todavía no tiene módulos cargados.</p>';
+  const content = !current ? '<p class="muted">Elige una lección del menú para empezar.</p>' : `
+    <h2 style="margin-top:0">${esc(current.title)}</h2>
+    ${curoLessonMedia(current)}
+    <div class="lessonBody">${esc(current.body || '').replace(/\n/g, '<br>')}</div>
+    <div class="actions">
+      ${progress[current.id] !== 'completado' ? `<button class="btn primary" onclick="markLessonV(${JSON.stringify(courseId)},${JSON.stringify(current.id)},'completado')">✅ Marcar como completada</button>` : `<span class="badge ok">✅ Completada</span>`}
+      ${progress[current.id] === 'pendiente' || !progress[current.id] ? `<button class="btn ghost" onclick="markLessonV(${JSON.stringify(courseId)},${JSON.stringify(current.id)},'en_curso')">Marcar en curso</button>` : ''}
+    </div>`;
+  shell('Mis cursos', `<button class="btn ghost" style="margin-bottom:14px" onclick="window.__curoCourseView=null;coursesPage()">← Mis cursos</button>
+    <h1 style="margin:0 0 4px">${esc(course.title)}</h1><p class="muted" style="margin-top:0">${esc(course.short_description || course.description || '')}</p>
+    <div class="courseLayout"><aside class="courseSide">${sidebar}</aside><main class="courseContent card">${content}</main></div>`);
+}
 
 // ---------- Portada pública (diseño original) ----------
 // ---------- Modos de automatizar y lista de espera ----------
