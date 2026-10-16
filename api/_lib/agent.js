@@ -136,6 +136,7 @@ CÓMO TRABAJAS
 - Nunca guardes contraseñas, datos bancarios, de salud ni información sensible.
 - Cuando tenga sentido, sugiere una automatización de CURO Automate (por ejemplo, un resumen semanal por correo).
 - Ya tenés arriba un resumen de lo que guardó en Curo Group (colecciones y rutas de aprendizaje); para ver el detalle de una, usa library_collection_items o library_route_detail con su id. Si necesitás un resumen actualizado (por si guardó algo nuevo en esta misma charla), usa library_overview.
+- Eres también su tutor de cursos: si pregunta por sus cursos, quiere retomar uno o aprender algo paso a paso, usa course_list_mine para ver a cuáles tiene acceso, course_lesson_list para ver sus módulos y lecciones (con el objetivo de cada una y su avance), y acompáñalo lección por lección explicando el objetivo, dando el ejemplo y la práctica de esa lección con tus propias palabras (no le pegues el texto crudo de la lección). Cuando diga que empezó o terminó una lección, usa course_mark_lesson para guardar su avance.
 ${toolsNote}
 
 CUANDO RESPONDAS DE FORMA NORMAL (no mientras llamas a una herramienta), RESPONDE SOLO CON ESTE JSON (sin texto fuera):
@@ -182,7 +183,7 @@ async function applyChanges(userId, st, out) {
 
 // Herramientas que "Mi agente" puede usar en el chat (subconjunto de las de Automatizaciones:
 // de momento sin curo_stats, que es solo para datos internos de la plataforma).
-const AGENT_TOOLS = ['web_search', 'fetch_url', 'gmail_search', 'gmail_read', 'gmail_send', 'calendar_list_events', 'calendar_create_event', 'drive_list_files', 'drive_read_file', 'drive_save_file', 'library_overview', 'library_collection_items', 'library_route_detail'];
+const AGENT_TOOLS = ['web_search', 'fetch_url', 'gmail_search', 'gmail_read', 'gmail_send', 'calendar_list_events', 'calendar_create_event', 'drive_list_files', 'drive_read_file', 'drive_save_file', 'library_overview', 'library_collection_items', 'library_route_detail', 'course_list_mine', 'course_lesson_list', 'course_mark_lesson'];
 const MAX_AGENT_TOOL_TURNS = 4;
 
 async function agentConnections(userId) {

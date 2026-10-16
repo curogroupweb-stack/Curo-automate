@@ -92,6 +92,24 @@ const CATALOG = {
     label: 'Ver el detalle de una ruta de aprendizaje guardada',
     description: 'Muestra el detalle completo de una ruta de aprendizaje guardada del usuario (el id se obtiene con library_overview): la búsqueda original y los recursos que incluye (artículos, vídeos, cursos, perfiles, productos, etc.) con su enlace.',
     parameters: { type: 'object', properties: { route_id: { type: 'string' } }, required: ['route_id'] }
+  },
+  course_list_mine: {
+    needs: null,
+    label: 'Ver los cursos del usuario',
+    description: 'Lista los cursos de Curo Group a los que el usuario tiene acceso, con cuántas lecciones tiene cada uno y cuántas ya completó. Úsala cuando el usuario pregunte por sus cursos o quiera continuar uno.',
+    parameters: { type: 'object', properties: {} }
+  },
+  course_lesson_list: {
+    needs: null,
+    label: 'Ver los módulos y lecciones de un curso',
+    description: 'Lista los módulos y lecciones de un curso del usuario (el id se obtiene con course_list_mine), con el objetivo de cada lección y si todavía no la empezó, la está cursando o ya la completó. Úsala para acompañar al usuario como tutor dentro de un curso.',
+    parameters: { type: 'object', properties: { course_id: { type: 'string' } }, required: ['course_id'] }
+  },
+  course_mark_lesson: {
+    needs: null,
+    label: 'Marcar el avance de una lección',
+    description: 'Marca el avance del usuario en una lección de un curso (el id de la lección se obtiene con course_lesson_list): pendiente, en_curso o completado. Úsala cuando el usuario diga que empezó, está cursando o terminó una lección.',
+    parameters: { type: 'object', properties: { lesson_id: { type: 'string' }, status: { type: 'string', enum: ['pendiente', 'en_curso', 'completado'] } }, required: ['lesson_id', 'status'] }
   }
 };
 
@@ -312,6 +330,95 @@ async function libraryRouteDetail(userId, routeId) {
   };
 }
 
+// ---------- Cursos (tutor de IA): cursos del usuario, sus lecciones y su avance ----------
+async function courseListMine(userId) {
+  const entitlements = await db.select('user_entitlements', `user_id=eq.${enc(userId)}&active=eq.true&select=content_id`);
+  if (!entitlements.length) return { cursos: [], nota: 'El usuario todavía no tiene acceso a ningún curso.' };
+  const ids = [...new Set(entitlements.map(e => e.content_id))];
+  const courses = await db.select('content', `id=in.(${ids.map(enc).join(',')})&content_type=eq.course&select=id,title,short_description`);
+  if (!courses.length) return { cursos: [], nota: 'El usuario todavía no tiene acceso a ningún curso.' };
+  const courseIds = courses.map(c => c.id);
+  const modules = await db.select('course_modules', `course_id=in.(${courseIds.map(enc).join(',')})&select=id,course_id`);
+  const moduleToCourse = {};
+  for (const m of modules) moduleToCourse[m.id] = m.course_id;
+  const moduleIds = modules.map(m => m.id);
+  const lessons = moduleIds.length
+    ? await db.select('course_lessons', `module_id=in.(${moduleIds.map(enc).join(',')})&select=id,module_id`)
+    : [];
+  const totalByCourse = {};
+  const lessonToCourse = {};
+  for (const l of lessons) {
+    const cId = moduleToCourse[l.module_id];
+    lessonToCourse[l.id] = cId;
+    totalByCourse[cId] = (totalByCourse[cId] || 0) + 1;
+  }
+  const lessonIds = lessons.map(l => l.id);
+  const progress = lessonIds.length
+    ? await db.select('course_progress', `user_id=eq.${enc(userId)}&lesson_id=in.(${lessonIds.map(enc).join(',')})&status=eq.completado&select=lesson_id`)
+    : [];
+  const completedByCourse = {};
+  for (const p of progress) {
+    const cId = lessonToCourse[p.lesson_id];
+    completedByCourse[cId] = (completedByCourse[cId] || 0) + 1;
+  }
+  return {
+    cursos: courses.map(c => ({
+      id: c.id,
+      titulo: c.title,
+      resumen: c.short_description || undefined,
+      lecciones_totales: totalByCourse[c.id] || 0,
+      lecciones_completadas: completedByCourse[c.id] || 0
+    }))
+  };
+}
+
+async function courseLessonList(userId, courseId) {
+  if (!courseId) return { error: 'Falta el id del curso (se obtiene con course_list_mine).' };
+  const course = (await db.select('content', `id=eq.${enc(courseId)}&content_type=eq.course&select=id,title`))[0];
+  if (!course) return { error: 'Ese curso no existe.' };
+  const tieneAcceso = !!(await db.one('user_entitlements', `user_id=eq.${enc(userId)}&content_id=eq.${enc(courseId)}&active=eq.true&select=id`));
+  const modules = await db.select('course_modules', `course_id=eq.${enc(courseId)}&select=id,title,sort_order&order=sort_order.asc`);
+  if (!modules.length) return { curso: course.title, modulos: [], nota: 'Este curso todavía no tiene módulos cargados.' };
+  const moduleIds = modules.map(m => m.id);
+  const lessons = await db.select('course_lessons', `module_id=in.(${moduleIds.map(enc).join(',')})&select=id,module_id,title,lesson_type,is_demo,sort_order,metadata&order=sort_order.asc`);
+  const lessonIds = lessons.map(l => l.id);
+  const progressByLesson = {};
+  if (lessonIds.length) {
+    const progress = await db.select('course_progress', `user_id=eq.${enc(userId)}&lesson_id=in.(${lessonIds.map(enc).join(',')})&select=lesson_id,status`);
+    for (const p of progress) progressByLesson[p.lesson_id] = p.status;
+  }
+  const lessonsByModule = {};
+  for (const l of lessons) (lessonsByModule[l.module_id] ||= []).push(l);
+  return {
+    curso: course.title,
+    acceso: tieneAcceso ? 'completo' : 'solo_demo',
+    modulos: modules.map(m => ({
+      titulo: m.title,
+      lecciones: (lessonsByModule[m.id] || []).map(l => {
+        const puedeVer = tieneAcceso || l.is_demo;
+        return {
+          id: l.id,
+          titulo: l.title,
+          tipo: l.lesson_type,
+          demo: !!l.is_demo,
+          estado: progressByLesson[l.id] || 'pendiente',
+          objetivo: puedeVer ? (l.metadata?.objetivo || undefined) : undefined,
+          bloqueada: puedeVer ? undefined : true
+        };
+      })
+    }))
+  };
+}
+
+async function courseMarkLesson(userId, lessonId, status) {
+  if (!lessonId) return { error: 'Falta el id de la lección (se obtiene con course_lesson_list).' };
+  if (!['pendiente', 'en_curso', 'completado'].includes(status)) return { error: 'Estado inválido. Usa pendiente, en_curso o completado.' };
+  const lesson = (await db.select('course_lessons', `id=eq.${enc(lessonId)}&select=id,title`))[0];
+  if (!lesson) return { error: 'Esa lección no existe.' };
+  await db.upsert('course_progress', { user_id: userId, lesson_id: lessonId, status, updated_at: new Date().toISOString() }, 'user_id,lesson_id');
+  return { status: 'guardado', leccion: lesson.title, estado: status };
+}
+
 // ctx: { userId, automation, runId, approvalMode, approvals:[] }
 async function execute(name, args, ctx) {
   switch (name) {
@@ -369,6 +476,9 @@ async function execute(name, args, ctx) {
     case 'library_overview': return libraryOverview(ctx.userId);
     case 'library_collection_items': return libraryCollectionItems(ctx.userId, args.collection_id);
     case 'library_route_detail': return libraryRouteDetail(ctx.userId, args.route_id);
+    case 'course_list_mine': return courseListMine(ctx.userId);
+    case 'course_lesson_list': return courseLessonList(ctx.userId, args.course_id);
+    case 'course_mark_lesson': return courseMarkLesson(ctx.userId, args.lesson_id, args.status);
     default: return { error: `Herramienta desconocida: ${name}` };
   }
 }
