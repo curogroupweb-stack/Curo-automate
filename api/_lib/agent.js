@@ -76,12 +76,21 @@ function parseDue(s) {
 }
 
 async function loadState(userId) {
-  const [settings, items, messages] = await Promise.all([
+  const [settings, items, messages, collections, savedItems, routes] = await Promise.all([
     db.one('agent_settings', `user_id=eq.${enc(userId)}&select=*`),
     db.select('agent_items', `user_id=eq.${enc(userId)}&select=*&order=status.asc,due_at.asc.nullslast,updated_at.desc&limit=200`),
-    db.select('agent_messages', `user_id=eq.${enc(userId)}&cleared=is.false&select=id,role,content,created_at&order=created_at.desc&limit=30`)
+    db.select('agent_messages', `user_id=eq.${enc(userId)}&cleared=is.false&select=id,role,content,created_at&order=created_at.desc&limit=30`),
+    db.select('collections', `user_id=eq.${enc(userId)}&select=id,name&order=created_at.desc&limit=100`).catch(() => []),
+    db.select('saved_items', `user_id=eq.${enc(userId)}&select=collection_id&limit=2000`).catch(() => []),
+    db.select('learning_routes', `user_id=eq.${enc(userId)}&select=id,title,items&order=created_at.desc&limit=20`).catch(() => [])
   ]);
-  return { settings, items, messages: messages.reverse() };
+  const countByCollection = {};
+  for (const it of savedItems) if (it.collection_id) countByCollection[it.collection_id] = (countByCollection[it.collection_id] || 0) + 1;
+  const library = {
+    collections: collections.map(c => ({ id: c.id, name: c.name, count: countByCollection[c.id] || 0 })),
+    routes: routes.map(r => ({ id: r.id, title: r.title, count: (r.items || []).length }))
+  };
+  return { settings, items, messages: messages.reverse(), library };
 }
 
 function itemsForPrompt(items) {
@@ -95,6 +104,14 @@ function itemsForPrompt(items) {
   return out.join('\n\n') || '(todavía no hay nada guardado)';
 }
 
+function libraryForPrompt(lib) {
+  if (!lib || (!lib.collections?.length && !lib.routes?.length)) return '';
+  const cols = (lib.collections || []).map(c => `- [col:${c.id}] "${c.name}" (${c.count} elemento${c.count === 1 ? '' : 's'})`).join('\n');
+  const routes = (lib.routes || []).map(r => `- [ruta:${r.id}] "${r.title}" (${r.count} recurso${r.count === 1 ? '' : 's'})`).join('\n');
+  return `\nLO QUE EL USUARIO TIENE GUARDADO EN CURO GROUP (tenlo en cuenta cuando compare opciones, pida ideas o arme un plan, aunque no te lo pida explícitamente; usa library_collection_items o library_route_detail con el id para ver el detalle):
+${cols ? `Colecciones:\n${cols}\n` : ''}${routes ? `Rutas de aprendizaje (búsquedas guiadas guardadas):\n${routes}\n` : ''}`;
+}
+
 function systemPrompt(st, name, allowedTools = []) {
   const p = PROFILES[st.settings.profile] || PROFILES.descubridor;
   const toolsNote = allowedTools.length
@@ -106,7 +123,7 @@ ${p.rule ? `REGLA DE TU PERFIL: ${p.rule}\n` : ''}${st.settings.about ? `Lo que 
 ${expertiseNote}
 TU MEMORIA DE ESTA PERSONA (úsala; no le hagas repetir lo que ya sabes):
 ${itemsForPrompt(st.items)}
-
+${libraryForPrompt(st.library)}
 CÓMO TRABAJAS
 - Hablas en español, cercano y práctico, frases cortas. Sin Markdown (nada de asteriscos ni almohadillas); para listas usa "•".
 - No eres solo un cuaderno de notas: resuelve de verdad lo que te pida con la IA (traducir un texto, resumir, explicar, redactar, dar ideas, analizar algo que te pega) y no solo lo apuntes.
@@ -118,7 +135,7 @@ CÓMO TRABAJAS
 - No inventes datos. Si falta información importante (por ejemplo la fecha de una entrega o el país desde donde trabaja), pregúntala.
 - Nunca guardes contraseñas, datos bancarios, de salud ni información sensible.
 - Cuando tenga sentido, sugiere una automatización de CURO Automate (por ejemplo, un resumen semanal por correo).
-- Si te pregunta qué tiene guardado en Curo Group (colecciones, elementos guardados, rutas de aprendizaje de búsquedas anteriores), usa library_overview y las herramientas relacionadas en vez de adivinar.
+- Ya tenés arriba un resumen de lo que guardó en Curo Group (colecciones y rutas de aprendizaje); para ver el detalle de una, usa library_collection_items o library_route_detail con su id. Si necesitás un resumen actualizado (por si guardó algo nuevo en esta misma charla), usa library_overview.
 ${toolsNote}
 
 CUANDO RESPONDAS DE FORMA NORMAL (no mientras llamas a una herramienta), RESPONDE SOLO CON ESTE JSON (sin texto fuera):
