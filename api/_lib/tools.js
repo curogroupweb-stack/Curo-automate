@@ -74,6 +74,24 @@ const CATALOG = {
     label: 'Leer una página web',
     description: 'Lee el texto de una página web pública (máximo unos 4.000 caracteres). Usa SOLO enlaces que hayan aparecido en resultados de búsqueda o que haya dado el usuario; nunca inventes direcciones.',
     parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] }
+  },
+  library_overview: {
+    needs: null,
+    label: 'Ver qué tiene guardado el usuario en Curo Group',
+    description: 'Resume lo que el usuario guardó en Curo Group: sus colecciones (carpetas) con cuántos elementos tiene cada una, y sus rutas de aprendizaje guardadas (resultados de búsquedas guiadas de descubrimiento) con título y cantidad de recursos. Úsala cuando pregunte qué tiene guardado, por sus colecciones, o por búsquedas/rutas de aprendizaje anteriores.',
+    parameters: { type: 'object', properties: {} }
+  },
+  library_collection_items: {
+    needs: null,
+    label: 'Ver los elementos guardados en una colección',
+    description: 'Lista los elementos guardados dentro de una colección del usuario (el id se obtiene con library_overview), con su título y tipo (contenido, producto o creador).',
+    parameters: { type: 'object', properties: { collection_id: { type: 'string' } }, required: ['collection_id'] }
+  },
+  library_route_detail: {
+    needs: null,
+    label: 'Ver el detalle de una ruta de aprendizaje guardada',
+    description: 'Muestra el detalle completo de una ruta de aprendizaje guardada del usuario (el id se obtiene con library_overview): la búsqueda original y los recursos que incluye (artículos, vídeos, cursos, perfiles, productos, etc.) con su enlace.',
+    parameters: { type: 'object', properties: { route_id: { type: 'string' } }, required: ['route_id'] }
   }
 };
 
@@ -235,6 +253,65 @@ async function curoStats(days) {
   };
 }
 
+// ---------- Biblioteca guardada del usuario en Curo Group (colecciones, guardados, rutas de aprendizaje) ----------
+const SAVED_TARGET_TABLE = { content: 'content', product: 'products', creator: 'creators' };
+const SAVED_TARGET_TITLE_COL = { content: 'title', product: 'name', creator: 'name' };
+
+async function libraryOverview(userId) {
+  const [collections, savedItems, routes] = await Promise.all([
+    db.select('collections', `user_id=eq.${enc(userId)}&select=id,name,description,created_at&order=created_at.desc&limit=100`),
+    db.select('saved_items', `user_id=eq.${enc(userId)}&select=collection_id&limit=2000`),
+    db.select('learning_routes', `user_id=eq.${enc(userId)}&select=id,title,items,created_at&order=created_at.desc&limit=20`)
+  ]);
+  const countByCollection = {};
+  let sinCarpeta = 0;
+  for (const it of savedItems) {
+    if (it.collection_id) countByCollection[it.collection_id] = (countByCollection[it.collection_id] || 0) + 1;
+    else sinCarpeta++;
+  }
+  const out = {
+    colecciones: collections.map(c => ({ id: c.id, nombre: c.name, descripcion: c.description || undefined, elementos_guardados: countByCollection[c.id] || 0 })),
+    guardados_sin_carpeta: sinCarpeta,
+    rutas_de_aprendizaje: routes.map(r => ({ id: r.id, titulo: r.title, recursos: (r.items || []).length, creada: r.created_at }))
+  };
+  if (!collections.length && !sinCarpeta && !routes.length) out.nota = 'El usuario todavía no guardó colecciones, elementos ni rutas de aprendizaje en Curo Group.';
+  return out;
+}
+
+async function libraryCollectionItems(userId, collectionId) {
+  if (!collectionId) return { error: 'Falta el id de la colección (se obtiene con library_overview).' };
+  const col = (await db.select('collections', `id=eq.${enc(collectionId)}&user_id=eq.${enc(userId)}&select=id,name`))[0];
+  if (!col) return { error: 'Esa colección no existe o no pertenece al usuario.' };
+  const items = await db.select('saved_items', `user_id=eq.${enc(userId)}&collection_id=eq.${enc(collectionId)}&select=target_type,target_id,created_at&order=created_at.desc&limit=200`);
+  if (!items.length) return { coleccion: col.name, elementos: [], nota: 'Esta colección todavía no tiene elementos guardados.' };
+  const byType = {};
+  for (const it of items) (byType[it.target_type] ||= new Set()).add(it.target_id);
+  const titles = {};
+  for (const [type, idsSet] of Object.entries(byType)) {
+    const table = SAVED_TARGET_TABLE[type], col2 = SAVED_TARGET_TITLE_COL[type];
+    if (!table) continue;
+    const ids = [...idsSet];
+    const rows = await db.select(table, `id=in.(${ids.map(enc).join(',')})&select=id,${col2}`).catch(() => []);
+    for (const r of rows) titles[`${type}:${r.id}`] = r[col2];
+  }
+  return {
+    coleccion: col.name,
+    elementos: items.map(it => ({ tipo: it.target_type, titulo: titles[`${it.target_type}:${it.target_id}`] || '(elemento eliminado)', guardado: it.created_at }))
+  };
+}
+
+async function libraryRouteDetail(userId, routeId) {
+  if (!routeId) return { error: 'Falta el id de la ruta de aprendizaje (se obtiene con library_overview).' };
+  const route = (await db.select('learning_routes', `id=eq.${enc(routeId)}&user_id=eq.${enc(userId)}&select=id,title,query,items,created_at`))[0];
+  if (!route) return { error: 'Esa ruta de aprendizaje no existe o no pertenece al usuario.' };
+  return {
+    titulo: route.title,
+    busqueda_original: route.query,
+    creada: route.created_at,
+    recursos: (route.items || []).map(it => ({ paso: it.step, tipo: it.type, titulo: it.title, de: it.by, enlace: it.url }))
+  };
+}
+
 // ctx: { userId, automation, runId, approvalMode, approvals:[] }
 async function execute(name, args, ctx) {
   switch (name) {
@@ -289,6 +366,9 @@ async function execute(name, args, ctx) {
     }
     case 'web_search': return webSearch(args.query, !!args.news);
     case 'fetch_url': return fetchUrl(args.url);
+    case 'library_overview': return libraryOverview(ctx.userId);
+    case 'library_collection_items': return libraryCollectionItems(ctx.userId, args.collection_id);
+    case 'library_route_detail': return libraryRouteDetail(ctx.userId, args.route_id);
     default: return { error: `Herramienta desconocida: ${name}` };
   }
 }

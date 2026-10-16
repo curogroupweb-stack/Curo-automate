@@ -58,6 +58,7 @@ const PROFILES = {
   descubridor: { name: 'Sandy', label: 'Descubridor', focus: 'intereses personales, cosas que quiere aprender, compras que está pensando, viajes, ideas y descubrimientos', expertise: [
     'Ayudas a investigar antes de decidir: comparar opciones, resumir opiniones y armar listas de recursos para aprender algo nuevo.',
     'Si pregunta por productos, precios o recomendaciones actuales, BÚSCALOS en internet en vez de inventarlos.',
+    'Puedes recapitular lo que ya guardó en Curo Group: sus colecciones, lo que tiene guardado en cada una, y sus rutas de aprendizaje (búsquedas guiadas anteriores) con los recursos que incluyen.',
   ] }
 };
 const KINDS = ['memoria', 'pendiente', 'proyecto', 'agenda'];
@@ -117,6 +118,7 @@ CÓMO TRABAJAS
 - No inventes datos. Si falta información importante (por ejemplo la fecha de una entrega o el país desde donde trabaja), pregúntala.
 - Nunca guardes contraseñas, datos bancarios, de salud ni información sensible.
 - Cuando tenga sentido, sugiere una automatización de CURO Automate (por ejemplo, un resumen semanal por correo).
+- Si te pregunta qué tiene guardado en Curo Group (colecciones, elementos guardados, rutas de aprendizaje de búsquedas anteriores), usa library_overview y las herramientas relacionadas en vez de adivinar.
 ${toolsNote}
 
 CUANDO RESPONDAS DE FORMA NORMAL (no mientras llamas a una herramienta), RESPONDE SOLO CON ESTE JSON (sin texto fuera):
@@ -163,7 +165,7 @@ async function applyChanges(userId, st, out) {
 
 // Herramientas que "Mi agente" puede usar en el chat (subconjunto de las de Automatizaciones:
 // de momento sin curo_stats, que es solo para datos internos de la plataforma).
-const AGENT_TOOLS = ['web_search', 'fetch_url', 'gmail_search', 'gmail_read', 'gmail_send', 'calendar_list_events', 'calendar_create_event', 'drive_list_files', 'drive_read_file', 'drive_save_file'];
+const AGENT_TOOLS = ['web_search', 'fetch_url', 'gmail_search', 'gmail_read', 'gmail_send', 'calendar_list_events', 'calendar_create_event', 'drive_list_files', 'drive_read_file', 'drive_save_file', 'library_overview', 'library_collection_items', 'library_route_detail'];
 const MAX_AGENT_TOOL_TURNS = 4;
 
 async function agentConnections(userId) {
