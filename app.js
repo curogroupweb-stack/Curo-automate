@@ -280,11 +280,11 @@ function showHelp() {
 }
 
 // ---------- Estructura del espacio privado ----------
-const NAV = ['Inicio', 'Mi agente', 'Mis cursos', 'Automatizaciones', 'Aprobaciones', 'Historial', 'Conexiones', 'Conocimiento', 'Cuenta'];
+const NAV = ['Inicio', 'Mi agente', 'Mis cursos', 'Automatizaciones', 'Prospectos', 'Aprobaciones', 'Historial', 'Conexiones', 'Conocimiento', 'Cuenta'];
 function shell(page, body) {
   currentPage = page;
   const pending = me?.counts?.pending_approvals || 0;
-  A.innerHTML = `<div class="shell"><aside class="side"><div class="brand"><span class="grad">CURO</span> Automate</div><nav>${NAV.map(n =>
+  A.innerHTML = `<div class="shell"><aside class="side"><div class="brand"><span class="grad">CURO</span> Automate</div><nav>${(me?.user?.is_admin ? NAV : NAV.filter(n => n !== 'Prospectos')).map(n =>
     `<button class="navbtn ${n === page ? 'active' : ''}" onclick="go('${n}')">${n}${n === 'Aprobaciones' && pending ? ` <span class="navCount">${pending}</span>` : ''}</button>`).join('')}</nav>
     <div class="sideFoot"><small>${esc(me?.user?.email || '')}</small><a class="navbtn backCuroSide" href="https://curogroup.net/">← Volver a CURO Group</a><button class="navbtn" onclick="showHelp()">Ayuda y contacto</button><button class="navbtn" onclick="logout()">Salir</button></div></aside>
     <button class="helpFab" onclick="showHelp()" aria-label="Ayuda y contacto">?</button><main class="main"><div class="dashhead"><div><small class="muted">CURO AUTOMATE</small><h1>${esc(page)}</h1></div>${aiBadge()}</div><div id="page">${body}</div></main></div>`;
@@ -300,10 +300,114 @@ async function go(page) {
   try { if (typeof stopSpeaking === 'function') stopSpeaking(); } catch {}
   if (!session) return login('login');
   try { await refreshMe(); } catch (e) { return shell(page, `<div class="card"><p>${esc(e.message)}</p><button class="btn primary" onclick="go('${page}')">Reintentar</button></div>`); }
-  const pages = { Inicio: inicio, 'Mi agente': agentPage, 'Mis cursos': coursesPage, Automatizaciones: automationsPage, Aprobaciones: approvalsPage, Historial: historyPage, Conexiones: connectionsPage, Conocimiento: knowledgePage, Cuenta: accountPage };
+  const pages = { Inicio: inicio, 'Mi agente': agentPage, 'Mis cursos': coursesPage, Automatizaciones: automationsPage, Prospectos: leadsPage, Aprobaciones: approvalsPage, Historial: historyPage, Conexiones: connectionsPage, Conocimiento: knowledgePage, Cuenta: accountPage };
   (pages[page] || inicio)();
 }
 function loading(page, text = 'Cargando…') { shell(page, `<div class="card"><p class="muted"><span class="spin"></span> ${esc(text)}</p></div>`); }
+
+// ---------- MVP: bandeja multicanal de prospectos ----------
+const LEAD_STATUS_LABELS = { nuevo: 'Nuevo', pendiente: 'Pendiente', contactado: 'Contactado', diagnostico: 'Diagnóstico', propuesta: 'Propuesta', cliente: 'Cliente', descartado: 'Descartado' };
+const LEAD_CHANNEL_LABELS = { web: 'Web/formulario', email: 'Email', instagram: 'Instagram', tiktok: 'TikTok', linkedin: 'LinkedIn', youtube: 'YouTube', telefono: 'Teléfono', referido: 'Referido', campana: 'Campaña', otro: 'Otro' };
+async function leadsPage() {
+  loading('Prospectos', 'Cargando bandeja de prospectos…');
+  try {
+    const { leads } = await api('leads');
+    renderLeads(leads || []);
+  } catch (e) {
+    shell('Prospectos', `<div class="card"><h3>No se pudo abrir la bandeja</h3><p>${esc(e.message)}</p><p class="muted">Esta sección es interna para administradores de CURO. Si es la primera instalación, hay que ejecutar la migración SQL incluida en el proyecto.</p><button class="btn primary" onclick="go('Prospectos')">Reintentar</button></div>`);
+  }
+}
+function renderLeads(leads) {
+  shell('Prospectos', `
+    <div class="row"><div><h2 style="margin:0">Entrada multicanal</h2><p class="muted">Registra consultas de web, email, redes, campañas, teléfono y referidos en una sola bandeja.</p></div><span class="badge">${leads.length} prospectos</span></div>
+    <div class="card">
+      <h3>Registrar consulta</h3>
+      <form id="leadForm" onsubmit="event.preventDefault();submitLead();">
+        <div class="formGrid">
+          <label>Persona de contacto<input id="leadName" maxlength="120" placeholder="Nombre y apellido"></label>
+          <label>Empresa / organización<input id="leadOrg" maxlength="180" placeholder="Nombre de la empresa"></label>
+          <label>Email<input id="leadEmail" type="email" maxlength="254" placeholder="persona@empresa.com"></label>
+          <label>Teléfono<input id="leadPhone" maxlength="40" placeholder="+34…"></label>
+          <label>Canal de entrada<select id="leadChannel">${Object.entries(LEAD_CHANNEL_LABELS).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+          <label>Rubro / sector<input id="leadSector" maxlength="120" placeholder="Inmobiliaria, educación, clínica…"></label>
+          <label>Proceso afectado<input id="leadProcess" maxlength="160" placeholder="Ventas, atención, documentos…"></label>
+          <label>Campaña / referencia<input id="leadCampaign" maxlength="160" placeholder="Nombre de campaña (opcional)"></label>
+        </div>
+        <label>Consulta o problema<textarea id="leadProblem" rows="3" maxlength="3000" placeholder="¿Qué necesita resolver?"></textarea></label>
+        <label>Resultado deseado<textarea id="leadGoal" rows="2" maxlength="1500" placeholder="¿Qué le gustaría conseguir?"></textarea></label>
+        <label>Notas internas<textarea id="leadNotes" rows="2" maxlength="3000" placeholder="Contexto y próximo paso"></textarea></label>
+        <label class="checkLine"><input id="leadConsent" type="checkbox"> La persona ha autorizado el contacto por este medio cuando corresponde.</label>
+        <div class="actions"><button class="btn primary" type="submit">Guardar prospecto</button></div>
+      </form>
+    </div>
+    <div class="row"><h3>Seguimiento</h3><button class="btn" onclick="go('Prospectos')">Actualizar</button></div>
+    <div class="list">${leads.length ? leads.map(lead => `
+      <article class="card">
+        <div class="row"><div><h3>${esc(lead.organization_name || lead.contact_name || lead.email || 'Consulta sin identificar')}</h3><p class="muted">${esc(lead.contact_name || '')}${lead.email ? ' · ' + esc(lead.email) : ''}${lead.phone ? ' · ' + esc(lead.phone) : ''}</p></div><select aria-label="Estado del prospecto" onchange="updateLeadStatus('${esc(lead.id)}',this.value)">${Object.entries(LEAD_STATUS_LABELS).map(([k,v]) => `<option value="${k}" ${lead.status===k?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="chips"><span class="chip">${esc(LEAD_CHANNEL_LABELS[lead.channel] || 'Otro canal')}</span>${lead.sector ? `<span class="chip">${esc(lead.sector)}</span>` : ''}${lead.process_affected ? `<span class="chip">${esc(lead.process_affected)}</span>` : ''}</div>
+        ${lead.problem ? `<p>${esc(lead.problem)}</p>` : ''}${lead.desired_outcome ? `<p class="muted">Objetivo: ${esc(lead.desired_outcome)}</p>` : ''}
+        ${lead.notes ? `<p class="muted">Notas: ${esc(lead.notes)}</p>` : ''}
+        ${lead.ai_classification ? renderLeadClassification(lead) : ''}
+        <div class="actions"><button class="btn" onclick="classifyLead('${esc(lead.id)}')">${lead.ai_classification ? 'Volver a analizar' : 'Analizar consulta con IA'}</button>${lead.ai_classification && lead.ai_classification_status !== 'revisada' ? `<button class="btn" onclick="reviewLeadClassification('${esc(lead.id)}')">Marcar revisada</button>` : ''}</div>
+        <p class="meta">Creado: ${fmtDate(lead.created_at)} · Última actualización: ${fmtDate(lead.updated_at)}</p>
+      </article>`).join('') : '<div class="card empty"><h3>Aún no hay prospectos</h3><p class="muted">Registra la primera consulta arriba. En la siguiente fase conectaremos formularios y canales compatibles.</p></div>'}</div>`);
+}
+function renderLeadClassification(lead) {
+  const c = lead.ai_classification || {};
+  const confidence = Math.round(Math.max(0, Math.min(1, Number(c.confidence) || 0)) * 100);
+  const list = values => Array.isArray(values) && values.length ? '<ul>' + values.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '<p class="muted">Sin datos.</p>';
+  return '<section class="leadAiPanel">' +
+    '<div class="row"><h4 style="margin:0">Sugerencia de IA</h4><span class="badge ' + (confidence < 60 || c.needs_clarification ? 'warn' : 'ok') + '">Confianza: ' + confidence + '%</span></div>' +
+    '<p><b>Rubro sugerido:</b> ' + esc(c.sector_suggestion || 'Desconocido') + ' · <b>Proceso:</b> ' + esc(c.process_suggestion || 'Desconocido') + '</p>' +
+    (c.problem_summary ? '<p>' + esc(c.problem_summary) + '</p>' : '') +
+    (c.needs_clarification && c.follow_up_question ? '<p><b>Pregunta de aclaración:</b> ' + esc(c.follow_up_question) + '</p>' : '') +
+    (c.missing_information?.length ? '<details><summary>Información que falta</summary>' + list(c.missing_information) + '</details>' : '') +
+    (c.inferred_facts?.length ? '<details><summary>Hipótesis de IA (no confirmadas)</summary>' + list(c.inferred_facts) + '</details>' : '') +
+    (c.risk_flags?.length ? '<p class="leadRisk"><b>Revisión necesaria:</b> ' + esc(c.risk_flags.join(' · ')) + '</p>' : '') +
+    '<p class="meta">Estado: ' + (lead.ai_classification_status === 'revisada' ? 'Revisada por CURO' : 'Pendiente de revisión humana') + '</p></section>';
+}
+async function classifyLead(id) {
+  const btn = [...document.querySelectorAll('button')].find(b => b.getAttribute('onclick') === "classifyLead('" + id + "')");
+  if (btn) { btn.disabled = true; btn.textContent = 'Analizando…'; }
+  try {
+    await api('classify-lead?id=' + encodeURIComponent(id), { method: 'POST', body: {} });
+    toast('Clasificación preparada; revisa la sugerencia antes de confirmarla.');
+    await leadsPage();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Analizar consulta con IA'; }
+    info('No se pudo analizar', e.message);
+  }
+}
+async function reviewLeadClassification(id) {
+  try {
+    await api('leads?id=' + encodeURIComponent(id), { method: 'PATCH', body: { review_ai: true } });
+    toast('Clasificación marcada como revisada.');
+    await leadsPage();
+  } catch (e) { info('No se pudo guardar la revisión', e.message); }
+}
+
+async function submitLead() {
+  const button = document.querySelector('#leadForm button[type="submit"]');
+  if (button) { button.disabled = true; button.textContent = 'Guardando…'; }
+  const value = id => document.getElementById(id)?.value || '';
+  try {
+    await api('leads', { method: 'POST', body: {
+      contact_name: value('leadName'), organization_name: value('leadOrg'), email: value('leadEmail'),
+      phone: value('leadPhone'), channel: value('leadChannel'), sector: value('leadSector'),
+      process_affected: value('leadProcess'), campaign: value('leadCampaign'), problem: value('leadProblem'),
+      desired_outcome: value('leadGoal'), notes: value('leadNotes'), consent_contact: !!document.getElementById('leadConsent')?.checked
+    }});
+    toast('Prospecto guardado');
+    await leadsPage();
+  } catch (e) {
+    if (button) { button.disabled = false; button.textContent = 'Guardar prospecto'; }
+    info('No se pudo guardar', e.message);
+  }
+}
+async function updateLeadStatus(id, status) {
+  try { await api('leads?id=' + encodeURIComponent(id), { method: 'PATCH', body: { status } }); toast('Estado actualizado'); await leadsPage(); }
+  catch (e) { info('No se pudo actualizar', e.message); await leadsPage(); }
+}
 
 // ---------- Mis cursos: visor visual (texto, video, PDF/flyers, enlaces) ----------
 function curoEmbedUrl(u) {
