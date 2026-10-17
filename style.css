@@ -358,3 +358,40 @@ video.wBig{height:auto}
 .leadAiPanel summary{cursor:pointer;font-weight:650}
 .leadAiPanel ul{margin:8px 0;padding-left:22px}
 .leadRisk{padding:10px;border-radius:8px;background:#fff4df;color:#744b00}
+
+
+/* CURO GROUP · identidad visual unificada para el MVP */
+:root{
+  --curo-navy:#101a3a;
+  --curo-blue:#145cf0;
+  --curo-cyan:#08bfd0;
+  --curo-teal:#00bfae;
+  --curo-violet:#6426e8;
+  --curo-ink:#17213d;
+  --curo-muted:#65718a;
+  --curo-border:#e2e8f2;
+  --curo-surface:#ffffff;
+  --curo-soft:#f5f8ff;
+  --curo-gradient:linear-gradient(112deg,#00c8c0 0%,#087fe8 48%,#6729e8 100%);
+}
+body{background:#f7f9fd;color:var(--curo-ink)}
+a{color:#145cf0}
+button,.btn,input[type=button],input[type=submit]{transition:transform .16s ease,box-shadow .16s ease,filter .16s ease}
+button:not(:disabled),.btn:not(:disabled),input[type=button],input[type=submit]{cursor:pointer}
+button:not(:disabled):hover,.btn:not(:disabled):hover,input[type=button]:hover,input[type=submit]:hover{filter:saturate(1.08);transform:translateY(-1px)}
+button:focus-visible,.btn:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #67dcd6;outline-offset:2px}
+.btn,.primary,.btn.primary,.button-primary,.cta-primary{background:var(--curo-gradient);color:#fff;border:0;box-shadow:0 7px 18px #145cf020}
+.btn:hover,.primary:hover,.button-primary:hover,.cta-primary:hover{box-shadow:0 10px 24px #145cf033}
+.ghost,.secondary,.btn-secondary{background:#fff;color:var(--curo-navy);border:1px solid #dce4f2}
+input:not([type=checkbox]):not([type=radio]),select,textarea{border:1px solid #d9e2f0;border-radius:12px}
+input:not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{border-color:#19bfc7;box-shadow:0 0 0 3px #00bfae1c;outline:0}
+.card,.panel,.stat,.leadCard,.leadAiPanel,.modal,.tile{border-color:var(--curo-border)}
+.badge,.pill{border-radius:999px}
+.grad{background:var(--curo-gradient);-webkit-background-clip:text;background-clip:text;color:transparent}
+.top,.header,.navbar{background:rgba(255,255,255,.96);border-color:var(--curo-border)}
+.brand{color:var(--curo-navy);letter-spacing:-.035em}
+.sidebar,.sideNav,.app-sidebar{background:#fff;border-right:1px solid var(--curo-border)}
+.sidebar a.active,.sideNav a.active,.app-sidebar a.active,.nav-item.active{background:linear-gradient(100deg,#e5fbfa,#eef2ff);color:#1742a0;border-radius:11px}
+.leadAiPanel{background:linear-gradient(145deg,#fbfdff,#f5f8ff);border-color:#dce6f7}
+.leadRisk{background:#fff5df;color:#80520a}
+@media(max-width:680px){.btn,.primary,.button-primary,.cta-primary{max-width:100%}}
