@@ -69,6 +69,7 @@ module.exports = handler(async (req, res) => {
   if (req.method === 'PATCH') {
     const body = await readBody(req);
     const patch = { ...normalize(body, true), updated_by: user.id, updated_at: new Date().toISOString() };
+    if (body.review_ai === true) patch.ai_classification_status = 'revisada';
     const [row] = await db.update('automate_leads', `id=eq.${enc(id)}`, patch);
     if (!row) throw new HttpError(404, 'No se encontró el prospecto.');
     return json(res, 200, { lead: row });
