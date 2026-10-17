@@ -349,3 +349,12 @@ video.wBig{height:auto}
 #leadForm .checkLine{display:flex;flex-direction:row;align-items:center;gap:9px;font-weight:500}
 #leadForm .checkLine input{width:16px;height:16px}
 @media(max-width:650px){.formGrid{grid-template-columns:1fr}}
+
+
+/* MVP · revisión de clasificación asistida */
+.leadAiPanel{margin:14px 0;padding:14px;border:1px solid #dce4f4;border-radius:12px;background:#f8faff}
+.leadAiPanel h4{font-size:15px}
+.leadAiPanel details{margin:8px 0;color:#34405a}
+.leadAiPanel summary{cursor:pointer;font-weight:650}
+.leadAiPanel ul{margin:8px 0;padding-left:22px}
+.leadRisk{padding:10px;border-radius:8px;background:#fff4df;color:#744b00}
