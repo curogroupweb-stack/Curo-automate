@@ -338,3 +338,14 @@ video.wBig{height:auto}
 .lessonImg{max-width:100%;border-radius:14px;margin:14px 0;display:block}
 .lessonBody{white-space:normal;line-height:1.6;color:#334059;margin:10px 0}
 @media(max-width:850px){.courseLayout{grid-template-columns:1fr}.courseSide{position:static}}
+
+
+/* MVP · formulario de prospectos */
+.formGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:14px 0}
+.formGrid label,#leadForm>label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:650;color:#34405a;margin:10px 0}
+#leadForm input:not([type=checkbox]),#leadForm select,#leadForm textarea{width:100%;box-sizing:border-box;border:1px solid #d8deeb;border-radius:10px;padding:11px 12px;background:#fff;color:#15213b;font:inherit;font-weight:400}
+#leadForm textarea{resize:vertical;line-height:1.5}
+#leadForm input:focus,#leadForm select:focus,#leadForm textarea:focus{outline:2px solid #8ca7ff;outline-offset:1px}
+#leadForm .checkLine{display:flex;flex-direction:row;align-items:center;gap:9px;font-weight:500}
+#leadForm .checkLine input{width:16px;height:16px}
+@media(max-width:650px){.formGrid{grid-template-columns:1fr}}
