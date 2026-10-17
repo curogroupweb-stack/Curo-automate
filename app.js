@@ -347,9 +347,45 @@ function renderLeads(leads) {
         <div class="chips"><span class="chip">${esc(LEAD_CHANNEL_LABELS[lead.channel] || 'Otro canal')}</span>${lead.sector ? `<span class="chip">${esc(lead.sector)}</span>` : ''}${lead.process_affected ? `<span class="chip">${esc(lead.process_affected)}</span>` : ''}</div>
         ${lead.problem ? `<p>${esc(lead.problem)}</p>` : ''}${lead.desired_outcome ? `<p class="muted">Objetivo: ${esc(lead.desired_outcome)}</p>` : ''}
         ${lead.notes ? `<p class="muted">Notas: ${esc(lead.notes)}</p>` : ''}
+        ${lead.ai_classification ? renderLeadClassification(lead) : ''}
+        <div class="actions"><button class="btn" onclick="classifyLead('${esc(lead.id)}')">${lead.ai_classification ? 'Volver a analizar' : 'Analizar consulta con IA'}</button>${lead.ai_classification && lead.ai_classification_status !== 'revisada' ? `<button class="btn" onclick="reviewLeadClassification('${esc(lead.id)}')">Marcar revisada</button>` : ''}</div>
         <p class="meta">Creado: ${fmtDate(lead.created_at)} · Última actualización: ${fmtDate(lead.updated_at)}</p>
       </article>`).join('') : '<div class="card empty"><h3>Aún no hay prospectos</h3><p class="muted">Registra la primera consulta arriba. En la siguiente fase conectaremos formularios y canales compatibles.</p></div>'}</div>`);
 }
+function renderLeadClassification(lead) {
+  const c = lead.ai_classification || {};
+  const confidence = Math.round(Math.max(0, Math.min(1, Number(c.confidence) || 0)) * 100);
+  const list = values => Array.isArray(values) && values.length ? '<ul>' + values.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '<p class="muted">Sin datos.</p>';
+  return '<section class="leadAiPanel">' +
+    '<div class="row"><h4 style="margin:0">Sugerencia de IA</h4><span class="badge ' + (confidence < 60 || c.needs_clarification ? 'warn' : 'ok') + '">Confianza: ' + confidence + '%</span></div>' +
+    '<p><b>Rubro sugerido:</b> ' + esc(c.sector_suggestion || 'Desconocido') + ' · <b>Proceso:</b> ' + esc(c.process_suggestion || 'Desconocido') + '</p>' +
+    (c.problem_summary ? '<p>' + esc(c.problem_summary) + '</p>' : '') +
+    (c.needs_clarification && c.follow_up_question ? '<p><b>Pregunta de aclaración:</b> ' + esc(c.follow_up_question) + '</p>' : '') +
+    (c.missing_information?.length ? '<details><summary>Información que falta</summary>' + list(c.missing_information) + '</details>' : '') +
+    (c.inferred_facts?.length ? '<details><summary>Hipótesis de IA (no confirmadas)</summary>' + list(c.inferred_facts) + '</details>' : '') +
+    (c.risk_flags?.length ? '<p class="leadRisk"><b>Revisión necesaria:</b> ' + esc(c.risk_flags.join(' · ')) + '</p>' : '') +
+    '<p class="meta">Estado: ' + (lead.ai_classification_status === 'revisada' ? 'Revisada por CURO' : 'Pendiente de revisión humana') + '</p></section>';
+}
+async function classifyLead(id) {
+  const btn = [...document.querySelectorAll('button')].find(b => b.getAttribute('onclick') === "classifyLead('" + id + "')");
+  if (btn) { btn.disabled = true; btn.textContent = 'Analizando…'; }
+  try {
+    await api('classify-lead?id=' + encodeURIComponent(id), { method: 'POST', body: {} });
+    toast('Clasificación preparada; revisa la sugerencia antes de confirmarla.');
+    await leadsPage();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Analizar consulta con IA'; }
+    info('No se pudo analizar', e.message);
+  }
+}
+async function reviewLeadClassification(id) {
+  try {
+    await api('leads?id=' + encodeURIComponent(id), { method: 'PATCH', body: { review_ai: true } });
+    toast('Clasificación marcada como revisada.');
+    await leadsPage();
+  } catch (e) { info('No se pudo guardar la revisión', e.message); }
+}
+
 async function submitLead() {
   const button = document.querySelector('#leadForm button[type="submit"]');
   if (button) { button.disabled = true; button.textContent = 'Guardando…'; }
