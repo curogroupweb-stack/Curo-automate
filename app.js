@@ -333,9 +333,9 @@ function renderLeads(leads) {
           <label>Proceso afectado<input id="leadProcess" maxlength="160" placeholder="Ventas, atención, documentos…"></label>
           <label>Campaña / referencia<input id="leadCampaign" maxlength="160" placeholder="Nombre de campaña (opcional)"></label>
         </div>
-        <label>Consulta o problema<textarea id="leadProblem" rows="3" maxlength="3000" placeholder="¿Qué necesita resolver?"></textarea></label>
-        <label>Resultado deseado<textarea id="leadGoal" rows="2" maxlength="1500" placeholder="¿Qué le gustaría conseguir?"></textarea></label>
-        <label>Notas internas<textarea id="leadNotes" rows="2" maxlength="3000" placeholder="Contexto y próximo paso"></textarea></label>
+        <label>Consulta o problema<div class="dictationWrap"><textarea id="leadProblem" rows="3" maxlength="3000" placeholder="¿Qué necesita resolver?"></textarea><button class="dictateBtn" type="button" onclick="toggleDictation('leadProblem',this)" aria-label="Dictar">🎙 <span>Dictar</span></button></div></label>
+        <label>Resultado deseado<div class="dictationWrap"><textarea id="leadGoal" rows="2" maxlength="1500" placeholder="¿Qué le gustaría conseguir?"></textarea><button class="dictateBtn" type="button" onclick="toggleDictation('leadGoal',this)" aria-label="Dictar">🎙 <span>Dictar</span></button></div></label>
+        <label>Notas internas<div class="dictationWrap"><textarea id="leadNotes" rows="2" maxlength="3000" placeholder="Contexto y próximo paso"></textarea><button class="dictateBtn" type="button" onclick="toggleDictation('leadNotes',this)" aria-label="Dictar">🎙 <span>Dictar</span></button></div></label>
         <label class="checkLine"><input id="leadConsent" type="checkbox"> La persona ha autorizado el contacto por este medio cuando corresponde.</label>
         <div class="actions"><button class="btn primary" type="submit">Guardar prospecto</button></div>
       </form>
