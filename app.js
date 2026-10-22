@@ -370,7 +370,7 @@ async function classifyLead(id) {
   const btn = [...document.querySelectorAll('button')].find(b => b.getAttribute('onclick') === "classifyLead('" + id + "')");
   if (btn) { btn.disabled = true; btn.textContent = 'Analizando…'; }
   try {
-    await api('classify-lead?id=' + encodeURIComponent(id), { method: 'POST', body: {} });
+    await api('leads?op=classify&id=' + encodeURIComponent(id), { method: 'POST', body: {} });
     toast('Clasificación preparada; revisa la sugerencia antes de confirmarla.');
     await leadsPage();
   } catch (e) {
