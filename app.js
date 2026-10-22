@@ -901,7 +901,7 @@ async function disconnectGoogle(btn) {
 // ---------- Conocimiento ----------
 async function knowledgePage() {
   loading('Conocimiento');
-  const { items } = await api('knowledge');
+  const { items } = await api('feedback?op=knowledge');
   shell('Conocimiento', `<p class="muted">Lo que CURO debe saber de tu negocio: servicios, precios, horarios, tono, normas. Lo usará al redactar y nunca inventará lo que no esté aquí.</p>
     <div class="card"><h3>Añadir información</h3><label class="field">Título<input id="kTitle" placeholder="Ej.: Servicios y precios"></label><label class="field">Contenido<textarea id="kBody" rows="5" placeholder="Ej.: Consultoría IA para colegios: diagnóstico 300 €, formación 90 €/hora…"></textarea></label><div class="actions"><button class="btn primary" onclick="addKnowledge(this)">Guardar</button></div></div>
     <div class="list">${items.map(k => `<div class="card"><div class="row"><h3>${esc(k.title)}</h3><button class="btn ghost danger smallBtn" onclick="delKnowledge('${k.id}',this)">Eliminar</button></div><p class="preLine">${esc(k.body)}</p></div>`).join('') || '<p class="muted">Aún no has añadido información.</p>'}</div>`);
@@ -910,12 +910,12 @@ async function addKnowledge(btn) {
   const title = kTitle.value.trim(), body = kBody.value.trim();
   if (!title || !body) return toast('Escribe un título y un contenido.', 'warn');
   const done = busy(btn, 'Guardando…');
-  try { await api('knowledge', { method: 'POST', body: { title, body } }); toast('Guardado.'); knowledgePage(); }
+  try { await api('feedback?op=knowledge', { method: 'POST', body: { title, body } }); toast('Guardado.'); knowledgePage(); }
   catch (e) { done(); info('No se pudo guardar', e.message); }
 }
 async function delKnowledge(id, btn) {
   const done = busy(btn, '…');
-  try { await api('knowledge?id=' + id, { method: 'DELETE' }); knowledgePage(); } catch (e) { done(); info('No se pudo eliminar', e.message); }
+  try { await api('feedback?op=knowledge&id=' + id, { method: 'DELETE' }); knowledgePage(); } catch (e) { done(); info('No se pudo eliminar', e.message); }
 }
 
 // ---------- Los 9 agentes AIA (presentación pública) ----------
