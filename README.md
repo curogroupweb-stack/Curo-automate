@@ -30,3 +30,15 @@ Añadir `ANTHROPIC_API_KEY` y cambiar `LLM_PROVIDER=anthropic`. Sin cambios de c
 - Plantilla de marca (`api/_lib/email_template.js`) con cabecera `brand/email-header.jpg`.
 - Remitente: si existe `BREVO_API_KEY`, se envía por Brevo desde `hola@curogroup.net` (`BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`); si Brevo falla o no está configurado, por Gmail.
 - "Responder a": `hola@curogroup.net` (`CURO_REPLY_TO`). Las respuestas a un correo recibido van siempre por Gmail para mantener el hilo.
+
+
+## MVP · Bandeja de prospectos
+La rama `feat/mvp-lead-intake` incorpora una primera bandeja interna para registrar consultas recibidas por web, email, redes, teléfono, campañas y referidos, con sector, proceso afectado, problema, objetivo, consentimiento y estado comercial. El acceso está restringido a administradores.
+
+### Activación de la bandeja
+1. En el SQL Editor del proyecto Supabase **Curo group Plataforma**, ejecutar una sola vez el archivo `supabase/migrations/202610170001_automate_leads.sql`.
+2. Desplegar la rama en un entorno Preview de Vercel y entrar con una cuenta cuyo `profiles.role` sea `admin`.
+3. Abrir **Prospectos** y crear un registro de prueba no sensible.
+4. Confirmar que se guarda, que aparece en la lista y que el cambio de estado persiste.
+
+Esta primera entrega es el registro y seguimiento manual centralizado. No afirma tener aún conectados los webhooks de Instagram/TikTok/LinkedIn/YouTube ni la clasificación por IA; eso requiere validar permisos, APIs y consentimiento de cada canal antes de habilitar automatismos.

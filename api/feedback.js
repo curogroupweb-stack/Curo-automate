@@ -1,11 +1,33 @@
 // POST { id, tester:{name,email}, device, answers, general, progress, finished }
 // Guarda (o actualiza) las respuestas de la guía de prueba piloto de CURO (/piloto). No requiere cuenta.
-const { handler, json, readBody, HttpError } = require('./_lib/http');
-const { db } = require('./_lib/db');
+// También expone el conocimiento del negocio del usuario (antes api/knowledge.js) bajo ?op=knowledge,
+// para no sumar una función serverless más al límite del plan de Vercel.
+const { handler, json, readBody, query, requireUser, HttpError } = require('./_lib/http');
+const { db, enc } = require('./_lib/db');
 
 const clip = (v, n) => String(v ?? '').slice(0, n);
 
+// ---------- Conocimiento del negocio (antes api/knowledge.js): GET · POST {title, body} · DELETE ?id= ----------
+async function knowledgeOp(req, res) {
+  const user = await requireUser(req);
+  if (req.method === 'GET') {
+    return json(res, 200, { items: await db.select('automate_knowledge', `user_id=eq.${enc(user.id)}&select=*&order=created_at.desc`) });
+  }
+  if (req.method === 'POST') {
+    const { title, body } = await readBody(req);
+    if (!String(title || '').trim() || !String(body || '').trim()) throw new HttpError(400, 'Escribe un título y un contenido.');
+    const row = await db.insert('automate_knowledge', { user_id: user.id, title: String(title).trim().slice(0, 120), body: String(body).trim().slice(0, 4000) });
+    return json(res, 201, { item: row });
+  }
+  if (req.method === 'DELETE') {
+    await db.remove('automate_knowledge', `id=eq.${enc(query(req).id)}&user_id=eq.${enc(user.id)}`);
+    return json(res, 200, { deleted: true });
+  }
+  throw new HttpError(405, 'Método no permitido');
+}
+
 module.exports = handler(async (req, res) => {
+  if (query(req).op === 'knowledge') return knowledgeOp(req, res);
   if (req.method !== 'POST') throw new HttpError(405, 'Método no permitido');
   const b = await readBody(req);
   const id = clip(b.id, 64);
