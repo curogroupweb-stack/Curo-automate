@@ -1241,8 +1241,8 @@ const agentRest = k => agentPose(k, 'ups');
 function agentHeroPose(pose, holdMs) {
   const face = document.querySelector('#agFaceWrap .agFace');
   if (face) {
-    clearTimeout(agentHeroTimer); face.dataset.pose = pose;
-    if (holdMs) agentHeroTimer = setTimeout(() => { if (face.isConnected) face.dataset.pose = 'ups'; }, holdMs);
+    clearTimeout(agentHeroTimer); face.dataset.pose = pose; agentChatFaces(pose);
+    if (holdMs) agentHeroTimer = setTimeout(() => { if (face.isConnected) { face.dataset.pose = 'ups'; agentChatFaces('ups'); } }, holdMs);
     return;
   }
   const img = document.getElementById('agHeroPic'); if (!img) return;
@@ -1253,7 +1253,15 @@ function agentHeroPose(pose, holdMs) {
   agentHeroVideo(key, pose);
   if (holdMs) agentHeroTimer = setTimeout(() => { if (img.isConnected) { img.src = agentRest(key); agentHeroVideo(key, null); } }, holdMs);
 }
+// Los agentes de la conversación hacen lo mismo que el de arriba (duermen, celebran, dudan o saludan a la vez).
+function agentChatFaces(pose) {
+  document.querySelectorAll('#agMsgs .agBotRow .agFace').forEach(f => { f.dataset.pose = pose || 'ups'; });
+  const key = agentState?.settings?.profile; if (!key) return;
+  const v = agentVideo(key, pose || 'ups'), src = v ? `${v}.webp?v=3` + (pose === 'duerme' ? '&t=' + Date.now() : '') : agentPose(key, pose || 'ups');
+  document.querySelectorAll('#agMsgs .agBotRow img.agAvatar').forEach(im => { if (im.getAttribute('src') !== src) im.src = src; });
+}
 function agentHeroVideo(key, pose) {
+  agentChatFaces(pose);
   const img = document.getElementById('agHeroPic'), vid = document.getElementById('agHeroVid'); if (!img || !vid) return;
   const v = agentVideo(key, pose || 'ups'); // sin dibujos fijos: en reposo, pensando con movimiento
   if (!v) { vid.hidden = true; img.hidden = false; return; }
