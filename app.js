@@ -1227,7 +1227,7 @@ function agentItemsHtml() {
   if (agentTab === 'agenda') active.sort((a, b) => new Date(a.due_at || 8.64e15) - new Date(b.due_at || 8.64e15));
   const row = i => `<li class="agItem ${i.status !== 'activo' ? 'done' : ''}">
     ${agentTab !== 'memoria' ? `<button class="agCheck" title="${i.status === 'activo' ? 'Marcar como hecho' : 'Volver a pendiente'}" onclick="agentItem('${i.status === 'activo' ? 'done' : 'undo'}','${i.id}')">${i.status === 'activo' ? '' : '✓'}</button>` : ''}
-    <div><b>${esc(String(i.title || '').replace(/^📚\s*Desde Mi Biblioteca:\s*/i, '📚 '))}</b>${i.detail ? agentDetailHtml(i.detail) : ''}${i.due_at ? `<small class="agDue">📅 ${fmtDate(i.due_at)}</small>` : ''}</div>
+    <div><b>${esc(String(i.title || '').replace(/^📚\s*Desde Mi Biblioteca:\s*/i, '📚 '))}</b>${i.detail ? agentDetailHtml(i.detail) : ''}${i.kind === 'proyecto' && i.status === 'activo' ? `<button type="button" class="agWork" onclick="agentWorkOn('${i.id}')">✨ Que ${esc(agentByKey(agentState?.settings?.profile).name)} lo prepare</button>` : ''}${i.due_at ? `<small class="agDue">📅 ${fmtDate(i.due_at)}</small>` : ''}</div>
     <button class="iconBtn" title="Borrar" aria-label="Borrar" onclick="agentItem('delete','${i.id}')">×</button></li>`;
   const empty = { pendiente: 'Sin pendientes. Cuéntale a tu agente lo que tienes que hacer.', proyecto: 'Aún no hay proyectos. Háblale de lo que estás preparando.', agenda: 'Nada en la agenda. Dile tus citas y entregas con fecha.', memoria: 'Todavía no recuerda nada. Cuéntale sobre ti y tu trabajo.' }[agentTab];
   return `<ul class="agList">${active.map(row).join('') || `<li class="muted agEmpty">${empty}</li>`}</ul>${done.length ? `<details class="agDone"><summary>Hechos (${done.length})</summary><ul class="agList">${done.map(row).join('')}</ul></details>` : ''}`;
@@ -1345,6 +1345,16 @@ function agentReturnGreeting(msgs) {
   return agentMsgHtml({ role: 'assistant', content: txt });
 }
 function renderAgentPanel() { const keep = document.getElementById('agInput')?.value || ''; renderAgent(); const i = document.getElementById('agInput'); if (i) i.value = keep; }
+// Pide al agente que prepare el producto final de un proyecto (planificación, contenido, agenda…) con sus recursos.
+function agentWorkOn(id) {
+  const it = (agentState.items || []).find(x => x.id === id); const input = document.getElementById('agInput'); if (!it || !input) return;
+  const fmt = (String(it.detail || '').match(/Producto a preparar:\s*([^\n]+)/) || [])[1];
+  input.value = `Trabaja en mi proyecto «${String(it.title).replace(/^📚\s*/, '')}» (id ${String(it.id).slice(0, 8)}). ` +
+    (fmt ? `Prepárame el producto final: ${fmt.trim()}. ` : 'Prepárame el producto final que te pedí (si no está claro qué formato quiero, pregúntamelo con opciones: planificación, plan semanal, contenido para redes, guía de estudio…). ') +
+    'Usa los recursos del proyecto (ábrelos si hace falta), entrégamelo redactado y listo para usar, y cita los recursos al final.';
+  agentSend();
+  document.getElementById('agInput')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
 function agentStarter(i) {
   const t = (AGENT_STARTERS[agentState?.settings?.profile] || AGENT_STARTERS.descubridor)[i];
   const input = document.getElementById('agInput'); if (!t || !input) return;

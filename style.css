@@ -357,3 +357,5 @@ img.agVid.profilePic{width:100%;max-width:120px;height:auto}
 .agRes li{overflow-wrap:anywhere;line-height:1.35}
 .agRes a{color:#1f2a44;text-decoration:none;font-weight:600}.agRes a:hover{text-decoration:underline}
 .agRes li span{color:#98a2b3;font-size:12px;margin-left:4px}
+.agItem .agWork{margin-top:8px;border:0;border-radius:10px;padding:7px 12px;font:600 13px inherit;color:#fff;background:linear-gradient(90deg,#16c6c8,#4f46e5);cursor:pointer}
+.agItem .agWork:hover{filter:brightness(1.05)}

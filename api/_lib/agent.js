@@ -240,7 +240,8 @@ async function chatTurn(user, message, { isAdmin } = {}) {
   const used = { web_search: 0, fetch_url: 0 };
   let res;
   for (let turn = 0; turn < MAX_AGENT_TOOL_TURNS; turn++) {
-    res = await chat({ system: systemPrompt(st, user.name, allowed), messages, tools: defs, maxTokens: 1500, temperature: 0.4 });
+    // Preparar el producto final de un proyecto (planificación, contenido…) necesita respuestas más largas.
+    res = await chat({ system: systemPrompt(st, user.name, allowed), messages, tools: defs, maxTokens: /^Trabaja en mi proyecto/i.test(text) ? 3500 : 1500, temperature: 0.4 });
     if (!res.tool_calls?.length) break;
     messages.push({ role: 'assistant', content: res.text || '', tool_calls: res.tool_calls });
     for (const call of res.tool_calls) {
