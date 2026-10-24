@@ -1207,13 +1207,27 @@ async function agentDeleteMsg(id, btn) {
     if (r.replyId != null) document.querySelector(`.agBotRow[data-id="${r.replyId}"]`)?.remove();
   } catch (err) { btn.disabled = false; info('No se pudo borrar', err.message); }
 }
+// Detalle de un pendiente/proyecto: texto breve y, si trae recursos («- título — enlace»), una lista corta con el nombre de la web en lugar del enlace largo.
+function agentDetailHtml(d) {
+  const lines = String(d || '').split('\n').map(x => x.trim()).filter(Boolean);
+  const res = [], txt = [];
+  for (const l of lines) {
+    const m = l.match(/^-\s*(.+?)(?:\s+—\s+(https?:\/\/\S+))?$/);
+    if (m) res.push({ t: m[1], u: m[2] || '' });
+    else if (!/^Recursos de Mi Biblioteca/i.test(l)) txt.push(l);
+  }
+  const host = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
+  let h = txt.length ? `<small class="agDet">${esc(txt.join(' '))}</small>` : '';
+  if (res.length) h += `<details class="agRes"><summary>📚 ${res.length} recurso${res.length > 1 ? 's' : ''} de tu biblioteca</summary><ul>${res.map(r => `<li>${r.u ? `<a href="${esc(r.u)}" target="_blank" rel="noopener">${esc(r.t)}</a> <span>${esc(host(r.u))}</span>` : esc(r.t)}</li>`).join('')}</ul></details>`;
+  return h;
+}
 function agentItemsHtml() {
   const items = (agentState.items || []).filter(i => agentTab === 'agenda' ? (i.kind === 'agenda' || (i.due_at && i.kind !== 'memoria')) : i.kind === agentTab);
   const active = items.filter(i => i.status === 'activo'), done = items.filter(i => i.status !== 'activo').slice(0, 10);
   if (agentTab === 'agenda') active.sort((a, b) => new Date(a.due_at || 8.64e15) - new Date(b.due_at || 8.64e15));
   const row = i => `<li class="agItem ${i.status !== 'activo' ? 'done' : ''}">
     ${agentTab !== 'memoria' ? `<button class="agCheck" title="${i.status === 'activo' ? 'Marcar como hecho' : 'Volver a pendiente'}" onclick="agentItem('${i.status === 'activo' ? 'done' : 'undo'}','${i.id}')">${i.status === 'activo' ? '' : '✓'}</button>` : ''}
-    <div><b>${esc(i.title)}</b>${i.detail ? `<small>${esc(i.detail)}</small>` : ''}${i.due_at ? `<small class="agDue">📅 ${fmtDate(i.due_at)}</small>` : ''}</div>
+    <div><b>${esc(String(i.title || '').replace(/^📚\s*Desde Mi Biblioteca:\s*/i, '📚 '))}</b>${i.detail ? agentDetailHtml(i.detail) : ''}${i.due_at ? `<small class="agDue">📅 ${fmtDate(i.due_at)}</small>` : ''}</div>
     <button class="iconBtn" title="Borrar" aria-label="Borrar" onclick="agentItem('delete','${i.id}')">×</button></li>`;
   const empty = { pendiente: 'Sin pendientes. Cuéntale a tu agente lo que tienes que hacer.', proyecto: 'Aún no hay proyectos. Háblale de lo que estás preparando.', agenda: 'Nada en la agenda. Dile tus citas y entregas con fecha.', memoria: 'Todavía no recuerda nada. Cuéntale sobre ti y tu trabajo.' }[agentTab];
   return `<ul class="agList">${active.map(row).join('') || `<li class="muted agEmpty">${empty}</li>`}</ul>${done.length ? `<details class="agDone"><summary>Hechos (${done.length})</summary><ul class="agList">${done.map(row).join('')}</ul></details>` : ''}`;
