@@ -920,7 +920,8 @@ const agentVideo = (k, pose) => (AGENT_VIDEOS[k] || []).includes(pose) ? `img/ag
 // <video> si existe, si no <img>. cls/alt se aplican a ambos.
 function agentPic(k, pose, cls, alt, extra) {
   const v = agentVideo(k, pose), poster = (AGENT_POSES[k] || []).includes(pose) ? `img/agentes/${k}-${pose}.png?v=4` : agentImg(k);
-  if (v) return `<video class="${cls || ''} agVid" autoplay muted loop playsinline preload="auto" poster="${poster}" aria-label="${alt || ''}" ${extra || ''}><source src="${v}.mp4?v=2" type="video/mp4"></video>`;
+  // Animación con fondo transparente (WebP animado): se ve igual sobre cualquier fondo.
+  if (v) return `<img class="${cls || ''} agVid" src="${v}.webp?v=3" alt="${alt || ''}" ${extra || ''}>`;
   return `<img class="${cls || ''}" src="${poster}" alt="${alt || ''}" ${extra || ''}>`;
 }
 // ---------- Apariencia del agente: animalito, persona (retrato hecho con IA) o sencillo (logo AIA) ----------
@@ -1241,11 +1242,11 @@ function agentHeroPose(pose, holdMs) {
 function agentHeroVideo(key, pose) {
   const img = document.getElementById('agHeroPic'), vid = document.getElementById('agHeroVid'); if (!img || !vid) return;
   const v = agentVideo(key, pose || 'ups'); // sin dibujos fijos: en reposo, pensando con movimiento
-  if (!v) { vid.pause(); vid.hidden = true; img.hidden = false; return; }
-  vid.innerHTML = `<source src="${v}.mp4?v=2" type="video/mp4">`;
-  vid.loop = pose !== 'duerme'; // al dormirse lo hace una vez y se queda dormido
-  vid.poster = img.src; vid.load(); vid.hidden = false; img.hidden = true;
-  const p = vid.play(); if (p && p.catch) p.catch(() => { vid.hidden = true; img.hidden = false; });
+  if (!v) { vid.hidden = true; img.hidden = false; return; }
+  // Animación transparente (WebP). «duerme» se reproduce una vez y se queda dormido.
+  vid.hidden = true;
+  img.src = `${v}.webp?v=3` + (pose === 'duerme' ? '&t=' + Date.now() : '');
+  img.hidden = false;
 }
 function agentResetIdle(wake) {
   clearTimeout(agentIdleTimer);
