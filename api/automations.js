@@ -7,7 +7,7 @@ const { connectionsFor } = require('./_lib/executor');
 const { isAdmin } = require('./_lib/account');
 
 const MAX_PER_USER = Number(process.env.MAX_AUTOMATIONS_PER_USER || 20);
-const FREE_PER_USER = Number(process.env.FREE_AUTOMATIONS_PER_USER || 2); // plan gratuito; desde la tercera, de pago
+// Cupo por plan (Gratis 3, Plus 15, Pro 50 en total, aunque se borren): lo controla la base de datos (curo_automations_limit).
 
 function rowFromPlan(plan) {
   const t = plan.trigger || { type: 'manual' };
@@ -47,12 +47,18 @@ module.exports = handler(async (req, res) => {
     if (!instruction || !body.plan) throw new HttpError(400, 'Falta la descripción o el plan.');
     const count = (await db.select('automate_automations', `user_id=eq.${enc(user.id)}&select=id`)).length;
     const [connections, admin] = await Promise.all([connectionsFor(user.id), isAdmin(user.id)]);
-    if (!admin && count >= FREE_PER_USER) throw new HttpError(403, `El plan gratuito incluye ${FREE_PER_USER} automatizaciones. Desde la tercera es de pago: escríbenos a hola@curogroup.net y la activamos, o elimina una para crear otra.`);
     if (count >= MAX_PER_USER) throw new HttpError(403, `Has llegado al máximo de ${MAX_PER_USER} automatizaciones. Elimina alguna para crear otra.`);
     // Re-normalizamos en el servidor: el navegador no puede saltarse las reglas (p. ej. curo_new_user solo admin).
     const plan = normalize(body.plan, { connections, isAdmin: admin, instruction });
     if (body.plan.approval === 'never' && plan.tools.includes('gmail_send')) plan.approval = 'never';
-    const row = await db.insert('automate_automations', { user_id: user.id, instruction, status: 'active', ...rowFromPlan(plan) });
+    let row;
+    try { row = await db.insert('automate_automations', { user_id: user.id, instruction, status: 'active', ...rowFromPlan(plan) }); }
+    catch (e) {
+      const m = String(e && e.message || e);
+      const lim = m.match(/LIMITE_AUTOMATIZACIONES[^0-9]*(\d+)/);
+      if (lim) throw new HttpError(403, `Tu plan incluye ${lim[1]} automatizaciones en total (borrar una no devuelve la plaza). Para crear más, mira los planes Plus y Pro en curogroup.net → Mi cuenta → Ver planes.`);
+      throw e;
+    }
     return json(res, 201, { automation: row });
   }
 

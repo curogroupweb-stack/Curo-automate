@@ -97,7 +97,7 @@ function deviceId() {
 }
 function askToSignUp(text) {
   closeModals();
-  modal('Crea tu cuenta gratis', `<p>${esc(text || 'Para seguir probando, crea tu cuenta gratis.')}</p><p class="muted">Con tu cuenta puedes crear 2 automatizaciones gratis.</p>`, {
+  modal('Crea tu cuenta gratis', `<p>${esc(text || 'Para seguir probando, crea tu cuenta gratis.')}</p><p class="muted">Con tu cuenta gratis puedes crear 3 automatizaciones.</p>`, {
     actions: `<button class="btn ghost" onclick="closeModals()">Ahora no</button><button class="btn primary" onclick="goActivate()">Crear cuenta o iniciar sesión</button>`
   });
 }
@@ -280,7 +280,8 @@ function showHelp() {
 }
 
 // ---------- Estructura del espacio privado ----------
-const NAV = ['Inicio', 'Mi agente', 'Mis cursos', 'Automatizaciones', 'Aprobaciones', 'Historial', 'Conexiones', 'Conocimiento', 'Cuenta'];
+// «Mis cursos» vive en curogroup.net (Mi cuenta): aquí solo agente y automatizaciones.
+const NAV = ['Inicio', 'Mi agente', 'Automatizaciones', 'Aprobaciones', 'Historial', 'Conexiones', 'Conocimiento', 'Cuenta'];
 function shell(page, body) {
   currentPage = page;
   const pending = me?.counts?.pending_approvals || 0;
@@ -300,7 +301,7 @@ async function go(page) {
   try { if (typeof stopSpeaking === 'function') stopSpeaking(); } catch {}
   if (!session) return login('login');
   try { await refreshMe(); } catch (e) { return shell(page, `<div class="card"><p>${esc(e.message)}</p><button class="btn primary" onclick="go('${page}')">Reintentar</button></div>`); }
-  const pages = { Inicio: inicio, 'Mi agente': agentPage, 'Mis cursos': coursesPage, Automatizaciones: automationsPage, Aprobaciones: approvalsPage, Historial: historyPage, Conexiones: connectionsPage, Conocimiento: knowledgePage, Cuenta: accountPage };
+  const pages = { Inicio: inicio, 'Mi agente': agentPage, 'Mis cursos': () => shell('Mis cursos', `<div class="card"><h3>Tus cursos están en CURO Group</h3><p class="muted">Los cursos que compras o creas se gestionan desde tu cuenta de CURO Group (Mi cuenta → Cursos). Tu agente puede acompañarte como tutor: pídeselo en «Mi agente».</p><a class="btn primary" href="https://curogroup.net/" target="_blank" rel="noopener">Ir a CURO Group</a></div>`), Automatizaciones: automationsPage, Aprobaciones: approvalsPage, Historial: historyPage, Conexiones: connectionsPage, Conocimiento: knowledgePage, Cuenta: accountPage };
   (pages[page] || inicio)();
 }
 function loading(page, text = 'Cargando…') { shell(page, `<div class="card"><p class="muted"><span class="spin"></span> ${esc(text)}</p></div>`); }
@@ -414,7 +415,7 @@ async function coursesDetailPage(courseId, lessonId) {
 // ---------- Modos de automatizar y lista de espera ----------
 const AGENT_PROFILES = ['Docente', 'Community manager', 'Creador de contenido', 'Emprendedor', 'Autónomo', 'Estudiante', 'Pequeños equipos (pymes)', 'Descubridor'];
 const MODES = [
-  { k: 'auto', tag: 'Disponible', t: 'Hazlo tú con IA', d: 'Escribe lo que necesitas con tus palabras, mira cómo funcionaría y actívalo.', li: ['Para tareas sencillas que se repiten', 'Ves una vista previa antes de crear tu cuenta', 'Tú apruebas antes de que se envíe nada'], price: 'Gratis hasta 2 automatizaciones', cta: 'Probar ahora' },
+  { k: 'auto', tag: 'Disponible', t: 'Hazlo tú con IA', d: 'Escribe lo que necesitas con tus palabras, mira cómo funcionaría y actívalo.', li: ['Para tareas sencillas que se repiten', 'Ves una vista previa antes de crear tu cuenta', 'Tú apruebas antes de que se envíe nada'], price: 'Gratis hasta 3 automatizaciones', cta: 'Probar ahora' },
   { k: 'agente', tag: 'Nuevo · en prueba', t: 'Tu agente IA personal', d: 'Un asistente que te conoce y no empieza de cero cada vez que entras.', li: ['Recuerda tus temas y lo que quedó pendiente', 'Lleva tu agenda y organiza tus proyectos', 'Cada mañana te dice qué tienes y qué sigue', 'Elige su perfil: docente, emprendedor, estudiante…'], price: 'Gratis durante la fase de prueba', cta: 'Crear mi agente' },
   { k: 'consultoria', tag: 'Próximamente', t: 'Soluciones IA', d: 'Para empresas y centros educativos. Nuestro equipo hace un diagnóstico, te dice qué se puede automatizar y qué no, y lo convertimos en un plan de trabajo.', li: ['Diagnóstico de tus tareas y procesos', 'Qué se puede automatizar y qué no', 'Plan de trabajo y automatizaciones a tu medida'], price: 'Precio según el proyecto', cta: 'Apuntarme a la lista de espera' }
 ];
