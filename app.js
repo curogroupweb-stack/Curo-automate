@@ -416,7 +416,7 @@ async function coursesDetailPage(courseId, lessonId) {
 const AGENT_PROFILES = ['Docente', 'Community manager', 'Creador de contenido', 'Emprendedor', 'Autónomo', 'Estudiante', 'Pequeños equipos (pymes)', 'Descubridor'];
 const MODES = [
   { k: 'auto', tag: 'Disponible', t: 'Hazlo tú con IA', d: 'Escribe lo que necesitas con tus palabras, mira cómo funcionaría y actívalo.', li: ['Para tareas sencillas que se repiten', 'Ves una vista previa antes de crear tu cuenta', 'Tú apruebas antes de que se envíe nada'], price: 'Gratis hasta 3 automatizaciones', cta: 'Probar ahora' },
-  { k: 'agente', tag: 'Nuevo · en prueba', t: 'Tu agente IA personal', d: 'Un asistente que te conoce y no empieza de cero cada vez que entras.', li: ['Recuerda tus temas y lo que quedó pendiente', 'Lleva tu agenda y organiza tus proyectos', 'Cada mañana te dice qué tienes y qué sigue', 'Elige su perfil: docente, emprendedor, estudiante…'], price: 'Gratis durante la fase de prueba', cta: 'Crear mi agente' },
+  { k: 'agente', tag: 'Nuevo', t: 'Tu agente IA personal', d: 'Un asistente que te conoce y no empieza de cero cada vez que entras.', li: ['Recuerda tus temas y lo que quedó pendiente', 'Lleva tu agenda y organiza tus proyectos', 'Cada mañana te dice qué tienes y qué sigue', 'Elige su perfil: docente, emprendedor, estudiante…'], price: 'Empieza gratis · sin compromiso', cta: 'Elige tu agente' },
   { k: 'consultoria', tag: 'Próximamente', t: 'Soluciones IA', d: 'Para empresas y centros educativos. Nuestro equipo hace un diagnóstico, te dice qué se puede automatizar y qué no, y lo convertimos en un plan de trabajo.', li: ['Diagnóstico de tus tareas y procesos', 'Qué se puede automatizar y qué no', 'Plan de trabajo y automatizaciones a tu medida'], price: 'Precio según el proyecto', cta: 'Apuntarme a la lista de espera' }
 ];
 function openWaitlist(mode) {
@@ -876,7 +876,7 @@ function agentsLanding() {
       <div class="grid agKeeps">${[['Pendientes', 'Lo que tienes que hacer, y lo marca como hecho cuando le dices que ya está.'], ['Proyectos', 'Tus proyectos por etapas, con el siguiente paso siempre claro.'], ['Agenda', 'Citas, entregas y fechas importantes, para que no se te pasen.'], ['Lo que recuerdo', 'Lo que le contaste de ti y de tu trabajo, para no tener que repetirlo.']].map(x => `<div class="card"><h3>${x[0]}</h3><p class="muted">${x[1]}</p></div>`).join('')}</div>
       <p class="muted small agPrivacy">No le cuentes contraseñas, datos bancarios ni de salud. Puedes borrar cualquier cosa que recuerde cuando quieras.</p>
     </section>
-    <section class="section"><div class="planCard"><div><span class="pill">GRATIS DURANTE LA FASE DE PRUEBA</span><h2>Crea tu agente hoy</h2><p>Solo necesitas tu cuenta de CURO Group. Si no la tienes, la creas gratis en un minuto.</p></div><a class="btn primary" href="#elige">Buscar mi perfil</a></div></section>
+    <section class="section"><div class="planCard"><div><span class="pill">EMPIEZA GRATIS</span><h2>Elige tu agente y personalízalo</h2><p>Accede a los agentes de IA sin coste inicial. Solo necesitas tu cuenta de CURO Group; si no la tienes, la creas gratis en un minuto. Sin compromiso de contratación.</p></div><a class="btn primary" href="#elige">Ver agentes disponibles</a></div></section>
   </main>
   <footer class="footer"><div class="footerBottom"><span>© 2026 CURO Group · Madrid, España</span><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></div></footer>`;
 }
@@ -1154,7 +1154,7 @@ function agentSetup(edit = false) {
       <label class="toggle"><input type="checkbox" id="agBrief" ${s.brief_enabled === false ? '' : 'checked'}> Sí, un correo con mi agenda, mis pendientes y el siguiente paso</label>
       <label class="field inlineField">Hora (Madrid)<input id="agTime" type="time" value="${esc(time)}"></label></div>
     <p class="muted small">No le cuentes contraseñas, datos bancarios ni de salud. Puedes borrar cualquier cosa que recuerde cuando quieras.</p>
-    <div class="actions">${edit ? `<button class="btn ghost" onclick="renderAgent()">Cancelar</button>` : ''}<button class="btn primary" id="agSave">${edit ? 'Guardar cambios' : chosen ? `Empezar con ${esc(chosen.name)}` : 'Crear mi agente'}</button></div>
+    <div class="actions">${edit ? `<button class="btn ghost" onclick="renderAgent()">Cancelar</button>` : ''}<button class="btn primary" id="agSave">${edit ? 'Guardar cambios' : chosen ? `Empezar con ${esc(chosen.name)}` : 'Elegir mi agente'}</button></div>
   </div>`);
   // Si al registrarse en CURO marcó intereses, se proponen como punto de partida.
   if (!edit && !s.goals && sb.auth.getUser) Promise.resolve().then(() => sb.auth.getUser()).then(({ data }) => {
@@ -1177,7 +1177,7 @@ function agentSetup(edit = false) {
   });
 }
 function setupWelcome(a, first, edit) {
-  if (!a) return `<span class="pill">CREA TU AGENTE IA PERSONAL</span><h2>Un asistente que te conoce y recuerda lo importante</h2><p class="muted">Elige el agente que más se parece a ti. Recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>`;
+  if (!a) return `<span class="pill">ELIGE TU AGENTE IA PERSONAL</span><h2>Un asistente que te conoce y recuerda lo importante</h2><p class="muted">Elige el agente que más se parece a ti. Recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>`;
   return `${agentPic(a.key, 'saluda', 'agWelcomePic', esc(a.name))}<div class="agBubble"><b>${edit ? `Aquí puedes cambiar cómo te ayudo${first ? `, ${esc(first)}` : ''}.` : `¡Hola${first ? `, ${esc(first)}` : ''}! Soy ${esc(a.name)}.`}</b><p>${edit ? 'Cuéntame si algo cambió en tu trabajo o en lo que necesitas.' : `Voy a ser tu agente personal${a.label ? ` (${esc(a.label.toLowerCase())})` : ''}. Cuéntame un poco de ti para ayudarte mejor: con tres respuestas ya podemos empezar.`}</p></div>`;
 }
 function selectSetupAgent(key) {
