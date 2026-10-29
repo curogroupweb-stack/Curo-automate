@@ -416,7 +416,7 @@ async function coursesDetailPage(courseId, lessonId) {
 const AGENT_PROFILES = ['Docente', 'Community manager', 'Creador de contenido', 'Emprendedor', 'Autónomo', 'Estudiante', 'Pequeños equipos (pymes)', 'Descubridor'];
 const MODES = [
   { k: 'auto', tag: 'Disponible', t: 'Hazlo tú con IA', d: 'Escribe lo que necesitas con tus palabras, mira cómo funcionaría y actívalo.', li: ['Para tareas sencillas que se repiten', 'Ves una vista previa antes de crear tu cuenta', 'Tú apruebas antes de que se envíe nada'], price: 'Gratis hasta 3 automatizaciones', cta: 'Probar ahora' },
-  { k: 'agente', tag: 'Nuevo', t: 'Tu agente IA personal', d: 'Un asistente que te conoce y no empieza de cero cada vez que entras.', li: ['Recuerda tus temas y lo que quedó pendiente', 'Lleva tu agenda y organiza tus proyectos', 'Cada mañana te dice qué tienes y qué sigue', 'Elige su perfil: docente, emprendedor, estudiante…'], price: 'Empieza gratis · sin compromiso', cta: 'Elige tu agente' },
+  { k: 'agente', tag: 'Nuevo', t: 'Tu agente IA personal', d: 'Un asistente que te conoce y no empieza de cero cada vez que entras.', li: ['Recuerda tus temas y lo que quedó pendiente', 'Lleva tu agenda y organiza tus proyectos', 'Cada mañana te dice qué tienes y qué sigue', 'Elige su perfil: docente, emprendedor, estudiante…'], price: 'Gratis · 20 consultas al día', cta: 'Elige tu agente' },
   { k: 'consultoria', tag: 'Próximamente', t: 'Soluciones IA', d: 'Para empresas y centros educativos. Nuestro equipo hace un diagnóstico, te dice qué se puede automatizar y qué no, y lo convertimos en un plan de trabajo.', li: ['Diagnóstico de tus tareas y procesos', 'Qué se puede automatizar y qué no', 'Plan de trabajo y automatizaciones a tu medida'], price: 'Precio según el proyecto', cta: 'Apuntarme a la lista de espera' }
 ];
 function openWaitlist(mode) {
@@ -876,7 +876,7 @@ function agentsLanding() {
       <div class="grid agKeeps">${[['Pendientes', 'Lo que tienes que hacer, y lo marca como hecho cuando le dices que ya está.'], ['Proyectos', 'Tus proyectos por etapas, con el siguiente paso siempre claro.'], ['Agenda', 'Citas, entregas y fechas importantes, para que no se te pasen.'], ['Lo que recuerdo', 'Lo que le contaste de ti y de tu trabajo, para no tener que repetirlo.']].map(x => `<div class="card"><h3>${x[0]}</h3><p class="muted">${x[1]}</p></div>`).join('')}</div>
       <p class="muted small agPrivacy">No le cuentes contraseñas, datos bancarios ni de salud. Puedes borrar cualquier cosa que recuerde cuando quieras.</p>
     </section>
-    <section class="section"><div class="planCard"><div><span class="pill">EMPIEZA GRATIS</span><h2>Elige tu agente y personalízalo</h2><p>Accede a los agentes de IA sin coste inicial. Solo necesitas tu cuenta de CURO Group; si no la tienes, la creas gratis en un minuto. Sin compromiso de contratación.</p></div><a class="btn primary" href="#elige">Ver agentes disponibles</a></div></section>
+    <section class="section"><div class="planCard"><div><span class="pill">EMPIEZA GRATIS</span><h2>Elige tu agente y personalízalo</h2><p>Accede a los agentes de IA sin coste inicial. Solo necesitas tu cuenta de CURO Group; si no la tienes, la creas gratis en un minuto. Incluye 20 consultas al día con tu agente. Sin compromiso de contratación.</p></div><a class="btn primary" href="#elige">Ver agentes disponibles</a></div></section>
   </main>
   <footer class="footer"><div class="footerBottom"><span>© 2026 CURO Group · Madrid, España</span><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></div></footer>`;
 }

@@ -84,7 +84,7 @@ const PROFILES = {
   ] }
 };
 const KINDS = ['memoria', 'pendiente', 'proyecto', 'agenda'];
-const DAILY_LIMIT = Number(process.env.AGENT_DAILY_MESSAGES || 18); // tope del plan gratis; ajustable sin tocar código
+const DAILY_LIMIT = 20; // Plan Gratis: 20 consultas al día al agente IA (decidido el 29-oct-2026)
 
 const madridNow = () => new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', dateStyle: 'full', timeStyle: 'short' }).format(new Date());
 const fmtDue = v => v ? new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(v)) : '';
@@ -221,7 +221,7 @@ async function chatTurn(user, message, { isAdmin } = {}) {
   if (!isAdmin) {
     const today = new Date(); today.setUTCHours(0, 0, 0, 0);
     const sent = await db.select('agent_messages', `user_id=eq.${enc(user.id)}&role=eq.user&created_at=gte.${enc(today.toISOString())}&select=id&limit=${DAILY_LIMIT + 1}`);
-    if (sent.length >= DAILY_LIMIT) throw new HttpError(429, `Hoy ya has enviado ${DAILY_LIMIT} mensajes a tu agente. Mañana podrás seguir.`);
+    if (sent.length >= DAILY_LIMIT) throw new HttpError(429, `Has usado tus ${DAILY_LIMIT} consultas de hoy con tu agente IA (plan Gratis). Mañana se renuevan y podrás seguir donde lo dejaste: tus pendientes y tu memoria se mantienen.`);
   }
   const userMsg = await db.insert('agent_messages', { user_id: user.id, role: 'user', content: text });
   const history = st.messages.slice(-12).map(m => ({ role: m.role, content: m.content.slice(0, 1500) }));
