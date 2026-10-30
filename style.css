@@ -359,3 +359,23 @@ img.agVid.profilePic{width:100%;max-width:120px;height:auto}
 .agRes li span{color:#98a2b3;font-size:12px;margin-left:4px}
 .agItem .agWork{margin-top:8px;border:0;border-radius:10px;padding:7px 12px;font:600 13px inherit;color:#fff;background:linear-gradient(90deg,#16c6c8,#4f46e5);cursor:pointer}
 .agItem .agWork:hover{filter:brightness(1.05)}
+
+/* Agentes versión persona (retratos realistas) */
+.agLookSwitch{display:inline-flex;gap:4px;background:#fff;border:1px solid #efe6d8;border-radius:99px;padding:4px;margin:0 auto 18px;box-shadow:0 4px 14px #1f2a440d}
+.agLookSwitch button{border:0;background:none;font:inherit;font-weight:700;font-size:14px;color:#475467;padding:8px 16px;border-radius:99px;cursor:pointer}
+.agLookSwitch button.sel{background:#1e2a5a;color:#fff}
+.agPicPersona{display:none}
+.agLanding.verPersonas .agPicAnimal:has(+ .agPicPersona){display:none}
+.agLanding.verPersonas .agPicPersona{display:block}
+.agLanding.verPersonas .agHeroPick .agPicPersona{width:96px;height:96px;border-radius:50%;object-fit:cover;object-position:50% 20%;border:3px solid #fff;box-shadow:0 6px 18px #1f2a4422}
+.agLanding.verPersonas .agCardPic{background:#eef2f7}
+.agLanding.verPersonas .agCardPic .agPicPersona{width:100%;aspect-ratio:4/5;max-height:300px;object-fit:cover;object-position:50% 25%}
+.agPicAnimal{display:contents}
+.agFace.persona img{object-position:50% 22%}
+.lookPic .lookFaceImg{object-position:50% 22%}
+.agLanding.verPersonas .agCardPic .agPicPersona{max-width:none;padding:0;filter:none;border-radius:0}
+.agLanding.verPersonas .agHeroRow .agPicPersona{filter:none;background:#eef2f7}
+@media(max-width:560px){.agLanding.verPersonas .agHeroPick .agPicPersona{width:64px;height:64px}}
+.agFace.persona{border-radius:50%}
+.agFace.persona > img{width:100%!important;height:100%!important;max-width:none!important;border-radius:50%!important;object-fit:cover!important;object-position:50% 22%;filter:none!important}
+.agFace.persona > img{position:absolute;inset:0}

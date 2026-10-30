@@ -850,14 +850,15 @@ function agentsLanding() {
       <span class="pill">TU AGENTE IA PERSONAL · AGENTES AIA</span>
       <h1>Un compañero que te conoce y <span class="grad">no empieza de cero</span> cada vez</h1>
       <p>Busca tu perfil: cada uno tiene su agente. Recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>
-      <div class="agHeroRow">${AGENTS.map(a => `<button type="button" class="agHeroPick" onclick="showAgentCard('${a.key}')" aria-label="Ver a ${esc(a.name)}">${agentPic(a.key, 'saluda', '', '')}<span>${esc(a.name)}</span></button>`).join('')}</div>
+      ${PERSONA_KEYS.length ? `<div class="agLookSwitch" role="group" aria-label="Cómo ver a los agentes"><button type="button" class="sel" onclick="agentsLook('animal',this)">🐾 Animalitos</button><button type="button" onclick="agentsLook('persona',this)">👤 Personas</button></div>` : ''}
+      <div class="agHeroRow">${AGENTS.map(a => `<button type="button" class="agHeroPick" onclick="showAgentCard('${a.key}')" aria-label="Ver a ${esc(a.name)}"><span class="agPicAnimal">${agentPic(a.key, 'saluda', '', '')}</span>${hasPersona(a.key) ? `<img class="agPicPersona" src="${personaImg(a.key)}" alt="">` : ''}<span>${esc(a.name)}</span></button>`).join('')}</div>
       <a class="btn primary" href="#elige">Buscar mi perfil</a>
     </section>
     <section class="section" id="elige">
       <div class="sectionIntro"><span class="eyebrow">LOS 9 AGENTES AIA</span><h2>¿A qué te dedicas?</h2><p class="muted">Busca tu perfil y conoce al agente que te va a acompañar. Cada uno conoce el trabajo de su perfil y te habla y te propone cosas pensadas para ti.</p></div>
       <div class="agCards">${AGENTS.map(a => `
         <article class="agCard" id="agente-${a.key}">
-          <div class="agCardPic">${agentPic(a.key, 'saluda', '', `${esc(a.name)}, ${esc(a.animal || 'agente AIA')}`, 'loading="lazy"')}</div>
+          <div class="agCardPic"><span class="agPicAnimal">${agentPic(a.key, 'saluda', '', `${esc(a.name)}, ${esc(a.animal || 'agente AIA')}`, 'loading="lazy"')}</span>${hasPersona(a.key) ? `<img class="agPicPersona" src="${personaImg(a.key)}" alt="${esc(a.name)}, versión persona" loading="lazy">` : ''}</div>
           <div class="agCardBody">
             <span class="agCardFor">${esc(a.label)}</span>
             <h3>${esc(a.name)} <small>${esc(a.vibe)}</small></h3>
@@ -881,6 +882,11 @@ function agentsLanding() {
   <footer class="footer"><div class="footerBottom"><span>© 2026 CURO Group · Madrid, España</span><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></div></footer>`;
 }
 // Al elegir: con sesión va directo a crear el agente con ese perfil; sin sesión, pide entrar y vuelve aquí.
+// Presentación: ver a los agentes como animalitos o como personas.
+function agentsLook(l, b) {
+  document.querySelector('.agLanding')?.classList.toggle('verPersonas', l === 'persona');
+  document.querySelectorAll('.agLookSwitch button').forEach(x => x.classList.toggle('sel', x === b));
+}
 // Al tocar un personaje de arriba, baja hasta su perfil y lo resalta un momento.
 function showAgentCard(key) {
   const c = document.getElementById('agente-' + key); if (!c) return;
@@ -927,15 +933,20 @@ function agentPic(k, pose, cls, alt, extra) {
 }
 // ---------- Apariencia del agente: animalito, persona (retrato hecho con IA) o sencillo (logo AIA) ----------
 // Retratos disponibles: al añadir una cara nueva basta con sumarla aquí.
-const PERSONAS = []; // { id: 'persona-1', src: 'img/agentes/personas/persona-1.jpg' }
+// Versión «persona»: un retrato realista por perfil (mismo nombre y mismos colores de ropa que su animalito).
+// Al sumar un retrato nuevo basta con añadir aquí la clave de su perfil.
+const PERSONA_KEYS = ['docente', 'autonomo', 'estudiante', 'emprendedor'];
+const personaImg = k => `img/agentes/personas/${k}.jpg?v=1`;
+const hasPersona = k => PERSONA_KEYS.includes(k);
+const PERSONAS = []; // (formato anterior, ya no se usa)
 function myLook() {
   const l = agentState?.settings?.look || 'animal';
   if (l === 'sencillo') return l;
-  return PERSONAS.some(p => p.id === l) ? l : 'animal';
+  return String(l).startsWith('persona') && hasPersona(agentState?.settings?.profile || 'descubridor') ? 'persona' : 'animal';
 }
 // Cara del agente cuando no es el animalito. La pose (saluda, ups, celebra, duerme) se muestra con efectos suaves.
 function lookFace(pose, big) {
-  const l = myLook(), p = PERSONAS.find(x => x.id === l);
+  const l = myLook(), p = l === 'persona' ? { src: personaImg(agentState?.settings?.profile || 'descubridor') } : null;
   const inner = p ? `<img src="${p.src}" alt="">` : '<span class="aiaLogo">AIA</span>';
   return `<span class="agFace ${big ? 'big' : ''} ${p ? 'persona' : 'simple'}" data-pose="${pose || 'ups'}">${inner}${big ? '<small class="aiaTag">AIA</small>' : ''}</span>`;
 }
@@ -1137,7 +1148,7 @@ function agentSetup(edit = false) {
   const first = (me?.user?.name || '').split(' ')[0];
   const lookNow = s.look || 'animal';
   const lookCards = `<button type="button" class="lookCard ${lookNow === 'animal' ? 'sel' : ''}" data-look="animal" onclick="pickLook(this)"><span class="lookPic">${agentPic(chosen?.key || 'descubridor', 'saluda', '', '')}</span><b>Animalito</b><small>Tu personaje con movimiento</small></button>`
-    + (PERSONAS.length ? PERSONAS.map((p, i) => `<button type="button" class="lookCard ${lookNow === p.id ? 'sel' : ''}" data-look="${p.id}" onclick="pickLook(this)"><span class="lookPic"><img class="lookFaceImg" src="${p.src}" alt=""></span><b>Persona ${i + 1}</b><small>Retrato hecho con IA</small></button>`).join('')
+    + (hasPersona(chosen?.key || 'descubridor') ? `<button type="button" class="lookCard ${String(lookNow).startsWith('persona') ? 'sel' : ''}" data-look="persona" onclick="pickLook(this)"><span class="lookPic"><img class="lookFaceImg" id="agLookPersona" src="${personaImg(chosen?.key || 'descubridor')}" alt=""></span><b>Persona</b><small>Retrato realista, sin animación</small></button>`
       : `<button type="button" class="lookCard soon" disabled><span class="lookPic"><span class="agFace simple"><span class="aiaLogo">👤</span></span></span><b>Persona</b><small>Muy pronto</small></button>`)
     + `<button type="button" class="lookCard ${lookNow === 'sencillo' ? 'sel' : ''}" data-look="sencillo" onclick="pickLook(this)"><span class="lookPic"><span class="agFace simple"><span class="aiaLogo">AIA</span></span></span><b>Sencillo</b><small>Solo el logo AIA</small></button>`;
   const grid = `<div class="profileGrid">${AGENTS.map(a => `<button type="button" class="profileCard ${s.profile === a.key ? 'sel' : ''}" data-p="${a.key}" aria-pressed="${s.profile === a.key}" onclick="selectSetupAgent('${a.key}')">${agentPic(a.key, 'saluda', 'profilePic', '')}<b>${esc(a.name)}</b><small class="profileFor">${esc(a.label)}</small><small>${esc(a.help)}</small></button>`).join('')}</div>`;
@@ -1185,6 +1196,7 @@ function selectSetupAgent(key) {
   const w = document.getElementById('agWelcome'); const first = (me?.user?.name || '').split(' ')[0];
   if (w && w.querySelector('.agBubble')) w.innerHTML = setupWelcome(agentByKey(key), first, false);
   const btn = document.getElementById('agSave'); if (btn && !/Guardar/.test(btn.textContent)) btn.textContent = `Empezar con ${agentByKey(key).name}`;
+  const lp = document.getElementById('agLookPersona'); if (lp && hasPersona(key)) lp.src = personaImg(key);
 }
 function agentMsgHtml(m) {
   if (m.role === 'user') {
