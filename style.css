@@ -379,3 +379,9 @@ img.agVid.profilePic{width:100%;max-width:120px;height:auto}
 .agFace.persona{border-radius:50%}
 .agFace.persona > img{width:100%!important;height:100%!important;max-width:none!important;border-radius:50%!important;object-fit:cover!important;object-position:50% 22%;filter:none!important}
 .agFace.persona > img{position:absolute;inset:0}
+/* Persona con vídeo: movimiento real, sin efectos de dibujo (ni saltitos, ni gris, ni «z z») */
+.agFace.persona > video{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;object-fit:cover;object-position:50% 22%}
+.agFace.persona.hasVid,.agFace.persona.hasVid[data-pose]{animation:none!important;filter:none!important}
+.agFace.persona::before{content:none!important}
+.agFace.persona.big[data-pose="duerme"]{filter:none}
+.agLanding.verPersonas .agHeroPick .agPicPersona{object-fit:cover}

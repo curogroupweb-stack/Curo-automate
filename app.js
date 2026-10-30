@@ -851,14 +851,14 @@ function agentsLanding() {
       <h1>Un compañero que te conoce y <span class="grad">no empieza de cero</span> cada vez</h1>
       <p>Busca tu perfil: cada uno tiene su agente. Recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>
       ${PERSONA_KEYS.length ? `<div class="agLookSwitch" role="group" aria-label="Cómo ver a los agentes"><button type="button" class="sel" onclick="agentsLook('animal',this)">🐾 Animalitos</button><button type="button" onclick="agentsLook('persona',this)">👤 Personas</button></div>` : ''}
-      <div class="agHeroRow">${AGENTS.map(a => `<button type="button" class="agHeroPick" onclick="showAgentCard('${a.key}')" aria-label="Ver a ${esc(a.name)}"><span class="agPicAnimal">${agentPic(a.key, 'saluda', '', '')}</span>${hasPersona(a.key) ? `<img class="agPicPersona" src="${personaImg(a.key)}" alt="">` : ''}<span>${esc(a.name)}</span></button>`).join('')}</div>
+      <div class="agHeroRow">${AGENTS.map(a => `<button type="button" class="agHeroPick" onclick="showAgentCard('${a.key}')" aria-label="Ver a ${esc(a.name)}"><span class="agPicAnimal">${agentPic(a.key, 'saluda', '', '')}</span>${hasPersona(a.key) ? personaMedia(a.key, 'saluda', false, 'agPicPersona') : ''}<span>${esc(a.name)}</span></button>`).join('')}</div>
       <a class="btn primary" href="#elige">Buscar mi perfil</a>
     </section>
     <section class="section" id="elige">
       <div class="sectionIntro"><span class="eyebrow">LOS 9 AGENTES AIA</span><h2>¿A qué te dedicas?</h2><p class="muted">Busca tu perfil y conoce al agente que te va a acompañar. Cada uno conoce el trabajo de su perfil y te habla y te propone cosas pensadas para ti.</p></div>
       <div class="agCards">${AGENTS.map(a => `
         <article class="agCard" id="agente-${a.key}">
-          <div class="agCardPic"><span class="agPicAnimal">${agentPic(a.key, 'saluda', '', `${esc(a.name)}, ${esc(a.animal || 'agente AIA')}`, 'loading="lazy"')}</span>${hasPersona(a.key) ? `<img class="agPicPersona" src="${personaImg(a.key)}" alt="${esc(a.name)}, versión persona" loading="lazy">` : ''}</div>
+          <div class="agCardPic"><span class="agPicAnimal">${agentPic(a.key, 'saluda', '', `${esc(a.name)}, ${esc(a.animal || 'agente AIA')}`, 'loading="lazy"')}</span>${hasPersona(a.key) ? (personaVid(a.key, 'saluda') ? `<video class="agPicPersona" src="${personaVid(a.key, 'saluda')}.mp4?v=1" poster="${personaImg(a.key)}" autoplay muted loop playsinline preload="metadata" aria-label="${esc(a.name)}, versión persona"></video>` : `<img class="agPicPersona" src="${personaImg(a.key)}" alt="${esc(a.name)}, versión persona" loading="lazy">`) : ''}</div>
           <div class="agCardBody">
             <span class="agCardFor">${esc(a.label)}</span>
             <h3>${esc(a.name)} <small>${esc(a.vibe)}</small></h3>
@@ -939,6 +939,29 @@ const PERSONA_KEYS = AGENTS.map(a => a.key); // los 9 perfiles tienen ya su retr
 const personaImg = k => `img/agentes/personas/${k}.jpg?v=1`;
 const hasPersona = k => PERSONA_KEYS.includes(k);
 const PERSONAS = []; // (formato anterior, ya no se usa)
+// Vídeos de la versión persona (5 s, sin sonido, en bucle): saluda, celebra (festeja), ups (pensando) y duerme (distraído, leyendo).
+// Al sumar los vídeos de otra persona basta con añadir aquí sus poses. Si falta una pose se usa «pensando»; si no hay ninguna, el retrato fijo.
+const PERSONA_VIDEOS = { docente: ['saluda', 'celebra', 'ups', 'duerme'], autonomo: ['saluda', 'celebra', 'ups'] };
+const personaVid = (k, pose) => {
+  const l = PERSONA_VIDEOS[k] || [], p = l.includes(pose) ? pose : l.includes('ups') ? 'ups' : null;
+  return p ? `img/agentes/personas/${k}-${p}` : null;
+};
+// Grande (cabecera, presentación): vídeo MP4. Pequeño (chat, tarjetas): animación ligera WebP.
+function personaMedia(k, pose, big, cls) {
+  const v = personaVid(k, pose || 'ups'), c = cls ? ` class="${cls}"` : '';
+  if (!v) return `<img${c} src="${personaImg(k)}" alt="">`;
+  return big ? `<video${c} src="${v}.mp4?v=1" poster="${personaImg(k)}" autoplay muted loop playsinline preload="auto"></video>` : `<img${c} src="${v}-mini.webp?v=1" alt="">`;
+}
+// Cambia el vídeo de una cara «persona» cuando cambia la pose (como el animalito).
+function personaSwap(face, pose) {
+  if (!face || !face.classList.contains('persona')) return;
+  const k = agentState?.settings?.profile || 'descubridor', big = face.classList.contains('big');
+  const tmp = document.createElement('span'); tmp.innerHTML = personaMedia(k, pose, big);
+  const next = tmp.firstChild, el = face.querySelector('img,video');
+  if (el && el.getAttribute('src') === next.getAttribute('src')) return;
+  el ? el.replaceWith(next) : face.prepend(next);
+  face.classList.toggle('hasVid', !!personaVid(k, pose || 'ups'));
+}
 function myLook() {
   const l = agentState?.settings?.look || 'animal';
   if (l === 'sencillo') return l;
@@ -946,9 +969,9 @@ function myLook() {
 }
 // Cara del agente cuando no es el animalito. La pose (saluda, ups, celebra, duerme) se muestra con efectos suaves.
 function lookFace(pose, big) {
-  const l = myLook(), p = l === 'persona' ? { src: personaImg(agentState?.settings?.profile || 'descubridor') } : null;
-  const inner = p ? `<img src="${p.src}" alt="">` : '<span class="aiaLogo">AIA</span>';
-  return `<span class="agFace ${big ? 'big' : ''} ${p ? 'persona' : 'simple'}" data-pose="${pose || 'ups'}">${inner}${big ? '<small class="aiaTag">AIA</small>' : ''}</span>`;
+  const l = myLook(), k = agentState?.settings?.profile || 'descubridor', p = l === 'persona';
+  const inner = p ? personaMedia(k, pose, big) : '<span class="aiaLogo">AIA</span>';
+  return `<span class="agFace ${big ? 'big' : ''} ${p ? 'persona' : 'simple'} ${p && personaVid(k, pose || 'ups') ? 'hasVid' : ''}" data-pose="${pose || 'ups'}">${inner}${big ? '<small class="aiaTag">AIA</small>' : ''}</span>`;
 }
 function pickLook(b) { document.querySelectorAll('#agLookGrid .lookCard').forEach(x => x.classList.toggle('sel', x === b)); b.blur(); }
 let welcome = null;
@@ -1148,7 +1171,7 @@ function agentSetup(edit = false) {
   const first = (me?.user?.name || '').split(' ')[0];
   const lookNow = s.look || 'animal';
   const lookCards = `<button type="button" class="lookCard ${lookNow === 'animal' ? 'sel' : ''}" data-look="animal" onclick="pickLook(this)"><span class="lookPic">${agentPic(chosen?.key || 'descubridor', 'saluda', '', '')}</span><b>Animalito</b><small>Tu personaje con movimiento</small></button>`
-    + (hasPersona(chosen?.key || 'descubridor') ? `<button type="button" class="lookCard ${String(lookNow).startsWith('persona') ? 'sel' : ''}" data-look="persona" onclick="pickLook(this)"><span class="lookPic"><img class="lookFaceImg" id="agLookPersona" src="${personaImg(chosen?.key || 'descubridor')}" alt=""></span><b>Persona</b><small>Retrato realista, sin animación</small></button>`
+    + (hasPersona(chosen?.key || 'descubridor') ? `<button type="button" class="lookCard ${String(lookNow).startsWith('persona') ? 'sel' : ''}" data-look="persona" onclick="pickLook(this)"><span class="lookPic">${personaMedia(chosen?.key || 'descubridor', 'saluda', false, 'lookFaceImg').replace('<img', '<img id="agLookPersona"')}</span><b>Persona</b><small>Retrato realista, sin animación</small></button>`
       : `<button type="button" class="lookCard soon" disabled><span class="lookPic"><span class="agFace simple"><span class="aiaLogo">👤</span></span></span><b>Persona</b><small>Muy pronto</small></button>`)
     + `<button type="button" class="lookCard ${lookNow === 'sencillo' ? 'sel' : ''}" data-look="sencillo" onclick="pickLook(this)"><span class="lookPic"><span class="agFace simple"><span class="aiaLogo">AIA</span></span></span><b>Sencillo</b><small>Solo el logo AIA</small></button>`;
   const grid = `<div class="profileGrid">${AGENTS.map(a => `<button type="button" class="profileCard ${s.profile === a.key ? 'sel' : ''}" data-p="${a.key}" aria-pressed="${s.profile === a.key}" onclick="selectSetupAgent('${a.key}')">${agentPic(a.key, 'saluda', 'profilePic', '')}<b>${esc(a.name)}</b><small class="profileFor">${esc(a.label)}</small><small>${esc(a.help)}</small></button>`).join('')}</div>`;
@@ -1196,7 +1219,7 @@ function selectSetupAgent(key) {
   const w = document.getElementById('agWelcome'); const first = (me?.user?.name || '').split(' ')[0];
   if (w && w.querySelector('.agBubble')) w.innerHTML = setupWelcome(agentByKey(key), first, false);
   const btn = document.getElementById('agSave'); if (btn && !/Guardar/.test(btn.textContent)) btn.textContent = `Empezar con ${agentByKey(key).name}`;
-  const lp = document.getElementById('agLookPersona'); if (lp && hasPersona(key)) lp.src = personaImg(key);
+  const lp = document.getElementById('agLookPersona'); if (lp && hasPersona(key)) lp.src = personaVid(key, 'saluda') ? `${personaVid(key, 'saluda')}-mini.webp?v=1` : personaImg(key);
 }
 function agentMsgHtml(m) {
   if (m.role === 'user') {
@@ -1254,8 +1277,9 @@ const agentRest = k => agentPose(k, 'ups');
 function agentHeroPose(pose, holdMs) {
   const face = document.querySelector('#agFaceWrap .agFace');
   if (face) {
-    clearTimeout(agentHeroTimer); face.dataset.pose = pose; agentChatFaces(pose);
-    if (holdMs) agentHeroTimer = setTimeout(() => { if (face.isConnected) { face.dataset.pose = 'ups'; agentChatFaces('ups'); } }, holdMs);
+    clearTimeout(agentHeroTimer); face.dataset.pose = pose; personaSwap(face, pose); agentChatFaces(pose);
+    if (holdMs && personaVid(agentState?.settings?.profile, pose)) holdMs = Math.max(holdMs, 5200);
+    if (holdMs) agentHeroTimer = setTimeout(() => { if (face.isConnected) { face.dataset.pose = 'ups'; personaSwap(face, 'ups'); agentChatFaces('ups'); } }, holdMs);
     return;
   }
   const img = document.getElementById('agHeroPic'); if (!img) return;
@@ -1268,7 +1292,7 @@ function agentHeroPose(pose, holdMs) {
 }
 // Los agentes de la conversación hacen lo mismo que el de arriba (duermen, celebran, dudan o saludan a la vez).
 function agentChatFaces(pose) {
-  document.querySelectorAll('#agMsgs .agBotRow .agFace').forEach(f => { f.dataset.pose = pose || 'ups'; });
+  document.querySelectorAll('#agMsgs .agBotRow .agFace').forEach(f => { f.dataset.pose = pose || 'ups'; personaSwap(f, pose || 'ups'); });
   const key = agentState?.settings?.profile; if (!key) return;
   const v = agentVideo(key, pose || 'ups'), src = v ? `${v}.webp?v=3` + (pose === 'duerme' ? '&t=' + Date.now() : '') : agentPose(key, pose || 'ups');
   document.querySelectorAll('#agMsgs .agBotRow img.agAvatar').forEach(im => { if (im.getAttribute('src') !== src) im.src = src; });
@@ -1286,7 +1310,7 @@ function agentHeroVideo(key, pose) {
 function agentResetIdle(wake) {
   clearTimeout(agentIdleTimer);
   const face = document.querySelector('#agFaceWrap .agFace');
-  if (face && wake !== false && ['duerme', 'saluda'].includes(face.dataset.pose)) face.dataset.pose = 'ups';
+  if (face && wake !== false && ['duerme', 'saluda'].includes(face.dataset.pose)) { face.dataset.pose = 'ups'; personaSwap(face, 'ups'); agentChatFaces('ups'); }
   const img = document.getElementById('agHeroPic');
   if (wake !== false && img && (img.src.includes('-duerme') || img.src.includes('-saluda'))) { clearTimeout(agentHeroTimer); img.src = agentRest(agentState?.settings?.profile); agentHeroVideo(agentState?.settings?.profile, null); }
   agentIdleTimer = setTimeout(() => agentHeroPose('duerme'), 90000);
