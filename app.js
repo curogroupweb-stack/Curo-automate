@@ -935,7 +935,7 @@ function agentPic(k, pose, cls, alt, extra) {
 // Retratos disponibles: al añadir una cara nueva basta con sumarla aquí.
 // Versión «persona»: un retrato realista por perfil (mismo nombre y mismos colores de ropa que su animalito).
 // Al sumar un retrato nuevo basta con añadir aquí la clave de su perfil.
-const PERSONA_KEYS = ['docente', 'autonomo', 'estudiante', 'emprendedor'];
+const PERSONA_KEYS = AGENTS.map(a => a.key); // los 9 perfiles tienen ya su retrato
 const personaImg = k => `img/agentes/personas/${k}.jpg?v=1`;
 const hasPersona = k => PERSONA_KEYS.includes(k);
 const PERSONAS = []; // (formato anterior, ya no se usa)
