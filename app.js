@@ -940,7 +940,7 @@ const personaImg = k => `img/agentes/personas/${k}.jpg?v=1`;
 const hasPersona = k => PERSONA_KEYS.includes(k);
 const PERSONAS = []; // (formato anterior, ya no se usa)
 // Vídeos de la versión persona (5 s, sin sonido, en bucle): saluda, celebra (festeja), ups (pensando) y duerme (distraído, leyendo).
-// Al sumar los vídeos de otra persona basta con añadir aquí sus poses. Si falta una pose se usa «pensando»; si no hay ninguna, el retrato fijo.
+// Al sumar los vídeos de otra persona basta con añadir aquí sus poses. Si falta una pose del chat se usa «pensando»; si falta el saludo o no hay ninguna, el retrato fijo.
 const PERSONA_VIDEOS = {
   docente: ['saluda', 'celebra', 'ups', 'duerme'], autonomo: ['saluda', 'celebra', 'ups'],
   estudiante: ['saluda'], community: ['saluda', 'ups', 'duerme'], creador: ['saluda', 'ups'],
@@ -951,7 +951,8 @@ const PERSONA_VIDEOS = {
 const reduceMotion = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
 const personaVid = (k, pose) => {
   if (reduceMotion) return null;
-  const l = PERSONA_VIDEOS[k] || [], p = l.includes(pose) ? pose : l.includes('ups') ? 'ups' : null;
+  // El saludo es siempre lo primero que se ve: sin vídeo de «saluda» se muestra el retrato, nunca otra pose.
+  const l = PERSONA_VIDEOS[k] || [], p = l.includes(pose) ? pose : pose !== 'saluda' && l.includes('ups') ? 'ups' : null;
   return p ? `img/agentes/personas/${k}-${p}` : null;
 };
 // Grande (cabecera, presentación): vídeo MP4. Pequeño (chat, tarjetas): animación ligera WebP.
