@@ -944,7 +944,8 @@ const PERSONAS = []; // (formato anterior, ya no se usa)
 const PERSONA_VIDEOS = {
   docente: ['saluda', 'celebra', 'ups', 'duerme'], autonomo: ['saluda', 'celebra', 'ups'],
   estudiante: ['saluda'], community: ['saluda', 'ups', 'duerme'], creador: ['saluda', 'ups'],
-  profesional: ['saluda', 'ups', 'duerme'], descubridor: ['saluda', 'celebra', 'ups']
+  profesional: ['saluda', 'ups', 'duerme'], descubridor: ['saluda', 'celebra', 'ups', 'duerme'],
+  pyme: ['saluda', 'celebra', 'ups', 'duerme'], emprendedor: ['ups', 'duerme']
 };
 // Con «reducir movimiento» activado en el dispositivo se muestra siempre el retrato fijo.
 const reduceMotion = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
