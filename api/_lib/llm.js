@@ -47,8 +47,9 @@ async function openaiCompatChat({ system, messages, tools, maxTokens, temperatur
   }
   // Los modelos abiertos a veces escriben mal el nombre de una herramienta y Groq rechaza la respuesta
   // (tool_use_failed). Reintentamos con temperatura 0 y, si vuelve a fallar, con un modelo alternativo.
+  // Último intento: sin poder usar herramientas, para que conteste con texto normal.
   const fallback = process.env.LLM_FALLBACK_MODEL || 'openai/gpt-oss-20b';
-  const attempts = [body, { ...body, temperature: 0 }, ...(tools.length && body.model !== fallback ? [{ ...body, temperature: 0, model: fallback }] : [])];
+  const attempts = [body, { ...body, temperature: 0 }, ...(tools.length && body.model !== fallback ? [{ ...body, temperature: 0, model: fallback }] : []), ...(tools.length && toolChoice !== 'none' ? [{ ...body, temperature: 0, tool_choice: 'none' }] : [])];
   let r, j;
   for (let i = 0; i < attempts.length; i++) {
     r = await fetchRetry('https://api.groq.com/openai/v1/chat/completions', {
@@ -59,6 +60,10 @@ async function openaiCompatChat({ system, messages, tools, maxTokens, temperatur
     if (!toolFail) break;
     const recovered = recoverFailedGeneration(j.error?.failed_generation, tools);
     if (recovered) return { text: '', tool_calls: [recovered], usage: { input: 0, output: 0 } };
+    // A veces el modelo «llama» a una herramienta inexistente (p. ej. 'JSON') para entregar su respuesta final:
+    // en ese caso la respuesta está dentro de la llamada rechazada y la usamos como texto.
+    const answer = recoverTextAnswer(j.error?.failed_generation, tools);
+    if (answer) return { text: answer, tool_calls: [], usage: { input: 0, output: 0 } };
   }
   // Límite por minuto del modelo principal: el modelo alternativo tiene su propio cupo en Groq.
   if (r.status === 429 && body.model !== fallback) {
@@ -142,6 +147,16 @@ function recoverFailedGeneration(text, tools) {
     }
   } catch {}
   return null;
+}
+
+// Si la llamada rechazada era a una herramienta que no existe y trae la respuesta final ({reply: ...}),
+// devuelve esa respuesta como texto JSON.
+function recoverTextAnswer(text, tools) {
+  const call = extractJson(text);
+  if (!call) return null;
+  if (tools.some(t => t.name === cleanName(call.name || call.function?.name))) return null;
+  const args = call.reply !== undefined ? call : safeParse(call.arguments || call.parameters || call.function?.arguments);
+  return typeof args?.reply === 'string' && args.reply.trim() ? JSON.stringify(args) : null;
 }
 
 function safeParse(s) { try { return typeof s === 'string' ? JSON.parse(s || '{}') : (s || {}); } catch { return {}; } }
