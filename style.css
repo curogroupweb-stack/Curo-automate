@@ -385,3 +385,5 @@ img.agVid.profilePic{width:100%;max-width:120px;height:auto}
 .agFace.persona::before{content:none!important}
 .agFace.persona.big[data-pose="duerme"]{filter:none}
 .agLanding.verPersonas .agHeroPick .agPicPersona{object-fit:cover}
+/* Mientras el agente piensa la respuesta se le ve en el chat, un poco más grande */
+.agBotRow.agThinking .agFace,.agBotRow.agThinking .agAvatar,.agBotRow.agThinking img.agAvatar.agVid{width:72px;height:72px}

@@ -1178,7 +1178,7 @@ function agentSetup(edit = false) {
   const first = (me?.user?.name || '').split(' ')[0];
   const lookNow = s.look || 'animal';
   const lookCards = `<button type="button" class="lookCard ${lookNow === 'animal' ? 'sel' : ''}" data-look="animal" onclick="pickLook(this)"><span class="lookPic">${agentPic(chosen?.key || 'descubridor', 'saluda', '', '')}</span><b>Animalito</b><small>Tu personaje con movimiento</small></button>`
-    + (hasPersona(chosen?.key || 'descubridor') ? `<button type="button" class="lookCard ${String(lookNow).startsWith('persona') ? 'sel' : ''}" data-look="persona" onclick="pickLook(this)"><span class="lookPic">${personaMedia(chosen?.key || 'descubridor', 'saluda', false, 'lookFaceImg').replace('<img', '<img id="agLookPersona"')}</span><b>Persona</b><small>Retrato realista, sin animación</small></button>`
+    + (hasPersona(chosen?.key || 'descubridor') ? `<button type="button" class="lookCard ${String(lookNow).startsWith('persona') ? 'sel' : ''}" data-look="persona" onclick="pickLook(this)"><span class="lookPic">${personaMedia(chosen?.key || 'descubridor', 'saluda', false, 'lookFaceImg').replace('<img', '<img id="agLookPersona"')}</span><b>Persona</b><small>${personaVid(chosen?.key || 'descubridor', 'saluda') ? 'Persona real con movimiento' : 'Retrato realista'}</small></button>`
       : `<button type="button" class="lookCard soon" disabled><span class="lookPic"><span class="agFace simple"><span class="aiaLogo">👤</span></span></span><b>Persona</b><small>Muy pronto</small></button>`)
     + `<button type="button" class="lookCard ${lookNow === 'sencillo' ? 'sel' : ''}" data-look="sencillo" onclick="pickLook(this)"><span class="lookPic"><span class="agFace simple"><span class="aiaLogo">AIA</span></span></span><b>Sencillo</b><small>Solo el logo AIA</small></button>`;
   const grid = `<div class="profileGrid">${AGENTS.map(a => `<button type="button" class="profileCard ${s.profile === a.key ? 'sel' : ''}" data-p="${a.key}" aria-pressed="${s.profile === a.key}" onclick="selectSetupAgent('${a.key}')">${agentPic(a.key, 'saluda', 'profilePic', '')}<b>${esc(a.name)}</b><small class="profileFor">${esc(a.label)}</small><small>${esc(a.help)}</small></button>`).join('')}</div>`;
@@ -1418,7 +1418,9 @@ async function agentSend() {
   if (!text) return;
   stopSpeaking();
   const box = document.getElementById('agMsgs');
-  box.insertAdjacentHTML('beforeend', agentMsgHtml({ role: 'user', content: text }) + '<div class="agMsg bot typing" id="agTyping"><span class="spin"></span> Pensando…</div>');
+  // Mientras piensa, el propio agente aparece en el chat con su pose «pensando» (animalito o persona).
+  const thinker = myLook() === 'animal' ? agentPic(agentState?.settings?.profile || 'descubridor', 'ups', 'agAvatar', '') : lookFace('ups');
+  box.insertAdjacentHTML('beforeend', agentMsgHtml({ role: 'user', content: text }) + `<div class="agBotRow agThinking" id="agTyping">${thinker}<div class="agMsg bot typing"><span class="spin"></span> Pensando…</div></div>`);
   box.scrollTop = box.scrollHeight; input.value = '';
   agentHeroPose('ups'); // mientras piensa la respuesta, el agente pone cara de duda
   const done = busy(document.getElementById('agSend'), '…');
