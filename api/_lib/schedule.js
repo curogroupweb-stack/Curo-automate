@@ -1,5 +1,5 @@
 // Cálculo de la próxima ejecución en hora de Madrid.
-// config: { frequency: 'hourly'|'daily'|'weekly'|'monthly', time: 'HH:MM', weekday: 1-7 (1=lunes), monthday: 1-28 }
+// config: { frequency: 'hourly'|'daily'|'weekdays'|'weekly'|'monthly', time: 'HH:MM', weekday: 1-7 (1=lunes), monthday: 1-28 }
 const TZ = 'Europe/Madrid';
 
 function madridParts(date) {
@@ -34,6 +34,7 @@ function nextRun(config = {}, from = new Date()) {
     const base = new Date(Date.UTC(now.y, now.m - 1, now.d + add, 12));
     const y = base.getUTCFullYear(), m = base.getUTCMonth() + 1, d = base.getUTCDate();
     const wd = ((base.getUTCDay() + 6) % 7) + 1;
+    if (freq === 'weekdays' && wd > 5) continue;
     if (freq === 'weekly' && wd !== (Number(config.weekday) || 1)) continue;
     if (freq === 'monthly' && d !== Math.min(Number(config.monthday) || 1, 28)) continue;
     const candidate = madridToUtc(y, m, d, hh, mm);
@@ -47,6 +48,7 @@ function describe(config = {}) {
   const t = config.time || '09:00';
   switch (config.frequency) {
     case 'hourly': return 'Cada hora';
+    case 'weekdays': return `De lunes a viernes a las ${t}`;
     case 'weekly': return `Cada ${DAYS[Number(config.weekday) || 1]} a las ${t}`;
     case 'monthly': return `El día ${Math.min(Number(config.monthday) || 1, 28)} de cada mes a las ${t}`;
     default: return `Cada día a las ${t}`;
