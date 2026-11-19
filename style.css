@@ -387,3 +387,13 @@ img.agVid.profilePic{width:100%;max-width:120px;height:auto}
 .agLanding.verPersonas .agHeroPick .agPicPersona{object-fit:cover}
 /* Mientras el agente piensa la respuesta se le ve en el chat, un poco más grande */
 .agBotRow.agThinking .agFace,.agBotRow.agThinking .agAvatar,.agBotRow.agThinking img.agAvatar.agVid{width:72px;height:72px}
+
+/* Corrección iPad: el selector domina el display de imágenes/vídeos de las tarjetas.
+   No depende de :has() ni del ancho del dispositivo. */
+.agLanding .agHeroPick > .agPicPersona,
+.agLanding .agCardPic > .agPicPersona{display:none}
+.agLanding.verPersonas .agHeroPick > .agPicPersona,
+.agLanding.verPersonas .agCardPic > .agPicPersona{display:block}
+.agLanding.verPersonas .agHeroPick > .agPicAnimal,
+.agLanding.verPersonas .agCardPic > .agPicAnimal{display:none}
+.agLanding .agCardPic > video.agPicPersona{width:100%;max-width:none;aspect-ratio:4/5;max-height:300px;object-fit:cover;object-position:50% 25%}
