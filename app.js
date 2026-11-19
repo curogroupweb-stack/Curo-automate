@@ -842,6 +842,17 @@ const AGENT_STARTERS = {
   descubridor: ['Quiero aprender a usar la IA en mi día a día', 'Estoy pensando en un viaje para el verano', 'Guárdame cosas que me gustaría comprar']
 };
 
+// La galería pública se anima cuando el visitante elige una apariencia.
+// Es independiente del ajuste de movimiento usado en el chat privado.
+function agentLandingPersonaMedia(key, compact, name) {
+  const label = esc(name + ', versión persona saludando');
+  const hasGreeting = (PERSONA_VIDEOS[key] || []).includes('saluda');
+  if (!hasGreeting) return `<img class="agPicPersona" src="${personaImg(key)}" alt="${label}" loading="lazy">`;
+  const file = `img/agentes/personas/${key}-saluda`;
+  return compact
+    ? `<img class="agPicPersona" src="${file}-mini.webp?v=1" alt="${label}" loading="lazy" decoding="async">`
+    : `<video class="agPicPersona" data-agent-greeting="${key}" src="${file}.mp4?v=1" poster="${personaImg(key)}" autoplay muted loop playsinline webkit-playsinline preload="metadata" aria-label="${label}"></video>`;
+}
 function agentsLanding() {
   window.scrollTo(0, 0);
   A.innerHTML = `<header class="top"><a class="brand brandLink" href="https://curogroup.net/" title="Volver a CURO Group"><span class="grad">CURO</span> Automate</a><div class="topnav"><a class="backCuro" href="https://curogroup.net/">← CURO Group</a>${session ? `<button class="btn ghost" onclick="go('Inicio')">Volver a Automate</button>` : `<button class="btn ghost" onclick="home()">Otras formas</button>`}</div></header>
@@ -851,14 +862,14 @@ function agentsLanding() {
       <h1>Un compañero que te conoce y <span class="grad">no empieza de cero</span> cada vez</h1>
       <p>Busca tu perfil: cada uno tiene su agente. Recordará lo que le cuentes, llevará tus pendientes, proyectos y agenda, y cada mañana te dirá qué tienes por delante.</p>
       ${PERSONA_KEYS.length ? `<div class="agLookSwitch" role="group" aria-label="Cómo ver a los agentes"><button type="button" class="sel" onclick="agentsLook('animal',this)">🐾 Animalitos</button><button type="button" onclick="agentsLook('persona',this)">👤 Personas</button></div>` : ''}
-      <div class="agHeroRow">${AGENTS.map(a => `<button type="button" class="agHeroPick" onclick="showAgentCard('${a.key}')" aria-label="Ver a ${esc(a.name)}"><span class="agPicAnimal">${agentPic(a.key, 'saluda', '', '')}</span>${hasPersona(a.key) ? personaMedia(a.key, 'saluda', false, 'agPicPersona') : ''}<span>${esc(a.name)}</span></button>`).join('')}</div>
+      <div class="agHeroRow">${AGENTS.map(a => `<button type="button" class="agHeroPick" onclick="showAgentCard('${a.key}')" aria-label="Ver a ${esc(a.name)}"><span class="agPicAnimal">${agentPic(a.key, 'saluda', '', '')}</span>${hasPersona(a.key) ? agentLandingPersonaMedia(a.key, true, a.name) : ''}<span>${esc(a.name)}</span></button>`).join('')}</div>
       <a class="btn primary" href="#elige">Buscar mi perfil</a>
     </section>
     <section class="section" id="elige">
       <div class="sectionIntro"><span class="eyebrow">LOS 9 AGENTES AIA</span><h2>¿A qué te dedicas?</h2><p class="muted">Busca tu perfil y conoce al agente que te va a acompañar. Cada uno conoce el trabajo de su perfil y te habla y te propone cosas pensadas para ti.</p></div>
       <div class="agCards">${AGENTS.map(a => `
         <article class="agCard" id="agente-${a.key}">
-          <div class="agCardPic"><span class="agPicAnimal">${agentPic(a.key, 'saluda', '', `${esc(a.name)}, ${esc(a.animal || 'agente AIA')}`, 'loading="lazy"')}</span>${hasPersona(a.key) ? (personaVid(a.key, 'saluda') ? `<video class="agPicPersona" src="${personaVid(a.key, 'saluda')}.mp4?v=1" poster="${personaImg(a.key)}" autoplay muted loop playsinline preload="metadata" aria-label="${esc(a.name)}, versión persona"></video>` : `<img class="agPicPersona" src="${personaImg(a.key)}" alt="${esc(a.name)}, versión persona" loading="lazy">`) : ''}</div>
+          <div class="agCardPic"><span class="agPicAnimal">${agentPic(a.key, 'saluda', '', `${esc(a.name)}, ${esc(a.animal || 'agente AIA')}`, 'loading="lazy"')}</span>${hasPersona(a.key) ? agentLandingPersonaMedia(a.key, false, a.name) : ''}</div>
           <div class="agCardBody">
             <span class="agCardFor">${esc(a.label)}</span>
             <h3>${esc(a.name)} <small>${esc(a.vibe)}</small></h3>
@@ -884,8 +895,29 @@ function agentsLanding() {
 // Al elegir: con sesión va directo a crear el agente con ese perfil; sin sesión, pide entrar y vuelve aquí.
 // Presentación: ver a los agentes como animalitos o como personas.
 function agentsLook(l, b) {
-  document.querySelector('.agLanding')?.classList.toggle('verPersonas', l === 'persona');
-  document.querySelectorAll('.agLookSwitch button').forEach(x => x.classList.toggle('sel', x === b));
+  const landing = document.querySelector('.agLanding');
+  if (!landing) return;
+  const showPeople = l === 'persona';
+  landing.classList.toggle('verPersonas', showPeople);
+  landing.querySelectorAll('.agLookSwitch button').forEach(x => x.classList.toggle('sel', x === b));
+  // Safari en iPad puede suspender los vídeos inicialmente ocultos: reactivar con el toque.
+  landing.querySelectorAll('.agCardPic > video.agPicPersona').forEach(video => {
+    if (!showPeople) { video.pause(); return; }
+    video.muted = true;
+    video.playsInline = true;
+    const started = video.play();
+    if (started && typeof started.catch === 'function') started.catch(() => {
+      // Si el iPad bloquea autoplay, el WebP animado mantiene el saludo.
+      if (!landing.classList.contains('verPersonas') || !video.isConnected) return;
+      const key = video.dataset.agentGreeting;
+      if (!key) return;
+      const img = document.createElement('img');
+      img.className = 'agPicPersona';
+      img.src = `img/agentes/personas/${key}-saluda-mini.webp?v=1`;
+      img.alt = video.getAttribute('aria-label') || '';
+      video.replaceWith(img);
+    });
+  });
 }
 // Al tocar un personaje de arriba, baja hasta su perfil y lo resalta un momento.
 function showAgentCard(key) {
