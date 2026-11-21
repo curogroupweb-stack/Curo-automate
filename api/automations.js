@@ -75,6 +75,28 @@ module.exports = handler(async (req, res) => {
       if (body.status === 'active' && current.trigger_type === 'schedule') patch.next_run_at = nextRun(current.trigger_config).toISOString();
       if (body.status === 'active' && current.trigger_type === 'gmail_new_message') patch.last_checked_at = new Date().toISOString();
     }
+    // Preferencias de lectura Gmail: solo se aplican a automatizaciones con este disparador.
+    // No cambian la cuenta conectada ni activan envíos.
+    if (body.gmail_polling !== undefined) {
+      if (current.trigger_type !== 'gmail_new_message') throw new HttpError(400, 'Esta automatización no utiliza lectura programada de Gmail.');
+      const cfg = body.gmail_polling;
+      if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) throw new HttpError(400, 'Configuración Gmail no válida.');
+      const n = Number(cfg.minutes);
+      if (!Number.isInteger(n) || n < 5 || n > 1440) throw new HttpError(400, 'El intervalo debe estar entre 5 y 1440 minutos.');
+      const validTime = t => /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(t));
+      if (!validTime(cfg.start) || !validTime(cfg.end)) throw new HttpError(400, 'Introduce horas válidas en formato HH:MM.');
+      patch.trigger_config = {
+        ...(current.trigger_config || {}),
+        gmail_poll_minutes: n,
+        gmail_window_start: cfg.start,
+        gmail_window_end: cfg.end,
+        gmail_weekdays_only: cfg.weekdays_only === true
+      };
+      patch.plan = {
+        ...(current.plan || {}),
+        trigger: { ...(current.plan?.trigger || {}), ...patch.trigger_config }
+      };
+    }
     if (body.approval_mode === 'always' || body.approval_mode === 'never') {
       patch.approval_mode = body.approval_mode;
       patch.plan = { ...current.plan, approval: body.approval_mode };
