@@ -23,6 +23,41 @@ function authorized(req) {
   return safeEqual(given, secret);
 }
 
+// Ventanas opcionales de consulta de Gmail. Sin configuración se conserva el comportamiento anterior.
+// gmail_poll_minutes: intervalo mínimo, 5 a 1440 minutos.
+// gmail_window_start / gmail_window_end: HH:MM en Europe/Madrid.
+// gmail_weekdays_only: true para consultar únicamente de lunes a viernes.
+function shouldPollGmail(automation, now = new Date()) {
+  const config = automation.trigger_config || {};
+  const interval = Number(config.gmail_poll_minutes);
+  if (Number.isFinite(interval) && interval >= 5 && interval <= 1440 && automation.last_checked_at) {
+    const elapsed = now.getTime() - new Date(automation.last_checked_at).getTime();
+    if (Number.isFinite(elapsed) && elapsed >= 0 && elapsed < interval * 60000) return false;
+  }
+  const windowStart = config.gmail_window_start;
+  const windowEnd = config.gmail_window_end;
+  if (!config.gmail_weekdays_only && !windowStart && !windowEnd) return true;
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Madrid', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(now).map(part => [part.type, part.value]));
+  if (config.gmail_weekdays_only && ['Sat', 'Sun'].includes(parts.weekday)) return false;
+  const toMinutes = value => {
+    if (!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(value))) return null;
+    const [h, m] = String(value).split(':').map(Number);
+    return h * 60 + m;
+  };
+  const start = toMinutes(windowStart);
+  const end = toMinutes(windowEnd);
+  const current = Number(parts.hour) * 60 + Number(parts.minute);
+  if (start !== null && end !== null) {
+    if (start === end) return true; // 24 horas
+    return start < end ? current >= start && current < end : current >= start || current < end;
+  }
+  if (start !== null && current < start) return false;
+  if (end !== null && current >= end) return false;
+  return true;
+}
+
 async function claimDelivery(automationId, externalId) {
   return db.insertIgnore('automate_deliveries', { automation_id: automationId, external_id: String(externalId) });
 }
@@ -56,6 +91,7 @@ module.exports = async (req, res) => {
     const watchers = await db.select('automate_automations', `status=eq.active&trigger_type=eq.gmail_new_message&select=*&order=last_checked_at.asc.nullsfirst&limit=5`);
     for (const a of watchers) {
       if (left() < 15000) break;
+      if (!shouldPollGmail(a)) continue;
       try {
         const since = new Date(a.last_checked_at || a.created_at).getTime() - 15 * 60 * 1000;
         const q = `${a.trigger_config?.gmail_query || 'in:inbox -from:me'} after:${Math.floor(since / 1000)}`;
