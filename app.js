@@ -594,7 +594,36 @@ function showAutoDetail(id) {
     <div class="plannerPlan"><div class="plannerStep"><small>CUÁNDO</small><b>${esc(a.plan?.trigger?.label || '')}</b></div>
     <div class="plannerStep"><small>PASOS</small><ol>${(a.plan?.steps || []).map(s => `<li>${esc(s)}</li>`).join('')}</ol></div>
     <div class="plannerStep"><small>HERRAMIENTAS</small><div class="chips">${(a.plan?.tools || []).map(t => `<span class="chip">${esc(TOOL_LABELS[t] || t)}</span>`).join('')}</div></div>
+    ${a.trigger_type === 'gmail_new_message' ? `<div class="plannerStep"><small>GMAIL PROGRAMADO · HORA DE MADRID</small>
+      <p class="muted">Consulta la cuenta Google conectada a este usuario. La configuración por empresa requiere una conexión independiente.</p>
+      <label class="field">Frecuencia de lectura
+        <select id="gmailPollMinutes">
+          ${[5,15,30,60,120,240,1440].map(n => `<option value="${n}" ${Number(a.trigger_config?.gmail_poll_minutes || 5) === n ? 'selected' : ''}>Cada ${n === 60 ? 'hora' : n === 120 ? '2 horas' : n === 1440 ? '24 horas' : n + ' minutos'}</option>`).join('')}
+        </select>
+      </label>
+      <div class="row"><label class="field">Desde<input type="time" id="gmailPollStart" value="${esc(a.trigger_config?.gmail_window_start || '08:00')}"></label>
+      <label class="field">Hasta<input type="time" id="gmailPollEnd" value="${esc(a.trigger_config?.gmail_window_end || '18:00')}"></label></div>
+      <label class="toggle"><input type="checkbox" id="gmailPollWeekdays" ${a.trigger_config?.gmail_weekdays_only === true ? 'checked' : ''}> Solo lunes a viernes</label>
+      <button class="btn ghost" onclick="saveGmailPolling('${a.id}',this)">Guardar horario de consulta</button>
+      <p class="muted">Guardar este horario no activa envíos automáticos ni modifica el estado de la automatización.</p>
+    </div>` : ''}
     ${a.plan?.tools?.includes('gmail_send') ? `<div class="plannerStep"><small>CONTROL</small><label class="toggle"><input type="checkbox" ${a.approval_mode === 'always' ? 'checked' : ''} onchange="setApproval('${a.id}',this.checked)"> Revisar cada correo antes de enviarlo</label></div>` : ''}</div>`, { wide: true });
+}
+async function saveGmailPolling(id, btn) {
+  const minutes = Number(document.getElementById('gmailPollMinutes')?.value);
+  const start = document.getElementById('gmailPollStart')?.value;
+  const end = document.getElementById('gmailPollEnd')?.value;
+  const weekdays_only = document.getElementById('gmailPollWeekdays')?.checked === true;
+  const done = busy(btn, 'Guardando…');
+  try {
+    const { automation } = await api('automations?id=' + encodeURIComponent(id), {
+      method: 'PATCH', body: { gmail_polling: { minutes, start, end, weekdays_only } }
+    });
+    automationsCache = automationsCache.map(a => a.id === id ? automation : a);
+    toast('Horario de consulta Gmail guardado.');
+    closeModals();
+    automationsPage();
+  } catch (e) { done(); info('No se pudo guardar el horario', e.message); }
 }
 async function setApproval(id, on) {
   try { await api('automations?id=' + id, { method: 'PATCH', body: { approval_mode: on ? 'always' : 'never' } }); toast(on ? 'Cada correo esperará tu aprobación.' : 'Los correos se enviarán sin revisión.'); }
