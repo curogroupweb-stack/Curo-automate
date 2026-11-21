@@ -42,7 +42,7 @@ function shouldPollGmail(automation, now = new Date()) {
   }).formatToParts(now).map(part => [part.type, part.value]));
   if (config.gmail_weekdays_only && ['Sat', 'Sun'].includes(parts.weekday)) return false;
   const toMinutes = value => {
-    if (!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(value))) return null;
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value))) return null;
     const [h, m] = String(value).split(':').map(Number);
     return h * 60 + m;
   };
