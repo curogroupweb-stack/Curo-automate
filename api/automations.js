@@ -83,7 +83,7 @@ module.exports = handler(async (req, res) => {
       if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) throw new HttpError(400, 'Configuración Gmail no válida.');
       const n = Number(cfg.minutes);
       if (!Number.isInteger(n) || n < 5 || n > 1440) throw new HttpError(400, 'El intervalo debe estar entre 5 y 1440 minutos.');
-      const validTime = t => /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(t));
+      const validTime = t => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(t));
       if (!validTime(cfg.start) || !validTime(cfg.end)) throw new HttpError(400, 'Introduce horas válidas en formato HH:MM.');
       patch.trigger_config = {
         ...(current.trigger_config || {}),
