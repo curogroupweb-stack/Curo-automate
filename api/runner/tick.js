@@ -88,10 +88,12 @@ module.exports = async (req, res) => {
     }
 
     // 2) Gmail: correos nuevos
-    const watchers = await db.select('automate_automations', `status=eq.active&trigger_type=eq.gmail_new_message&select=*&order=last_checked_at.asc.nullsfirst&limit=5`);
+    const watchers = await db.select('automate_automations', `status=eq.active&trigger_type=eq.gmail_new_message&select=*&order=last_checked_at.asc.nullsfirst&limit=50`);
+    let gmailChecks = 0;
     for (const a of watchers) {
-      if (left() < 15000) break;
+      if (left() < 15000 || gmailChecks >= 5) break;
       if (!shouldPollGmail(a)) continue;
+      gmailChecks++;
       try {
         const since = new Date(a.last_checked_at || a.created_at).getTime() - 15 * 60 * 1000;
         const q = `${a.trigger_config?.gmail_query || 'in:inbox -from:me'} after:${Math.floor(since / 1000)}`;
